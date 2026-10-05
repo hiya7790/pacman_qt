@@ -1,0 +1,40 @@
+# C++ objects and libs
+*.slo
+*.lo
+*.o
+*.obj
+*.suo
+*.tlb
+*.tlh
+*.exp
+*.ilk
+*.lib
+*.ncb
+*.pdb
+*.idb
+*.efi
+*.prx
+*.lib
+*.res
+*.dll
+*.so
+*.dylib
+*.exe
+*.app/
+*.out
+
+# Qt specific
+Makefile
+.qmake.stash
+moc_*.cpp
+ui_*.h
+qrc_*.cpp
+*_plugin_import.cpp
+*.Debug
+*.Release
+
+# Build directories
+build/
+build-*/
+*-build/
+*.build/
