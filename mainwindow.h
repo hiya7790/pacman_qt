@@ -3,8 +3,11 @@
 
 #include <QWidget>
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QTimer>
 #include <QVector>
+#include <memory>
+#include "mazesolver.h"
 
 enum Direction {
     UP,
@@ -31,6 +34,7 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
 
 private slots:
     void gameLoop();
@@ -40,6 +44,8 @@ private:
     void movePacman();
     void moveGhosts();
     bool canMove(int x, int y, Direction dir);
+    void recalculatePath();
+    void stepAutoSolve();
 
     static const int ROWS = 21;
     static const int COLS = 21;
@@ -53,6 +59,15 @@ private:
     Direction pacmanNextDir;
     int pacmanMouthAngle;
     bool pacmanMouthOpening;
+
+    // Maze Solver Pattern components
+    Point goalPoint;
+    SolveResult currentResult;
+    QVector<std::shared_ptr<MazeSolverStrategy>> solvers;
+    int currentSolverIndex;
+    bool autoSolveMode;
+    bool showExplored;
+    bool ghostsActive;
 
     int score;
     bool gameOver;
