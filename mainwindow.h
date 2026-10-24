@@ -71,6 +71,7 @@ private:
     static const int ROWS = 21;
     static const int COLS = 21;
     static constexpr double VISION_RADIUS = 3.6;
+    static const int FOG_PEEK_DURATION_MS = 3000; // 3 seconds temporary peek
 
     int board[ROWS][COLS]; // 0 = empty, 1 = wall, 2 = dot
 
@@ -88,6 +89,8 @@ private:
 
     // Fog of War / Dark Maze system
     bool fogOfWarEnabled;
+    bool fogPeekActive;
+    QElapsedTimer fogPeekTimer;
     bool explored[ROWS][COLS];
 
     // Level system

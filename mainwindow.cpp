@@ -14,6 +14,7 @@ MainWindow::MainWindow(QWidget *parent)
     setWindowTitle("Pacman: Dark Maze Escape (Fullscreen)");
 
     fogOfWarEnabled = true;
+    fogPeekActive = false;
 
     initGame();
 
@@ -195,6 +196,9 @@ void MainWindow::initLevel()
     activeFruits.clear();
     fruitSpawnCounter = QRandomGenerator::global()->bounded(15, 40);
 
+    fogOfWarEnabled = true;
+    fogPeekActive = false;
+
     updateFogOfWar();
     elapsedTimer.start();
 }
@@ -254,9 +258,17 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
-    // Toggle Fog of War
+    // Toggle Fog of War: When turned OFF, automatically turns back ON after 3 seconds!
     if (event->key() == Qt::Key_F) {
-        fogOfWarEnabled = !fogOfWarEnabled;
+        if (fogOfWarEnabled) {
+            fogOfWarEnabled = false;
+            fogPeekActive = true;
+            fogPeekTimer.start();
+        } else {
+            // If already peeking, pressing F again re-enables Fog immediately
+            fogOfWarEnabled = true;
+            fogPeekActive = false;
+        }
         update();
         return;
     }
@@ -603,6 +615,14 @@ void MainWindow::gameLoop()
 {
     if (gameOver || levelComplete) return;
 
+    // Check 3-second fog peek timer: Automatically re-enable Fog of War!
+    if (fogPeekActive) {
+        if (fogPeekTimer.elapsed() >= FOG_PEEK_DURATION_MS) {
+            fogOfWarEnabled = true;
+            fogPeekActive = false;
+        }
+    }
+
     ghostTickCounter++;
     if (ghostTickCounter >= ghostMoveEveryN) {
         ghostTickCounter = 0;
@@ -876,9 +896,15 @@ void MainWindow::paintEvent(QPaintEvent *)
                      .arg(mins, 2, 10, QChar('0'))
                      .arg(secs, 2, 10, QChar('0')));
 
-    if (fogOfWarEnabled) {
+    // Live Fog / Peek status badge
+    if (fogPeekActive) {
+        int msLeft = std::max(0, FOG_PEEK_DURATION_MS - (int)fogPeekTimer.elapsed());
+        double secLeft = msLeft / 1000.0;
+        painter.setPen(QColor(255, 215, 0));
+        painter.drawText(width() * 0.65, hudY + 22, QString("[MAP PEEK: %1s ☀️]").arg(secLeft, 0, 'f', 1));
+    } else if (fogOfWarEnabled) {
         painter.setPen(QColor(120, 220, 255));
-        painter.drawText(width() * 0.65, hudY + 22, "[FOG: ON 🌑]");
+        painter.drawText(width() * 0.65, hudY + 22, "[FOG: ON 🌑 (F: Peek)]");
     } else {
         painter.setPen(QColor(150, 150, 160));
         painter.drawText(width() * 0.65, hudY + 22, "[FOG: OFF ☀️]");
@@ -893,7 +919,7 @@ void MainWindow::paintEvent(QPaintEvent *)
     painter.setFont(QFont("Arial", baseFont2));
     painter.setPen(QColor(130, 150, 180));
     painter.drawText(20, hudY + 45,
-        "[Arrows] Move  |  [F] Toggle Fog  |  [F11 / Esc] Fullscreen  |  [R] New Maze/Reset  |  Reach EXIT to Win!");
+        "[Arrows] Move  |  [F] 3s Map Peek  |  [F11 / Esc] Fullscreen  |  [R] New Maze/Reset  |  Reach EXIT to Win!");
 
     // 8. Game Over / Level Complete Banner
     if (gameOver) {
