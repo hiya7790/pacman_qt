@@ -1,7 +1,6 @@
 #include "mainwindow.h"
 #include <QPainter>
 #include <QPainterPath>
-#include <QTime>
 #include <QRandomGenerator>
 
 // 1 = Wall, 0 = Empty, 2 = Dot
@@ -32,22 +31,9 @@ int initialBoard[21][21] = {
 MainWindow::MainWindow(QWidget *parent)
     : QWidget(parent)
 {
-    // Window layout: Grid + bottom HUD area (85 px)
-    setFixedSize(COLS * CELL_SIZE, ROWS * CELL_SIZE + 85);
-    setStyleSheet("background-color: #0b0b12;");
-    setWindowTitle("Pacman Maze Solver - Strategy Pattern (BFS / A* / DFS)");
-
-    // Initialize Strategy Pattern Solvers
-    solvers.push_back(std::make_shared<BFSSolver>());
-    solvers.push_back(std::make_shared<AStarSolver>());
-    solvers.push_back(std::make_shared<DFSSolver>());
-    currentSolverIndex = 0; // Default to BFS (Shortest Path)
-
-    // Goal at (1, 1) by default
-    goalPoint = {1, 1};
-    autoSolveMode = false;
-    showExplored = true;
-    ghostsActive = true;
+    setFixedSize(COLS * CELL_SIZE, ROWS * CELL_SIZE + 45);
+    setStyleSheet("background-color: black;");
+    setWindowTitle("Pacman Maze");
 
     initGame();
 
@@ -85,29 +71,8 @@ void MainWindow::initGame()
     ghosts.push_back({11, 10, RIGHT, 2}); // Inky (Cyan)
     ghosts.push_back({10, 9, DOWN, 3});   // Clyde (Orange)
 
-    recalculatePath();
-}
-
-void MainWindow::recalculatePath()
-{
-    if (currentSolverIndex >= 0 && currentSolverIndex < solvers.size()) {
-        currentResult = solvers[currentSolverIndex]->solve(board, {pacmanX, pacmanY}, goalPoint);
-    }
-}
-
-void MainWindow::mousePressEvent(QMouseEvent *event)
-{
-    int c = event->pos().x() / CELL_SIZE;
-    int r = event->pos().y() / CELL_SIZE;
-
-    // Check if clicked inside board
-    if (r >= 0 && r < ROWS && c >= 0 && c < COLS) {
-        if (board[r][c] != 1) { // Cannot set a wall as goal
-            goalPoint = {c, r};
-            recalculatePath();
-            update();
-        }
-    }
+    activeFruits.clear();
+    fruitSpawnCounter = QRandomGenerator::global()->bounded(15, 40); // first fruit after 15-40 ticks
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
@@ -115,66 +80,29 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     if (gameOver || gameWon) {
         if (event->key() == Qt::Key_Space || event->key() == Qt::Key_R) {
             initGame();
+            update();
         }
         return;
     }
 
-    // Toggle Auto-Solve mode
-    if (event->key() == Qt::Key_S) {
-        autoSolveMode = !autoSolveMode;
-        recalculatePath();
-        update();
-        return;
-    }
-
-    // Cycle through Maze Solver Strategies (BFS -> A* -> DFS)
-    if (event->key() == Qt::Key_A) {
-        currentSolverIndex = (currentSolverIndex + 1) % solvers.size();
-        recalculatePath();
-        update();
-        return;
-    }
-
-    // Toggle Explored Nodes Visualization
-    if (event->key() == Qt::Key_E) {
-        showExplored = !showExplored;
-        update();
-        return;
-    }
-
-    // Toggle Ghosts Active / Frozen
-    if (event->key() == Qt::Key_G) {
-        ghostsActive = !ghostsActive;
-        update();
-        return;
-    }
-
-    // Reset board
-    if (event->key() == Qt::Key_R) {
-        initGame();
-        update();
-        return;
-    }
-
-    // Manual Arrow movement (switches Auto-Solve off to give player control)
     Direction attemptDir = STOP;
     switch (event->key()) {
         case Qt::Key_Up:    attemptDir = UP; break;
         case Qt::Key_Down:  attemptDir = DOWN; break;
         case Qt::Key_Left:  attemptDir = LEFT; break;
         case Qt::Key_Right: attemptDir = RIGHT; break;
+        case Qt::Key_R:     initGame(); update(); return;
         default: QWidget::keyPressEvent(event); return;
     }
 
     if (attemptDir != STOP) {
-        autoSolveMode = false;
         pacmanNextDir = attemptDir;
         movePacman();
-        recalculatePath();
+        checkFruitPickup();
 
-        // Check collisions immediately after Pacman moves
+        // Check ghost collisions
         for (const Ghost &g : ghosts) {
-            if (g.x == pacmanX && g.y == pacmanY && ghostsActive) {
+            if (g.x == pacmanX && g.y == pacmanY) {
                 gameOver = true;
             }
         }
@@ -244,51 +172,6 @@ void MainWindow::movePacman()
     }
 }
 
-void MainWindow::stepAutoSolve()
-{
-    if (!currentResult.found || currentResult.path.size() <= 1) {
-        // Reached goal or no path
-        return;
-    }
-
-    // Next step along solved path
-    Point next = currentResult.path[1];
-
-    // Determine direction for sprite rotation
-    int dx = next.x - pacmanX;
-    int dy = next.y - pacmanY;
-
-    if (dx == 1 || (pacmanX == COLS - 1 && next.x == 0)) {
-        pacmanDir = RIGHT;
-    } else if (dx == -1 || (pacmanX == 0 && next.x == COLS - 1)) {
-        pacmanDir = LEFT;
-    } else if (dy == 1) {
-        pacmanDir = DOWN;
-    } else if (dy == -1) {
-        pacmanDir = UP;
-    }
-
-    pacmanX = next.x;
-    pacmanY = next.y;
-
-    // Eat dot if present
-    if (board[pacmanY][pacmanX] == 2) {
-        board[pacmanY][pacmanX] = 0;
-        score += 10;
-    }
-
-    // Mouth animation
-    if (pacmanMouthOpening) {
-        pacmanMouthAngle += 15;
-        if (pacmanMouthAngle >= 45) pacmanMouthOpening = false;
-    } else {
-        pacmanMouthAngle -= 15;
-        if (pacmanMouthAngle <= 0) pacmanMouthOpening = true;
-    }
-
-    recalculatePath();
-}
-
 void MainWindow::moveGhosts()
 {
     for (Ghost &g : ghosts) {
@@ -324,22 +207,175 @@ void MainWindow::moveGhosts()
     }
 }
 
+// ========================================================
+// Bonus Fruit System
+// ========================================================
+
+void MainWindow::trySpawnFruit()
+{
+    fruitSpawnCounter--;
+    if (fruitSpawnCounter > 0) return;
+
+    // Reset timer for next spawn attempt (20-50 ticks)
+    fruitSpawnCounter = QRandomGenerator::global()->bounded(20, 50);
+
+    // Don't exceed max fruits on screen
+    if (activeFruits.size() >= MAX_FRUITS) return;
+
+    // Collect all empty, non-wall, non-dot cells as candidates
+    QVector<QPair<int,int>> candidates;
+    for (int r = 0; r < ROWS; ++r) {
+        for (int c = 0; c < COLS; ++c) {
+            if (board[r][c] == 0) {
+                // Not on pacman
+                if (c == pacmanX && r == pacmanY) continue;
+                // Not on a ghost
+                bool onGhost = false;
+                for (const Ghost &g : ghosts) {
+                    if (g.x == c && g.y == r) { onGhost = true; break; }
+                }
+                if (onGhost) continue;
+                // Not on existing fruit
+                bool onFruit = false;
+                for (const BonusFruit &f : activeFruits) {
+                    if (f.x == c && f.y == r) { onFruit = true; break; }
+                }
+                if (onFruit) continue;
+                candidates.push_back({c, r});
+            }
+        }
+    }
+
+    if (candidates.isEmpty()) return;
+
+    int idx = QRandomGenerator::global()->bounded(candidates.size());
+    FruitType type = static_cast<FruitType>(QRandomGenerator::global()->bounded(4));
+    int lifespan = QRandomGenerator::global()->bounded(40, 80); // fruit disappears after 40-80 ticks
+
+    activeFruits.push_back({candidates[idx].first, candidates[idx].second, type, lifespan});
+}
+
+void MainWindow::checkFruitPickup()
+{
+    for (int i = activeFruits.size() - 1; i >= 0; --i) {
+        if (activeFruits[i].x == pacmanX && activeFruits[i].y == pacmanY) {
+            score += 100;
+            activeFruits.removeAt(i);
+        }
+    }
+}
+
+// ========================================================
+// Fruit Drawing Helpers (QPainter art)
+// ========================================================
+
+void MainWindow::drawCherry(QPainter &painter, int cx, int cy)
+{
+    int s = CELL_SIZE;
+    // Stem
+    painter.setPen(QPen(QColor(0, 160, 0), 2));
+    painter.drawLine(cx + s/2, cy + 4, cx + s/2 - 4, cy + s/2 - 2);
+    painter.drawLine(cx + s/2, cy + 4, cx + s/2 + 4, cy + s/2 - 2);
+    // Left cherry
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(220, 20, 20));
+    painter.drawEllipse(cx + s/2 - 9, cy + s/2 - 3, 10, 10);
+    // Right cherry
+    painter.setBrush(QColor(200, 10, 10));
+    painter.drawEllipse(cx + s/2 + 1, cy + s/2 - 3, 10, 10);
+    // Highlight
+    painter.setBrush(QColor(255, 180, 180, 180));
+    painter.drawEllipse(cx + s/2 - 7, cy + s/2, 3, 3);
+    painter.drawEllipse(cx + s/2 + 3, cy + s/2, 3, 3);
+}
+
+void MainWindow::drawApple(QPainter &painter, int cx, int cy)
+{
+    int s = CELL_SIZE;
+    // Body
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(50, 200, 50));
+    painter.drawEllipse(cx + 5, cy + 7, s - 10, s - 10);
+    // Highlight
+    painter.setBrush(QColor(120, 255, 120, 150));
+    painter.drawEllipse(cx + 8, cy + 9, 5, 5);
+    // Stem
+    painter.setPen(QPen(QColor(100, 60, 20), 2));
+    painter.drawLine(cx + s/2, cy + 7, cx + s/2, cy + 3);
+    // Leaf
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(30, 160, 30));
+    painter.drawEllipse(cx + s/2, cy + 2, 6, 4);
+}
+
+void MainWindow::drawStrawberry(QPainter &painter, int cx, int cy)
+{
+    int s = CELL_SIZE;
+    // Body (triangle-ish via polygon)
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(220, 30, 50));
+    QPolygon strawberry;
+    strawberry << QPoint(cx + s/2, cy + s - 5)
+               << QPoint(cx + 5, cy + 8)
+               << QPoint(cx + s - 5, cy + 8);
+    painter.drawPolygon(strawberry);
+    // Round top
+    painter.drawEllipse(cx + 5, cy + 6, s - 10, 8);
+    // Seeds
+    painter.setBrush(QColor(255, 255, 100));
+    painter.drawEllipse(cx + s/2 - 3, cy + 12, 2, 2);
+    painter.drawEllipse(cx + s/2 + 2, cy + 14, 2, 2);
+    painter.drawEllipse(cx + s/2 - 1, cy + 17, 2, 2);
+    // Leaves
+    painter.setBrush(QColor(30, 160, 30));
+    painter.drawEllipse(cx + s/2 - 5, cy + 4, 5, 4);
+    painter.drawEllipse(cx + s/2 + 1, cy + 4, 5, 4);
+}
+
+void MainWindow::drawOrangeFruit(QPainter &painter, int cx, int cy)
+{
+    int s = CELL_SIZE;
+    // Body
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(255, 160, 30));
+    painter.drawEllipse(cx + 5, cy + 6, s - 10, s - 10);
+    // Highlight
+    painter.setBrush(QColor(255, 220, 120, 160));
+    painter.drawEllipse(cx + 8, cy + 9, 5, 5);
+    // Stem
+    painter.setPen(QPen(QColor(100, 60, 20), 2));
+    painter.drawLine(cx + s/2, cy + 6, cx + s/2, cy + 3);
+    // Leaf
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(30, 160, 30));
+    painter.drawEllipse(cx + s/2, cy + 1, 6, 4);
+}
+
+// ========================================================
+// Game Loop
+// ========================================================
+
 void MainWindow::gameLoop()
 {
     if (gameOver || gameWon) return;
 
-    if (autoSolveMode) {
-        stepAutoSolve();
-    }
+    moveGhosts();
 
-    if (ghostsActive) {
-        moveGhosts();
-    }
-
-    // Check collisions
+    // Check ghost collisions
     for (const Ghost &g : ghosts) {
-        if (g.x == pacmanX && g.y == pacmanY && ghostsActive) {
+        if (g.x == pacmanX && g.y == pacmanY) {
             gameOver = true;
+        }
+    }
+
+    // Fruit spawning
+    trySpawnFruit();
+
+    // Tick down fruit lifespans and remove expired ones
+    for (int i = activeFruits.size() - 1; i >= 0; --i) {
+        activeFruits[i].ticksRemaining--;
+        if (activeFruits[i].ticksRemaining <= 0) {
+            activeFruits.removeAt(i);
         }
     }
 
@@ -354,6 +390,10 @@ void MainWindow::gameLoop()
 
     update();
 }
+
+// ========================================================
+// Rendering
+// ========================================================
 
 void MainWindow::paintEvent(QPaintEvent *)
 {
@@ -385,75 +425,25 @@ void MainWindow::paintEvent(QPaintEvent *)
         }
     }
 
-    // 2. Draw Explored Nodes (Search Tree Exploration visualization)
-    if (showExplored && !currentResult.exploredOrder.isEmpty()) {
-        painter.setBrush(QColor(0, 180, 220, 45));
-        painter.setPen(Qt::NoPen);
-        for (const Point &pt : currentResult.exploredOrder) {
-            if (board[pt.y][pt.x] != 1 && (pt.x != pacmanX || pt.y != pacmanY)) {
-                painter.drawRect(pt.x * CELL_SIZE + 2, pt.y * CELL_SIZE + 2, CELL_SIZE - 4, CELL_SIZE - 4);
-            }
-        }
-    }
+    // 2. Draw Bonus Fruits
+    for (const BonusFruit &fruit : activeFruits) {
+        int fx = fruit.x * CELL_SIZE;
+        int fy = fruit.y * CELL_SIZE;
 
-    // 3. Draw Solved Path
-    if (currentResult.found && currentResult.path.size() > 1) {
-        // Glowing path line
-        QPen pathGlowPen(QColor(0, 255, 140, 120), 8, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-        QPen pathCorePen(QColor(180, 255, 220), 3, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-
-        for (int i = 0; i < currentResult.path.size() - 1; ++i) {
-            Point p1 = currentResult.path[i];
-            Point p2 = currentResult.path[i+1];
-
-            // Avoid drawing path lines across horizontal wrapping tunnels
-            if (std::abs(p1.x - p2.x) > 1) continue;
-
-            int x1 = p1.x * CELL_SIZE + CELL_SIZE / 2;
-            int y1 = p1.y * CELL_SIZE + CELL_SIZE / 2;
-            int x2 = p2.x * CELL_SIZE + CELL_SIZE / 2;
-            int y2 = p2.y * CELL_SIZE + CELL_SIZE / 2;
-
-            painter.setPen(pathGlowPen);
-            painter.drawLine(x1, y1, x2, y2);
-            painter.setPen(pathCorePen);
-            painter.drawLine(x1, y1, x2, y2);
+        switch (fruit.type) {
+            case CHERRY:       drawCherry(painter, fx, fy); break;
+            case APPLE:        drawApple(painter, fx, fy); break;
+            case STRAWBERRY:   drawStrawberry(painter, fx, fy); break;
+            case ORANGE_FRUIT: drawOrangeFruit(painter, fx, fy); break;
         }
 
-        // Draw small waypoint nodes along the path
-        painter.setBrush(QColor(255, 255, 100, 200));
-        painter.setPen(Qt::NoPen);
-        for (const Point &pt : currentResult.path) {
-            if (pt != goalPoint && (pt.x != pacmanX || pt.y != pacmanY)) {
-                int cx = pt.x * CELL_SIZE + CELL_SIZE / 2;
-                int cy = pt.y * CELL_SIZE + CELL_SIZE / 2;
-                painter.drawEllipse(cx - 3, cy - 3, 6, 6);
-            }
-        }
+        // Draw "100" label below/above the fruit for clarity
+        painter.setPen(QColor(255, 255, 100));
+        painter.setFont(QFont("Arial", 7, QFont::Bold));
+        painter.drawText(fx + 4, fy + CELL_SIZE - 1, "100");
     }
 
-    // 4. Draw Goal Marker (Target Destination)
-    {
-        int gx = goalPoint.x * CELL_SIZE;
-        int gy = goalPoint.y * CELL_SIZE;
-
-        // Outer pulsing ring
-        painter.setBrush(QColor(255, 50, 80, 80));
-        painter.setPen(QPen(QColor(255, 60, 100), 2));
-        painter.drawEllipse(gx + 3, gy + 3, CELL_SIZE - 6, CELL_SIZE - 6);
-
-        // Inner bullseye
-        painter.setBrush(QColor(255, 220, 0));
-        painter.setPen(Qt::NoPen);
-        painter.drawEllipse(gx + CELL_SIZE/2 - 4, gy + CELL_SIZE/2 - 4, 8, 8);
-
-        // Flag / Target text
-        painter.setPen(QColor(255, 255, 255));
-        painter.setFont(QFont("Arial", 8, QFont::Bold));
-        painter.drawText(gx + 2, gy + 11, "GOAL");
-    }
-
-    // 5. Draw Pacman (Maze Solver Agent)
+    // 3. Draw Pacman
     {
         painter.setBrush(QColor(255, 220, 0));
         painter.setPen(Qt::NoPen);
@@ -468,7 +458,7 @@ void MainWindow::paintEvent(QPaintEvent *)
                         CELL_SIZE - 4, CELL_SIZE - 4, startAngle * 16, spanAngle * 16);
     }
 
-    // 6. Draw Ghosts
+    // 4. Draw Ghosts
     QColor ghostColors[] = {
         QColor(255, 50, 50),   // Blinky (Red)
         QColor(255, 180, 220), // Pinky (Pink)
@@ -480,12 +470,7 @@ void MainWindow::paintEvent(QPaintEvent *)
         int gx = g.x * CELL_SIZE;
         int gy = g.y * CELL_SIZE;
 
-        if (!ghostsActive) {
-            // Frozen ghost visual indicator
-            painter.setBrush(QColor(100, 120, 160, 160));
-        } else {
-            painter.setBrush(ghostColors[g.colorIndex]);
-        }
+        painter.setBrush(ghostColors[g.colorIndex]);
         painter.setPen(Qt::NoPen);
 
         // Ghost head & body
@@ -501,7 +486,7 @@ void MainWindow::paintEvent(QPaintEvent *)
         painter.drawEllipse(gx + 18, gy + 10, 3, 3);
     }
 
-    // 7. Draw HUD (Bottom Control & Strategy Pattern Information Panel)
+    // 5. Draw HUD
     int hudY = ROWS * CELL_SIZE;
     painter.fillRect(0, hudY, width(), height() - hudY, QColor(14, 16, 26));
 
@@ -509,46 +494,23 @@ void MainWindow::paintEvent(QPaintEvent *)
     painter.setPen(QPen(QColor(40, 60, 100), 2));
     painter.drawLine(0, hudY, width(), hudY);
 
-    // Line 1: Algorithm & Mode
-    painter.setFont(QFont("Arial", 11, QFont::Bold));
+    // Score
+    painter.setFont(QFont("Arial", 14, QFont::Bold));
     painter.setPen(Qt::white);
-    painter.drawText(12, hudY + 22, QString("SCORE: %1").arg(score));
+    painter.drawText(12, hudY + 28, QString("SCORE: %1").arg(score));
 
-    // Active strategy name & description
-    QString algoName = solvers[currentSolverIndex]->name();
-    QString algoDesc = solvers[currentSolverIndex]->description();
-    painter.setPen(QColor(0, 230, 160));
-    painter.drawText(120, hudY + 22, QString("STRATEGY: %1 (%2)").arg(algoName).arg(algoDesc));
-
-    // Status pill
-    if (autoSolveMode) {
-        painter.setPen(QColor(255, 210, 0));
-        painter.drawText(width() - 175, hudY + 22, "[AUTO-SOLVE: ON]");
-    } else {
-        painter.setPen(QColor(160, 170, 190));
-        painter.drawText(width() - 175, hudY + 22, "[MANUAL MODE]");
-    }
-
-    // Line 2: Solver stats
-    painter.setFont(QFont("Arial", 10));
-    painter.setPen(QColor(190, 210, 235));
-    int pathSteps = currentResult.found ? currentResult.path.size() - 1 : 0;
-    int exploredCount = currentResult.exploredOrder.size();
-    QString ghostStatus = ghostsActive ? "Active" : "Frozen";
-    painter.drawText(12, hudY + 45,
-                     QString("Path Length: %1 steps   |   Visited Nodes: %2   |   Ghosts: %3   |   Explored Vis: %4")
-                     .arg(pathSteps)
-                     .arg(exploredCount)
-                     .arg(ghostStatus)
-                     .arg(showExplored ? "ON" : "OFF"));
-
-    // Line 3: Controls Guide
+    // Controls hint
     painter.setFont(QFont("Arial", 9));
     painter.setPen(QColor(130, 150, 180));
-    painter.drawText(12, hudY + 68,
-                     "Controls: [Click Maze] Set Goal  |  [S] Auto-Solve  |  [A] Switch Strategy  |  [G] Ghosts  |  [E] Explored  |  [Arrows] Move  |  [R] Reset");
+    painter.drawText(200, hudY + 28, "[Arrow Keys] Move   |   [R] Reset");
 
-    // 8. Game Over / Win Banner
+    // Fruit legend
+    painter.setPen(QColor(255, 200, 100));
+    painter.setFont(QFont("Arial", 9));
+    int legendX = width() - 145;
+    painter.drawText(legendX, hudY + 28, "Fruits = 100 pts!");
+
+    // 6. Game Over / Win Banner
     if (gameOver) {
         painter.fillRect(0, ROWS * CELL_SIZE / 2 - 30, width(), 60, QColor(0, 0, 0, 200));
         painter.setPen(QColor(255, 60, 60));
@@ -559,10 +521,5 @@ void MainWindow::paintEvent(QPaintEvent *)
         painter.setPen(QColor(60, 255, 120));
         painter.setFont(QFont("Arial", 18, QFont::Bold));
         painter.drawText(rect(), Qt::AlignCenter, "ALL PELLETS CLEARED! Press [R] to Restart");
-    } else if (pacmanX == goalPoint.x && pacmanY == goalPoint.y && autoSolveMode) {
-        // Goal reached banner (brief indicator)
-        painter.setPen(QColor(255, 220, 0));
-        painter.setFont(QFont("Arial", 10, QFont::Bold));
-        painter.drawText(width() - 320, hudY + 22, "★ GOAL REACHED!");
     }
 }

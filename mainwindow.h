@@ -3,11 +3,8 @@
 
 #include <QWidget>
 #include <QKeyEvent>
-#include <QMouseEvent>
 #include <QTimer>
 #include <QVector>
-#include <memory>
-#include "mazesolver.h"
 
 enum Direction {
     UP,
@@ -23,6 +20,20 @@ struct Ghost {
     int colorIndex;
 };
 
+// Bonus fruit types
+enum FruitType {
+    CHERRY = 0,
+    APPLE,
+    STRAWBERRY,
+    ORANGE_FRUIT
+};
+
+struct BonusFruit {
+    int x, y;
+    FruitType type;
+    int ticksRemaining; // disappears after this many game ticks
+};
+
 class MainWindow : public QWidget
 {
     Q_OBJECT
@@ -34,7 +45,6 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
-    void mousePressEvent(QMouseEvent *event) override;
 
 private slots:
     void gameLoop();
@@ -44,14 +54,18 @@ private:
     void movePacman();
     void moveGhosts();
     bool canMove(int x, int y, Direction dir);
-    void recalculatePath();
-    void stepAutoSolve();
+    void trySpawnFruit();
+    void checkFruitPickup();
+    void drawCherry(QPainter &painter, int cx, int cy);
+    void drawApple(QPainter &painter, int cx, int cy);
+    void drawStrawberry(QPainter &painter, int cx, int cy);
+    void drawOrangeFruit(QPainter &painter, int cx, int cy);
 
     static const int ROWS = 21;
     static const int COLS = 21;
     static const int CELL_SIZE = 30;
 
-    int board[ROWS][COLS]; // 0 = empty, 1 = wall, 2 = dot, 3 = power pellet
+    int board[ROWS][COLS]; // 0 = empty, 1 = wall, 2 = dot
 
     int pacmanX;
     int pacmanY;
@@ -60,21 +74,17 @@ private:
     int pacmanMouthAngle;
     bool pacmanMouthOpening;
 
-    // Maze Solver Pattern components
-    Point goalPoint;
-    SolveResult currentResult;
-    QVector<std::shared_ptr<MazeSolverStrategy>> solvers;
-    int currentSolverIndex;
-    bool autoSolveMode;
-    bool showExplored;
-    bool ghostsActive;
-
     int score;
     bool gameOver;
     bool gameWon;
 
     QTimer *timer;
     QVector<Ghost> ghosts;
+
+    // Bonus fruit system
+    QVector<BonusFruit> activeFruits;
+    int fruitSpawnCounter;       // ticks until next spawn attempt
+    static const int MAX_FRUITS = 3; // max fruits on screen at once
 };
 
 #endif // MAINWINDOW_H

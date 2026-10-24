@@ -6,7 +6,6 @@ TEMPLATE = app
 SOURCES += main.cpp \
            mainwindow.cpp
 
-HEADERS += mainwindow.h \
-           mazesolver.h
+HEADERS += mainwindow.h
 
 CONFIG += c++17
