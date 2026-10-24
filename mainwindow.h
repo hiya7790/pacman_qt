@@ -63,14 +63,13 @@ private:
     void respawnGhostFarAway(Ghost &g);
     void updateFogOfWar();
     bool isCellVisible(int x, int y) const;
-    void drawCherry(QPainter &painter, int cx, int cy);
-    void drawApple(QPainter &painter, int cx, int cy);
-    void drawStrawberry(QPainter &painter, int cx, int cy);
-    void drawOrangeFruit(QPainter &painter, int cx, int cy);
+    void drawCherry(QPainter &painter, int cx, int cy, int s);
+    void drawApple(QPainter &painter, int cx, int cy, int s);
+    void drawStrawberry(QPainter &painter, int cx, int cy, int s);
+    void drawOrangeFruit(QPainter &painter, int cx, int cy, int s);
 
     static const int ROWS = 21;
     static const int COLS = 21;
-    static const int CELL_SIZE = 30;
     static constexpr double VISION_RADIUS = 3.6;
 
     int board[ROWS][COLS]; // 0 = empty, 1 = wall, 2 = dot

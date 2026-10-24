@@ -9,9 +9,9 @@
 MainWindow::MainWindow(QWidget *parent)
     : QWidget(parent)
 {
-    setFixedSize(COLS * CELL_SIZE, ROWS * CELL_SIZE + 55);
+    setMinimumSize(700, 750);
     setStyleSheet("background-color: black;");
-    setWindowTitle("Pacman: Dark Maze Escape (Procedural Levels)");
+    setWindowTitle("Pacman: Dark Maze Escape (Fullscreen)");
 
     fogOfWarEnabled = true;
 
@@ -20,6 +20,8 @@ MainWindow::MainWindow(QWidget *parent)
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &MainWindow::gameLoop);
     timer->start(130);
+
+    showFullScreen();
 }
 
 MainWindow::~MainWindow()
@@ -51,7 +53,6 @@ void MainWindow::generateMaze()
     bool visited[ROWS][COLS] = {};
     QVector<QPoint> stack;
 
-    // Start carving from top-left (1, 1)
     visited[1][1] = true;
     board[1][1] = 0;
     stack.push_back(QPoint(1, 1));
@@ -79,12 +80,10 @@ void MainWindow::generateMaze()
             int nr = curr.y() + dr[pick];
             int nc = curr.x() + dc[pick];
 
-            // Carve wall between current and target
             int wallR = curr.y() + dr[pick] / 2;
             int wallC = curr.x() + dc[pick] / 2;
             board[wallR][wallC] = 0;
 
-            // Carve destination cell
             board[nr][nc] = 0;
             visited[nr][nc] = true;
             stack.push_back(QPoint(nc, nr));
@@ -99,7 +98,6 @@ void MainWindow::generateMaze()
             board[r][c] = 0;
         }
     }
-    // Doors connecting ghost house to the corridors
     board[8][10] = 0;
     board[7][10] = 0;
     board[12][10] = 0;
@@ -112,17 +110,14 @@ void MainWindow::generateMaze()
     board[10][COLS - 1] = 0;
 
     // 5. Braid the maze: Randomly remove ~28% of internal dividing walls
-    // This creates loops and cycles so Pacman can outmaneuver chasing ghosts!
     for (int r = 2; r < ROWS - 2; ++r) {
         for (int c = 2; c < COLS - 2; ++c) {
             if (board[r][c] == 1) {
-                // Horizontal wall between two vertical corridors
                 if (board[r-1][c] == 0 && board[r+1][c] == 0 && board[r][c-1] == 1 && board[r][c+1] == 1) {
                     if (QRandomGenerator::global()->bounded(100) < 28) {
                         board[r][c] = 0;
                     }
                 }
-                // Vertical wall between two horizontal corridors
                 else if (board[r][c-1] == 0 && board[r][c+1] == 0 && board[r-1][c] == 1 && board[r+1][c] == 1) {
                     if (QRandomGenerator::global()->bounded(100) < 28) {
                         board[r][c] = 0;
@@ -137,7 +132,7 @@ void MainWindow::generateMaze()
     exitY = 1;
     board[exitY][exitX] = 0;
 
-    // 7. Find Pacman start position in the bottom corridor near center
+    // 7. Find Pacman start position in bottom corridor near center
     pacmanX = 10;
     pacmanY = ROWS - 2;
     bool foundStart = false;
@@ -158,14 +153,14 @@ void MainWindow::generateMaze()
     }
     board[pacmanY][pacmanX] = 0;
 
-    // 8. Populate Dots (2) on all open floor tiles (except start, exit, ghost house)
+    // 8. Populate Dots (2)
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
             if (board[r][c] == 0) {
                 if (c == exitX && r == exitY) continue;
                 if (c == pacmanX && r == pacmanY) continue;
-                if (r >= 9 && r <= 11 && c >= 8 && c <= 12) continue; // ghost house
-                if ((c == 0 || c == COLS - 1) && r == 10) continue;   // warp tunnel edges
+                if (r >= 9 && r <= 11 && c >= 8 && c <= 12) continue;
+                if ((c == 0 || c == COLS - 1) && r == 10) continue;
 
                 board[r][c] = 2; // Dot
             }
@@ -175,7 +170,6 @@ void MainWindow::generateMaze()
 
 void MainWindow::initLevel()
 {
-    // Generate a fresh procedural maze for this level!
     generateMaze();
 
     pacmanDir = LEFT;
@@ -186,29 +180,22 @@ void MainWindow::initLevel()
     levelComplete = false;
     gameOver = false;
 
-    // Place Ghosts in Ghost House
     ghosts.clear();
     ghosts.push_back({10, 9, UP, 0});     // Blinky (Red)
     ghosts.push_back({9, 10, LEFT, 1});   // Pinky (Pink)
     ghosts.push_back({11, 10, RIGHT, 2}); // Inky (Cyan)
     ghosts.push_back({10, 10, DOWN, 3});  // Clyde (Orange)
 
-    // Frightened mode off
     ghostsFrightened = false;
     frightenedTicksLeft = 0;
 
-    // Ghost speed increases with level
     ghostMoveEveryN = std::max(1, 4 - currentLevel);
     ghostTickCounter = 0;
 
-    // Reset fruits
     activeFruits.clear();
     fruitSpawnCounter = QRandomGenerator::global()->bounded(15, 40);
 
-    // Initial fog-of-war vision around starting position
     updateFogOfWar();
-
-    // Reset timer
     elapsedTimer.start();
 }
 
@@ -232,6 +219,24 @@ bool MainWindow::isCellVisible(int x, int y) const
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
 {
+    // Toggle Fullscreen with F11
+    if (event->key() == Qt::Key_F11) {
+        if (isFullScreen()) {
+            showNormal();
+        } else {
+            showFullScreen();
+        }
+        update();
+        return;
+    }
+
+    // Exit fullscreen with Escape key
+    if (event->key() == Qt::Key_Escape && isFullScreen()) {
+        showNormal();
+        update();
+        return;
+    }
+
     if (gameOver) {
         if (event->key() == Qt::Key_Space || event->key() == Qt::Key_R) {
             initGame();
@@ -274,10 +279,9 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         checkFruitPickup();
         checkGhostCollisions();
 
-        // Check if reached exit
         if (pacmanX == exitX && pacmanY == exitY) {
             levelComplete = true;
-            score += 500; // level completion bonus
+            score += 500;
         }
 
         update();
@@ -294,7 +298,6 @@ bool MainWindow::canMove(int x, int y, Direction dir)
     else if (dir == LEFT) nextX--;
     else if (dir == RIGHT) nextX++;
 
-    // Tunnel wrapping
     if (nextX < 0 || nextX >= COLS) return true;
 
     if (nextY >= 0 && nextY < ROWS) {
@@ -315,17 +318,14 @@ void MainWindow::movePacman()
         else if (pacmanDir == LEFT) pacmanX--;
         else if (pacmanDir == RIGHT) pacmanX++;
 
-        // Wrap around tunnels
         if (pacmanX < 0) pacmanX = COLS - 1;
         if (pacmanX >= COLS) pacmanX = 0;
 
-        // Eat dot
         if (board[pacmanY][pacmanX] == 2) {
             board[pacmanY][pacmanX] = 0;
             score += 10;
         }
 
-        // Mouth animation
         if (pacmanMouthOpening) {
             pacmanMouthAngle += 15;
             if (pacmanMouthAngle >= 45) pacmanMouthOpening = false;
@@ -339,7 +339,6 @@ void MainWindow::movePacman()
 void MainWindow::moveGhosts()
 {
     for (Ghost &g : ghosts) {
-        // Frightened ghosts move slower
         if (ghostsFrightened && QRandomGenerator::global()->bounded(3) == 0) {
             continue;
         }
@@ -362,7 +361,6 @@ void MainWindow::moveGhosts()
         if (possibleDirs.isEmpty()) {
             if (canMove(g.x, g.y, reverseDir)) g.dir = reverseDir;
         } else {
-            // Level 3+: Blinky (red ghost, index 0) actively chases Pacman
             if (!ghostsFrightened && g.colorIndex == 0 && currentLevel >= 3) {
                 int bestDist = 999;
                 Direction bestDir = possibleDirs[0];
@@ -382,7 +380,6 @@ void MainWindow::moveGhosts()
                 }
                 g.dir = bestDir;
             } else if (ghostsFrightened) {
-                // Frightened: run away from Pacman
                 int bestDist = -1;
                 Direction bestDir = possibleDirs[0];
                 for (Direction d : possibleDirs) {
@@ -509,7 +506,6 @@ void MainWindow::checkFruitPickup()
             score += 100;
             activeFruits.removeAt(i);
 
-            // POWER-UP: Eating a fruit makes ghosts frightened!
             ghostsFrightened = true;
             frightenedTicksLeft = FRIGHTEN_DURATION;
         }
@@ -517,73 +513,86 @@ void MainWindow::checkFruitPickup()
 }
 
 // ========================================================
-// Fruit Drawing Helpers
+// Responsive Scaled Fruit Drawing Helpers
 // ========================================================
 
-void MainWindow::drawCherry(QPainter &painter, int cx, int cy)
+void MainWindow::drawCherry(QPainter &painter, int cx, int cy, int s)
 {
-    int s = CELL_SIZE;
-    painter.setPen(QPen(QColor(0, 160, 0), 2));
-    painter.drawLine(cx + s/2, cy + 4, cx + s/2 - 4, cy + s/2 - 2);
-    painter.drawLine(cx + s/2, cy + 4, cx + s/2 + 4, cy + s/2 - 2);
+    painter.setPen(QPen(QColor(0, 160, 0), std::max(2, s / 15)));
+    painter.drawLine(cx + s/2, cy + s * 4 / 30, cx + s/2 - s * 4 / 30, cy + s/2 - s * 2 / 30);
+    painter.drawLine(cx + s/2, cy + s * 4 / 30, cx + s/2 + s * 4 / 30, cy + s/2 - s * 2 / 30);
+
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(220, 20, 20));
-    painter.drawEllipse(cx + s/2 - 9, cy + s/2 - 3, 10, 10);
+    int cherryD = std::max(6, s * 10 / 30);
+    painter.drawEllipse(cx + s/2 - s * 9 / 30, cy + s/2 - s * 3 / 30, cherryD, cherryD);
+
     painter.setBrush(QColor(200, 10, 10));
-    painter.drawEllipse(cx + s/2 + 1, cy + s/2 - 3, 10, 10);
+    painter.drawEllipse(cx + s/2 + s * 1 / 30, cy + s/2 - s * 3 / 30, cherryD, cherryD);
+
     painter.setBrush(QColor(255, 180, 180, 180));
-    painter.drawEllipse(cx + s/2 - 7, cy + s/2, 3, 3);
-    painter.drawEllipse(cx + s/2 + 3, cy + s/2, 3, 3);
+    int hlD = std::max(2, s * 3 / 30);
+    painter.drawEllipse(cx + s/2 - s * 7 / 30, cy + s/2, hlD, hlD);
+    painter.drawEllipse(cx + s/2 + s * 3 / 30, cy + s/2, hlD, hlD);
 }
 
-void MainWindow::drawApple(QPainter &painter, int cx, int cy)
+void MainWindow::drawApple(QPainter &painter, int cx, int cy, int s)
 {
-    int s = CELL_SIZE;
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(50, 200, 50));
-    painter.drawEllipse(cx + 5, cy + 7, s - 10, s - 10);
+    painter.drawEllipse(cx + s * 5 / 30, cy + s * 7 / 30, s - s * 10 / 30, s - s * 10 / 30);
+
     painter.setBrush(QColor(120, 255, 120, 150));
-    painter.drawEllipse(cx + 8, cy + 9, 5, 5);
-    painter.setPen(QPen(QColor(100, 60, 20), 2));
-    painter.drawLine(cx + s/2, cy + 7, cx + s/2, cy + 3);
+    painter.drawEllipse(cx + s * 8 / 30, cy + s * 9 / 30, std::max(3, s * 5 / 30), std::max(3, s * 5 / 30));
+
+    painter.setPen(QPen(QColor(100, 60, 20), std::max(2, s / 15)));
+    painter.drawLine(cx + s/2, cy + s * 7 / 30, cx + s/2, cy + s * 3 / 30);
+
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(30, 160, 30));
-    painter.drawEllipse(cx + s/2, cy + 2, 6, 4);
+    painter.drawEllipse(cx + s/2, cy + s * 2 / 30, std::max(3, s * 6 / 30), std::max(2, s * 4 / 30));
 }
 
-void MainWindow::drawStrawberry(QPainter &painter, int cx, int cy)
+void MainWindow::drawStrawberry(QPainter &painter, int cx, int cy, int s)
 {
-    int s = CELL_SIZE;
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(220, 30, 50));
     QPolygon strawberry;
-    strawberry << QPoint(cx + s/2, cy + s - 5)
-               << QPoint(cx + 5, cy + 8)
-               << QPoint(cx + s - 5, cy + 8);
+    strawberry << QPoint(cx + s/2, cy + s - s * 5 / 30)
+               << QPoint(cx + s * 5 / 30, cy + s * 8 / 30)
+               << QPoint(cx + s - s * 5 / 30, cy + s * 8 / 30);
     painter.drawPolygon(strawberry);
-    painter.drawEllipse(cx + 5, cy + 6, s - 10, 8);
+    painter.drawEllipse(cx + s * 5 / 30, cy + s * 6 / 30, s - s * 10 / 30, std::max(4, s * 8 / 30));
+
     painter.setBrush(QColor(255, 255, 100));
-    painter.drawEllipse(cx + s/2 - 3, cy + 12, 2, 2);
-    painter.drawEllipse(cx + s/2 + 2, cy + 14, 2, 2);
-    painter.drawEllipse(cx + s/2 - 1, cy + 17, 2, 2);
+    int seedD = std::max(2, s * 2 / 30);
+    painter.drawEllipse(cx + s/2 - s * 3 / 30, cy + s * 12 / 30, seedD, seedD);
+    painter.drawEllipse(cx + s/2 + s * 2 / 30, cy + s * 14 / 30, seedD, seedD);
+    painter.drawEllipse(cx + s/2 - s * 1 / 30, cy + s * 17 / 30, seedD, seedD);
+
     painter.setBrush(QColor(30, 160, 30));
-    painter.drawEllipse(cx + s/2 - 5, cy + 4, 5, 4);
-    painter.drawEllipse(cx + s/2 + 1, cy + 4, 5, 4);
+    int leafW = std::max(3, s * 5 / 30);
+    int leafH = std::max(2, s * 4 / 30);
+    painter.drawEllipse(cx + s/2 - s * 5 / 30, cy + s * 4 / 30, leafW, leafH);
+    painter.drawEllipse(cx + s/2 + s * 1 / 30, cy + s * 4 / 30, leafW, leafH);
 }
 
-void MainWindow::drawOrangeFruit(QPainter &painter, int cx, int cy)
+void MainWindow::drawOrangeFruit(QPainter &painter, int cx, int cy, int s)
 {
-    int s = CELL_SIZE;
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(255, 160, 30));
-    painter.drawEllipse(cx + 5, cy + 6, s - 10, s - 10);
+    painter.drawEllipse(cx + s * 5 / 30, cy + s * 6 / 30, s - s * 10 / 30, s - s * 10 / 30);
+
     painter.setBrush(QColor(255, 220, 120, 160));
-    painter.drawEllipse(cx + 8, cy + 9, 5, 5);
-    painter.setPen(QPen(QColor(100, 60, 20), 2));
-    painter.drawLine(cx + s/2, cy + 6, cx + s/2, cy + 3);
+    int hlD = std::max(3, s * 5 / 30);
+    painter.drawEllipse(cx + s * 8 / 30, cy + s * 9 / 30, hlD, hlD);
+
+    painter.setPen(QPen(QColor(100, 60, 20), std::max(2, s / 15)));
+    painter.drawLine(cx + s/2, cy + s * 6 / 30, cx + s/2, cy + s * 3 / 30);
+
     painter.setPen(Qt::NoPen);
     painter.setBrush(QColor(30, 160, 30));
-    painter.drawEllipse(cx + s/2, cy + 1, 6, 4);
+    painter.drawEllipse(cx + s/2, cy + s * 1 / 30, std::max(3, s * 6 / 30), std::max(2, s * 4 / 30));
 }
 
 // ========================================================
@@ -594,7 +603,6 @@ void MainWindow::gameLoop()
 {
     if (gameOver || levelComplete) return;
 
-    // Ghost movement speed control
     ghostTickCounter++;
     if (ghostTickCounter >= ghostMoveEveryN) {
         ghostTickCounter = 0;
@@ -602,7 +610,6 @@ void MainWindow::gameLoop()
         checkGhostCollisions();
     }
 
-    // Frightened mode countdown
     if (ghostsFrightened) {
         frightenedTicksLeft--;
         if (frightenedTicksLeft <= 0) {
@@ -610,10 +617,8 @@ void MainWindow::gameLoop()
         }
     }
 
-    // Fruit spawning
     trySpawnFruit();
 
-    // Tick down fruit lifespans
     for (int i = activeFruits.size() - 1; i >= 0; --i) {
         activeFruits[i].ticksRemaining--;
         if (activeFruits[i].ticksRemaining <= 0) {
@@ -625,7 +630,7 @@ void MainWindow::gameLoop()
 }
 
 // ========================================================
-// Rendering
+// Dynamic Fullscreen Rendering
 // ========================================================
 
 void MainWindow::paintEvent(QPaintEvent *)
@@ -633,18 +638,33 @@ void MainWindow::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
+    // Compute responsive cell size and center offset
+    int hudHeight = 58;
+    int availW = width();
+    int availH = height() - hudHeight;
+
+    int cellSize = std::min(availW / COLS, availH / ROWS);
+    if (cellSize < 12) cellSize = 12;
+
+    int mazeW = COLS * cellSize;
+    int mazeH = ROWS * cellSize;
+    int startX = (availW - mazeW) / 2;
+    int startY = (availH - mazeH) / 2;
+
+    // Fill background letterbox with deep black
+    painter.fillRect(rect(), QColor(5, 5, 8));
+
     // 1. Draw Maze Tiles & Pellets (with Fog of War)
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
-            int cx = c * CELL_SIZE;
-            int cy = r * CELL_SIZE;
+            int cx = startX + c * cellSize;
+            int cy = startY + r * cellSize;
 
             bool visible = isCellVisible(c, r);
             bool wasExplored = explored[r][c];
 
-            // If in fog of war and tile is completely unvisited and out of sight:
             if (fogOfWarEnabled && !visible && !wasExplored) {
-                painter.fillRect(cx, cy, CELL_SIZE, CELL_SIZE, QColor(0, 0, 0));
+                painter.fillRect(cx, cy, cellSize, cellSize, QColor(0, 0, 0));
                 continue;
             }
 
@@ -652,29 +672,30 @@ void MainWindow::paintEvent(QPaintEvent *)
                 // Wall tile
                 if (visible) {
                     painter.setBrush(QColor(25, 45, 130));
-                    painter.setPen(QPen(QColor(40, 80, 200), 1));
+                    painter.setPen(QPen(QColor(40, 80, 200), std::max(1, cellSize / 25)));
                 } else {
-                    // Explored breadcrumb memory: dim midnight blue
                     painter.setBrush(QColor(14, 22, 50));
-                    painter.setPen(QPen(QColor(24, 38, 80), 1));
+                    painter.setPen(QPen(QColor(24, 38, 80), std::max(1, cellSize / 25)));
                 }
-                painter.drawRoundedRect(cx + 1, cy + 1, CELL_SIZE - 2, CELL_SIZE - 2, 4, 4);
+                int cornerR = std::max(3, cellSize / 7);
+                painter.drawRoundedRect(cx + 1, cy + 1, cellSize - 2, cellSize - 2, cornerR, cornerR);
             } else {
-                // Open floor corridor
+                // Open corridor
                 if (visible) {
-                    painter.fillRect(cx, cy, CELL_SIZE, CELL_SIZE, QColor(8, 8, 16));
+                    painter.fillRect(cx, cy, cellSize, cellSize, QColor(8, 8, 16));
                     if (board[r][c] == 2) {
                         painter.setBrush(QColor(255, 230, 180));
                         painter.setPen(Qt::NoPen);
-                        painter.drawEllipse(cx + CELL_SIZE/2 - 2, cy + CELL_SIZE/2 - 2, 5, 5);
+                        int dotSize = std::max(4, cellSize * 5 / 30);
+                        painter.drawEllipse(cx + cellSize/2 - dotSize/2, cy + cellSize/2 - dotSize/2, dotSize, dotSize);
                     }
                 } else {
-                    // Dimly remembered floor corridor
-                    painter.fillRect(cx, cy, CELL_SIZE, CELL_SIZE, QColor(4, 4, 10));
+                    painter.fillRect(cx, cy, cellSize, cellSize, QColor(4, 4, 10));
                     if (board[r][c] == 2) {
                         painter.setBrush(QColor(100, 95, 80, 75));
                         painter.setPen(Qt::NoPen);
-                        painter.drawEllipse(cx + CELL_SIZE/2 - 1, cy + CELL_SIZE/2 - 1, 3, 3);
+                        int dotSize = std::max(2, cellSize * 3 / 30);
+                        painter.drawEllipse(cx + cellSize/2 - dotSize/2, cy + cellSize/2 - dotSize/2, dotSize, dotSize);
                     }
                 }
             }
@@ -687,59 +708,57 @@ void MainWindow::paintEvent(QPaintEvent *)
         bool exitExplored = explored[exitY][exitX];
 
         if (!fogOfWarEnabled || exitVisible || exitExplored) {
-            int ex = exitX * CELL_SIZE;
-            int ey = exitY * CELL_SIZE;
+            int ex = startX + exitX * cellSize;
+            int ey = startY + exitY * cellSize;
 
             if (exitVisible) {
-                // Outer glow
                 painter.setBrush(QColor(0, 255, 100, 50));
-                painter.setPen(QPen(QColor(0, 255, 120, 180), 2));
-                painter.drawRoundedRect(ex + 2, ey + 2, CELL_SIZE - 4, CELL_SIZE - 4, 6, 6);
+                painter.setPen(QPen(QColor(0, 255, 120, 180), std::max(2, cellSize / 15)));
+                painter.drawRoundedRect(ex + 2, ey + 2, cellSize - 4, cellSize - 4, 6, 6);
 
-                // Inner portal
                 painter.setBrush(QColor(0, 255, 100, 120));
                 painter.setPen(Qt::NoPen);
-                painter.drawEllipse(ex + 5, ey + 5, CELL_SIZE - 10, CELL_SIZE - 10);
+                painter.drawEllipse(ex + 5, ey + 5, cellSize - 10, cellSize - 10);
 
-                // "EXIT" text
                 painter.setPen(QColor(255, 255, 255));
-                painter.setFont(QFont("Arial", 7, QFont::Bold));
-                painter.drawText(ex + 3, ey + CELL_SIZE/2 + 4, "EXIT");
+                painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+                painter.drawText(ex + 2, ey + cellSize/2 + cellSize/8, "EXIT");
             } else {
-                // Dim memory of discovered exit
                 painter.setBrush(QColor(0, 120, 50, 30));
                 painter.setPen(QPen(QColor(0, 140, 60, 90), 1));
-                painter.drawRoundedRect(ex + 2, ey + 2, CELL_SIZE - 4, CELL_SIZE - 4, 6, 6);
+                painter.drawRoundedRect(ex + 2, ey + 2, cellSize - 4, cellSize - 4, 6, 6);
 
                 painter.setPen(QColor(140, 200, 140, 140));
-                painter.setFont(QFont("Arial", 6, QFont::Bold));
-                painter.drawText(ex + 4, ey + CELL_SIZE/2 + 3, "EXIT");
+                painter.setFont(QFont("Arial", std::max(6, cellSize / 5), QFont::Bold));
+                painter.drawText(ex + 3, ey + cellSize/2 + cellSize/8, "EXIT");
             }
         }
     }
 
-    // 3. Draw Bonus Fruits (Only when visible in player's light!)
+    // 3. Draw Bonus Fruits
     for (const BonusFruit &fruit : activeFruits) {
         if (!isCellVisible(fruit.x, fruit.y)) continue;
 
-        int fx = fruit.x * CELL_SIZE;
-        int fy = fruit.y * CELL_SIZE;
+        int fx = startX + fruit.x * cellSize;
+        int fy = startY + fruit.y * cellSize;
 
         switch (fruit.type) {
-            case CHERRY:       drawCherry(painter, fx, fy); break;
-            case APPLE:        drawApple(painter, fx, fy); break;
-            case STRAWBERRY:   drawStrawberry(painter, fx, fy); break;
-            case ORANGE_FRUIT: drawOrangeFruit(painter, fx, fy); break;
+            case CHERRY:       drawCherry(painter, fx, fy, cellSize); break;
+            case APPLE:        drawApple(painter, fx, fy, cellSize); break;
+            case STRAWBERRY:   drawStrawberry(painter, fx, fy, cellSize); break;
+            case ORANGE_FRUIT: drawOrangeFruit(painter, fx, fy, cellSize); break;
         }
 
-        // Point value label
         painter.setPen(QColor(255, 255, 100));
-        painter.setFont(QFont("Arial", 7, QFont::Bold));
-        painter.drawText(fx + 4, fy + CELL_SIZE - 1, "100");
+        painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+        painter.drawText(fx + 3, fy + cellSize - 1, "100");
     }
 
     // 4. Draw Pacman
     {
+        int px = startX + pacmanX * cellSize;
+        int py = startY + pacmanY * cellSize;
+
         painter.setBrush(QColor(255, 220, 0));
         painter.setPen(Qt::NoPen);
         int startAngle = 0;
@@ -749,11 +768,10 @@ void MainWindow::paintEvent(QPaintEvent *)
         else if (pacmanDir == UP) startAngle = 90 + pacmanMouthAngle;
 
         int spanAngle = 360 - 2 * pacmanMouthAngle;
-        painter.drawPie(pacmanX * CELL_SIZE + 2, pacmanY * CELL_SIZE + 2,
-                        CELL_SIZE - 4, CELL_SIZE - 4, startAngle * 16, spanAngle * 16);
+        painter.drawPie(px + 2, py + 2, cellSize - 4, cellSize - 4, startAngle * 16, spanAngle * 16);
     }
 
-    // 5. Draw Ghosts (Only visible when within Pacman's lantern vision!)
+    // 5. Draw Ghosts
     QColor ghostNormalColors[] = {
         QColor(255, 50, 50),   // Blinky (Red)
         QColor(255, 180, 220), // Pinky (Pink)
@@ -762,11 +780,10 @@ void MainWindow::paintEvent(QPaintEvent *)
     };
 
     for (const Ghost &g : ghosts) {
-        // Ghost is invisible in the dark unless inside lantern radius!
         if (!isCellVisible(g.x, g.y)) continue;
 
-        int gx = g.x * CELL_SIZE;
-        int gy = g.y * CELL_SIZE;
+        int gx = startX + g.x * cellSize;
+        int gy = startY + g.y * cellSize;
 
         if (ghostsFrightened) {
             if (frightenedTicksLeft <= 8 && (frightenedTicksLeft % 2 == 0)) {
@@ -779,116 +796,120 @@ void MainWindow::paintEvent(QPaintEvent *)
         }
         painter.setPen(Qt::NoPen);
 
-        // Ghost head & body
-        painter.drawEllipse(gx + 2, gy + 2, CELL_SIZE - 4, CELL_SIZE - 4);
-        painter.drawRect(gx + 2, gy + CELL_SIZE/2, CELL_SIZE - 4, (CELL_SIZE - 4)/2);
+        // Ghost body
+        painter.drawEllipse(gx + 2, gy + 2, cellSize - 4, cellSize - 4);
+        painter.drawRect(gx + 2, gy + cellSize/2, cellSize - 4, (cellSize - 4)/2);
 
-        // Wavy bottom edge
+        // Wavy bottom
+        int waveW = (cellSize - 4) / 3;
         for (int w = 0; w < 3; ++w) {
-            int wx = gx + 2 + w * ((CELL_SIZE - 4) / 3);
-            int wy = gy + CELL_SIZE - 5;
-            painter.drawEllipse(wx, wy, (CELL_SIZE - 4) / 3, 6);
+            int wx = gx + 2 + w * waveW;
+            int wy = gy + cellSize - cellSize / 5;
+            painter.drawEllipse(wx, wy, waveW, cellSize / 5);
         }
 
         if (ghostsFrightened) {
-            // Scared face
             painter.setBrush(QColor(255, 200, 200));
-            painter.drawEllipse(gx + 8, gy + 10, 4, 4);
-            painter.drawEllipse(gx + 18, gy + 10, 4, 4);
+            int eyeSize = std::max(3, cellSize * 4 / 30);
+            painter.drawEllipse(gx + cellSize * 8 / 30, gy + cellSize * 10 / 30, eyeSize, eyeSize);
+            painter.drawEllipse(gx + cellSize * 18 / 30, gy + cellSize * 10 / 30, eyeSize, eyeSize);
+
             painter.setPen(QPen(QColor(255, 200, 200), 1));
             for (int m = 0; m < 4; ++m) {
-                int mx = gx + 6 + m * 5;
-                int my = gy + 18 + (m % 2 == 0 ? 0 : 2);
-                painter.drawLine(mx, my, mx + 4, my + (m % 2 == 0 ? 2 : -2));
+                int mx = gx + cellSize * 6 / 30 + m * (cellSize * 5 / 30);
+                int my = gy + cellSize * 18 / 30 + (m % 2 == 0 ? 0 : 2);
+                painter.drawLine(mx, my, mx + cellSize * 4 / 30, my + (m % 2 == 0 ? 2 : -2));
             }
             painter.setPen(Qt::NoPen);
         } else {
-            // Normal eyes
             painter.setBrush(Qt::white);
-            painter.drawEllipse(gx + 6, gy + 8, 6, 6);
-            painter.drawEllipse(gx + 16, gy + 8, 6, 6);
+            int eyeSize = std::max(5, cellSize * 6 / 30);
+            painter.drawEllipse(gx + cellSize * 6 / 30, gy + cellSize * 8 / 30, eyeSize, eyeSize);
+            painter.drawEllipse(gx + cellSize * 16 / 30, gy + cellSize * 8 / 30, eyeSize, eyeSize);
+
             painter.setBrush(Qt::blue);
-            painter.drawEllipse(gx + 8, gy + 10, 3, 3);
-            painter.drawEllipse(gx + 18, gy + 10, 3, 3);
+            int pupilSize = std::max(3, cellSize * 3 / 30);
+            painter.drawEllipse(gx + cellSize * 8 / 30, gy + cellSize * 10 / 30, pupilSize, pupilSize);
+            painter.drawEllipse(gx + cellSize * 18 / 30, gy + cellSize * 10 / 30, pupilSize, pupilSize);
         }
     }
 
-    // 6. Draw Atmospheric Lantern Light Spotlight / Ambient Vignette
+    // 6. Lantern Light Spotlight / Ambient Vignette
     if (fogOfWarEnabled) {
-        int pxCenter = pacmanX * CELL_SIZE + CELL_SIZE / 2;
-        int pyCenter = pacmanY * CELL_SIZE + CELL_SIZE / 2;
+        int pxCenter = startX + pacmanX * cellSize + cellSize / 2;
+        int pyCenter = startY + pacmanY * cellSize + cellSize / 2;
 
-        QRadialGradient lantern(pxCenter, pyCenter, (VISION_RADIUS + 0.6) * CELL_SIZE);
-        lantern.setColorAt(0.0, QColor(255, 235, 170, 25)); // soft lantern center
+        QRadialGradient lantern(pxCenter, pyCenter, (VISION_RADIUS + 0.6) * cellSize);
+        lantern.setColorAt(0.0, QColor(255, 235, 170, 25));
         lantern.setColorAt(0.45, QColor(255, 200, 100, 10));
         lantern.setColorAt(0.75, QColor(0, 0, 0, 60));
         lantern.setColorAt(1.0, QColor(0, 0, 0, 220));
 
-        painter.fillRect(0, 0, COLS * CELL_SIZE, ROWS * CELL_SIZE, lantern);
+        painter.fillRect(startX, startY, mazeW, mazeH, lantern);
     }
 
-    // 7. Draw HUD
-    int hudY = ROWS * CELL_SIZE;
-    painter.fillRect(0, hudY, width(), height() - hudY, QColor(14, 16, 26));
+    // 7. Fullscreen Bottom HUD Bar
+    int hudY = height() - hudHeight;
+    painter.fillRect(0, hudY, width(), hudHeight, QColor(14, 16, 26));
     painter.setPen(QPen(QColor(40, 60, 100), 2));
     painter.drawLine(0, hudY, width(), hudY);
 
-    // Line 1: Score, Level, Moves, Time, Fog status
-    painter.setFont(QFont("Arial", 11, QFont::Bold));
+    int baseFont1 = std::max(11, width() / 110);
+    int baseFont2 = std::max(9, width() / 135);
+
+    // Line 1: Metrics
+    painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
     painter.setPen(Qt::white);
-    painter.drawText(12, hudY + 20, QString("SCORE: %1").arg(score));
+    painter.drawText(20, hudY + 22, QString("SCORE: %1").arg(score));
 
     painter.setPen(QColor(0, 230, 160));
-    painter.drawText(125, hudY + 20, QString("LEVEL: %1").arg(currentLevel));
+    painter.drawText(width() * 0.18, hudY + 22, QString("LEVEL: %1").arg(currentLevel));
 
     painter.setPen(QColor(180, 200, 255));
-    painter.drawText(220, hudY + 20, QString("MOVES: %1").arg(moveCount));
+    painter.drawText(width() * 0.32, hudY + 22, QString("MOVES: %1").arg(moveCount));
 
-    // Elapsed time
     qint64 elapsedSec = elapsedTimer.elapsed() / 1000;
     int mins = elapsedSec / 60;
     int secs = elapsedSec % 60;
     painter.setPen(QColor(255, 200, 100));
-    painter.drawText(330, hudY + 20, QString("TIME: %1:%2")
+    painter.drawText(width() * 0.48, hudY + 22, QString("TIME: %1:%2")
                      .arg(mins, 2, 10, QChar('0'))
                      .arg(secs, 2, 10, QChar('0')));
 
-    // Fog of war status badge
     if (fogOfWarEnabled) {
         painter.setPen(QColor(120, 220, 255));
-        painter.drawText(440, hudY + 20, "[FOG: ON 🌑]");
+        painter.drawText(width() * 0.65, hudY + 22, "[FOG: ON 🌑]");
     } else {
         painter.setPen(QColor(150, 150, 160));
-        painter.drawText(440, hudY + 20, "[FOG: OFF ☀️]");
+        painter.drawText(width() * 0.65, hudY + 22, "[FOG: OFF ☀️]");
     }
 
-    // Frightened indicator
     if (ghostsFrightened) {
         painter.setPen(QColor(255, 100, 140));
-        painter.drawText(545, hudY + 20, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
+        painter.drawText(width() * 0.82, hudY + 22, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
     }
 
     // Line 2: Controls
-    painter.setFont(QFont("Arial", 9));
+    painter.setFont(QFont("Arial", baseFont2));
     painter.setPen(QColor(130, 150, 180));
-    painter.drawText(12, hudY + 42,
-        "[Arrows] Move  |  [F] Toggle Fog  |  [R] New Maze/Reset  |  Eat Fruit = Ghosts Edible!  |  Reach EXIT to Win!");
+    painter.drawText(20, hudY + 45,
+        "[Arrows] Move  |  [F] Toggle Fog  |  [F11 / Esc] Fullscreen  |  [R] New Maze/Reset  |  Reach EXIT to Win!");
 
     // 8. Game Over / Level Complete Banner
     if (gameOver) {
-        painter.fillRect(0, ROWS * CELL_SIZE / 2 - 30, width(), 60, QColor(0, 0, 0, 220));
+        painter.fillRect(0, height() / 2 - 40, width(), 80, QColor(0, 0, 0, 225));
         painter.setPen(QColor(255, 60, 60));
-        painter.setFont(QFont("Arial", 18, QFont::Bold));
+        painter.setFont(QFont("Arial", std::max(18, width() / 55), QFont::Bold));
         painter.drawText(rect(), Qt::AlignCenter, "GAME OVER! Press [R] for New Maze");
     } else if (levelComplete) {
-        painter.fillRect(0, ROWS * CELL_SIZE / 2 - 35, width(), 70, QColor(0, 0, 0, 220));
+        painter.fillRect(0, height() / 2 - 45, width(), 90, QColor(0, 0, 0, 225));
         painter.setPen(QColor(60, 255, 120));
-        painter.setFont(QFont("Arial", 16, QFont::Bold));
+        painter.setFont(QFont("Arial", std::max(16, width() / 60), QFont::Bold));
         QString levelMsg = QString("LEVEL %1 COMPLETE! +500 Bonus").arg(currentLevel);
-        painter.drawText(0, ROWS * CELL_SIZE / 2 - 10, width(), 20, Qt::AlignCenter, levelMsg);
+        painter.drawText(0, height() / 2 - 12, width(), 25, Qt::AlignCenter, levelMsg);
         painter.setPen(QColor(255, 220, 100));
-        painter.setFont(QFont("Arial", 12));
-        painter.drawText(0, ROWS * CELL_SIZE / 2 + 12, width(), 20, Qt::AlignCenter,
+        painter.setFont(QFont("Arial", std::max(12, width() / 75)));
+        painter.drawText(0, height() / 2 + 16, width(), 25, Qt::AlignCenter,
                          "Press [Space] for Next Level (Brand New Maze!)");
     }
 }
