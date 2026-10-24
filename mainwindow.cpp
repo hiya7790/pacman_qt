@@ -3,39 +3,15 @@
 #include <QPainterPath>
 #include <QRadialGradient>
 #include <QRandomGenerator>
+#include <QPoint>
 #include <cmath>
-
-// 1 = Wall, 0 = Empty, 2 = Dot
-int initialBoard[21][21] = {
-    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-    {1,0,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,1},
-    {1,2,1,1,1,2,1,1,1,2,1,2,1,1,1,2,1,1,1,2,1},
-    {1,2,1,1,1,2,1,1,1,2,1,2,1,1,1,2,1,1,1,2,1},
-    {1,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,2,1},
-    {1,2,1,1,1,2,1,2,1,1,1,1,1,2,1,2,1,1,1,2,1},
-    {1,2,2,2,2,2,1,2,2,2,1,2,2,2,1,2,2,2,2,2,1},
-    {1,1,1,1,1,2,1,1,1,0,1,0,1,1,1,2,1,1,1,1,1},
-    {0,0,0,0,1,2,1,0,0,0,0,0,0,0,1,2,1,0,0,0,0},
-    {1,1,1,1,1,2,1,0,1,1,0,1,1,0,1,2,1,1,1,1,1},
-    {0,0,0,0,0,2,0,0,1,0,0,0,1,0,0,2,0,0,0,0,0},
-    {1,1,1,1,1,2,1,0,1,1,1,1,1,0,1,2,1,1,1,1,1},
-    {0,0,0,0,1,2,1,0,0,0,0,0,0,0,1,2,1,0,0,0,0},
-    {1,1,1,1,1,2,1,2,1,1,1,1,1,2,1,2,1,1,1,1,1},
-    {1,2,2,2,2,2,2,2,2,2,1,2,2,2,2,2,2,2,2,2,1},
-    {1,2,1,1,1,2,1,1,1,2,1,2,1,1,1,2,1,1,1,2,1},
-    {1,2,2,2,1,2,2,2,2,2,0,2,2,2,2,2,1,2,2,2,1},
-    {1,1,1,2,1,2,1,2,1,1,1,1,1,2,1,2,1,2,1,1,1},
-    {1,2,2,2,2,2,1,2,2,2,1,2,2,2,1,2,2,2,2,2,1},
-    {1,2,1,1,1,1,1,1,1,2,1,2,1,1,1,1,1,1,1,2,1},
-    {1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1}
-};
 
 MainWindow::MainWindow(QWidget *parent)
     : QWidget(parent)
 {
     setFixedSize(COLS * CELL_SIZE, ROWS * CELL_SIZE + 55);
     setStyleSheet("background-color: black;");
-    setWindowTitle("Pacman: Dark Maze Escape (Fog of War)");
+    setWindowTitle("Pacman: Dark Maze Escape (Procedural Levels)");
 
     fogOfWarEnabled = true;
 
@@ -61,18 +37,147 @@ void MainWindow::initGame()
     initLevel();
 }
 
-void MainWindow::initLevel()
+void MainWindow::generateMaze()
 {
+    // 1. Fill entire board with walls and reset explored fog
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
-            board[r][c] = initialBoard[r][c];
+            board[r][c] = 1;
             explored[r][c] = false;
         }
     }
 
-    // Pacman starts at bottom-center
+    // 2. Randomized Depth-First Search (DFS) carving on odd grid nodes
+    bool visited[ROWS][COLS] = {};
+    QVector<QPoint> stack;
+
+    // Start carving from top-left (1, 1)
+    visited[1][1] = true;
+    board[1][1] = 0;
+    stack.push_back(QPoint(1, 1));
+
+    const int dr[] = {-2, 2, 0, 0};
+    const int dc[] = {0, 0, -2, 2};
+
+    while (!stack.isEmpty()) {
+        QPoint curr = stack.last();
+        QVector<int> neighbors;
+
+        for (int i = 0; i < 4; ++i) {
+            int nr = curr.y() + dr[i];
+            int nc = curr.x() + dc[i];
+
+            if (nr >= 1 && nr < ROWS - 1 && nc >= 1 && nc < COLS - 1) {
+                if (!visited[nr][nc]) {
+                    neighbors.push_back(i);
+                }
+            }
+        }
+
+        if (!neighbors.isEmpty()) {
+            int pick = neighbors[QRandomGenerator::global()->bounded(neighbors.size())];
+            int nr = curr.y() + dr[pick];
+            int nc = curr.x() + dc[pick];
+
+            // Carve wall between current and target
+            int wallR = curr.y() + dr[pick] / 2;
+            int wallC = curr.x() + dc[pick] / 2;
+            board[wallR][wallC] = 0;
+
+            // Carve destination cell
+            board[nr][nc] = 0;
+            visited[nr][nc] = true;
+            stack.push_back(QPoint(nc, nr));
+        } else {
+            stack.pop_back();
+        }
+    }
+
+    // 3. Central Ghost House room (rows 9..11, cols 8..12)
+    for (int r = 9; r <= 11; ++r) {
+        for (int c = 8; c <= 12; ++c) {
+            board[r][c] = 0;
+        }
+    }
+    // Doors connecting ghost house to the corridors
+    board[8][10] = 0;
+    board[7][10] = 0;
+    board[12][10] = 0;
+    board[13][10] = 0;
+
+    // 4. Side Warp Tunnels on Row 10
+    board[10][0] = 0;
+    board[10][1] = 0;
+    board[10][COLS - 2] = 0;
+    board[10][COLS - 1] = 0;
+
+    // 5. Braid the maze: Randomly remove ~28% of internal dividing walls
+    // This creates loops and cycles so Pacman can outmaneuver chasing ghosts!
+    for (int r = 2; r < ROWS - 2; ++r) {
+        for (int c = 2; c < COLS - 2; ++c) {
+            if (board[r][c] == 1) {
+                // Horizontal wall between two vertical corridors
+                if (board[r-1][c] == 0 && board[r+1][c] == 0 && board[r][c-1] == 1 && board[r][c+1] == 1) {
+                    if (QRandomGenerator::global()->bounded(100) < 28) {
+                        board[r][c] = 0;
+                    }
+                }
+                // Vertical wall between two horizontal corridors
+                else if (board[r][c-1] == 0 && board[r][c+1] == 0 && board[r-1][c] == 1 && board[r+1][c] == 1) {
+                    if (QRandomGenerator::global()->bounded(100) < 28) {
+                        board[r][c] = 0;
+                    }
+                }
+            }
+        }
+    }
+
+    // 6. Set EXIT point at top-left corner (1, 1)
+    exitX = 1;
+    exitY = 1;
+    board[exitY][exitX] = 0;
+
+    // 7. Find Pacman start position in the bottom corridor near center
     pacmanX = 10;
-    pacmanY = 16;
+    pacmanY = ROWS - 2;
+    bool foundStart = false;
+    for (int r = ROWS - 2; r >= ROWS - 5; --r) {
+        for (int offset = 0; offset < COLS / 2; ++offset) {
+            for (int sign : {0, -1, 1}) {
+                int c = 10 + sign * offset;
+                if (c >= 1 && c < COLS - 1 && board[r][c] == 0) {
+                    pacmanX = c;
+                    pacmanY = r;
+                    foundStart = true;
+                    break;
+                }
+            }
+            if (foundStart) break;
+        }
+        if (foundStart) break;
+    }
+    board[pacmanY][pacmanX] = 0;
+
+    // 8. Populate Dots (2) on all open floor tiles (except start, exit, ghost house)
+    for (int r = 0; r < ROWS; ++r) {
+        for (int c = 0; c < COLS; ++c) {
+            if (board[r][c] == 0) {
+                if (c == exitX && r == exitY) continue;
+                if (c == pacmanX && r == pacmanY) continue;
+                if (r >= 9 && r <= 11 && c >= 8 && c <= 12) continue; // ghost house
+                if ((c == 0 || c == COLS - 1) && r == 10) continue;   // warp tunnel edges
+
+                board[r][c] = 2; // Dot
+            }
+        }
+    }
+}
+
+void MainWindow::initLevel()
+{
+    // Generate a fresh procedural maze for this level!
+    generateMaze();
+
     pacmanDir = LEFT;
     pacmanNextDir = LEFT;
     pacmanMouthAngle = 45;
@@ -81,27 +186,22 @@ void MainWindow::initLevel()
     levelComplete = false;
     gameOver = false;
 
-    // Exit at top-left open cell
-    exitX = 1;
-    exitY = 1;
-    board[exitY][exitX] = 0; // ensure exit cell is clear
-
-    // Ghosts
+    // Place Ghosts in Ghost House
     ghosts.clear();
-    ghosts.push_back({10, 10, UP, 0});    // Blinky (Red)
+    ghosts.push_back({10, 9, UP, 0});     // Blinky (Red)
     ghosts.push_back({9, 10, LEFT, 1});   // Pinky (Pink)
     ghosts.push_back({11, 10, RIGHT, 2}); // Inky (Cyan)
-    ghosts.push_back({10, 9, DOWN, 3});   // Clyde (Orange)
+    ghosts.push_back({10, 10, DOWN, 3});  // Clyde (Orange)
 
     // Frightened mode off
     ghostsFrightened = false;
     frightenedTicksLeft = 0;
 
-    // Ghost speed: move every N ticks. Decreases with level (faster ghosts).
+    // Ghost speed increases with level
     ghostMoveEveryN = std::max(1, 4 - currentLevel);
     ghostTickCounter = 0;
 
-    // Fruits
+    // Reset fruits
     activeFruits.clear();
     fruitSpawnCounter = QRandomGenerator::global()->bounded(15, 40);
 
@@ -494,7 +594,7 @@ void MainWindow::gameLoop()
 {
     if (gameOver || levelComplete) return;
 
-    // Ghost movement governed by speed control
+    // Ghost movement speed control
     ghostTickCounter++;
     if (ghostTickCounter >= ghostMoveEveryN) {
         ghostTickCounter = 0;
@@ -772,14 +872,14 @@ void MainWindow::paintEvent(QPaintEvent *)
     painter.setFont(QFont("Arial", 9));
     painter.setPen(QColor(130, 150, 180));
     painter.drawText(12, hudY + 42,
-        "[Arrows] Move  |  [F] Toggle Fog  |  [R] Reset  |  Eat Fruit = Ghosts Edible!  |  Reach EXIT to Win!");
+        "[Arrows] Move  |  [F] Toggle Fog  |  [R] New Maze/Reset  |  Eat Fruit = Ghosts Edible!  |  Reach EXIT to Win!");
 
     // 8. Game Over / Level Complete Banner
     if (gameOver) {
         painter.fillRect(0, ROWS * CELL_SIZE / 2 - 30, width(), 60, QColor(0, 0, 0, 220));
         painter.setPen(QColor(255, 60, 60));
         painter.setFont(QFont("Arial", 18, QFont::Bold));
-        painter.drawText(rect(), Qt::AlignCenter, "GAME OVER! Press [R] to Restart");
+        painter.drawText(rect(), Qt::AlignCenter, "GAME OVER! Press [R] for New Maze");
     } else if (levelComplete) {
         painter.fillRect(0, ROWS * CELL_SIZE / 2 - 35, width(), 70, QColor(0, 0, 0, 220));
         painter.setPen(QColor(60, 255, 120));
@@ -789,6 +889,6 @@ void MainWindow::paintEvent(QPaintEvent *)
         painter.setPen(QColor(255, 220, 100));
         painter.setFont(QFont("Arial", 12));
         painter.drawText(0, ROWS * CELL_SIZE / 2 + 12, width(), 20, Qt::AlignCenter,
-                         "Press [Space] for Next Level (Ghosts get faster!)");
+                         "Press [Space] for Next Level (Brand New Maze!)");
     }
 }

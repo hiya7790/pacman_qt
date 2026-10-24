@@ -53,6 +53,7 @@ private slots:
 private:
     void initGame();
     void initLevel();
+    void generateMaze();
     void movePacman();
     void moveGhosts();
     bool canMove(int x, int y, Direction dir);
