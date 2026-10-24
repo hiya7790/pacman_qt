@@ -60,6 +60,8 @@ private:
     void checkFruitPickup();
     void checkGhostCollisions();
     void respawnGhostFarAway(Ghost &g);
+    void updateFogOfWar();
+    bool isCellVisible(int x, int y) const;
     void drawCherry(QPainter &painter, int cx, int cy);
     void drawApple(QPainter &painter, int cx, int cy);
     void drawStrawberry(QPainter &painter, int cx, int cy);
@@ -68,6 +70,7 @@ private:
     static const int ROWS = 21;
     static const int COLS = 21;
     static const int CELL_SIZE = 30;
+    static constexpr double VISION_RADIUS = 3.6;
 
     int board[ROWS][COLS]; // 0 = empty, 1 = wall, 2 = dot
 
@@ -83,9 +86,13 @@ private:
     bool gameOver;
     bool levelComplete;
 
+    // Fog of War / Dark Maze system
+    bool fogOfWarEnabled;
+    bool explored[ROWS][COLS];
+
     // Level system
     int currentLevel;
-    int ghostTimerInterval;   // ms between ghost ticks — decreases each level
+    int ghostTimerInterval;
 
     // Exit point
     int exitX, exitY;
@@ -108,7 +115,7 @@ private:
 
     // Ghost speed control
     int ghostTickCounter;
-    int ghostMoveEveryN; // ghosts move every N ticks (decreases with level)
+    int ghostMoveEveryN;
 };
 
 #endif // MAINWINDOW_H

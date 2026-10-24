@@ -1,6 +1,7 @@
 #include "mainwindow.h"
 #include <QPainter>
 #include <QPainterPath>
+#include <QRadialGradient>
 #include <QRandomGenerator>
 #include <cmath>
 
@@ -34,7 +35,9 @@ MainWindow::MainWindow(QWidget *parent)
 {
     setFixedSize(COLS * CELL_SIZE, ROWS * CELL_SIZE + 55);
     setStyleSheet("background-color: black;");
-    setWindowTitle("Pacman Maze Escape");
+    setWindowTitle("Pacman: Dark Maze Escape (Fog of War)");
+
+    fogOfWarEnabled = true;
 
     initGame();
 
@@ -63,6 +66,7 @@ void MainWindow::initLevel()
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
             board[r][c] = initialBoard[r][c];
+            explored[r][c] = false;
         }
     }
 
@@ -80,7 +84,7 @@ void MainWindow::initLevel()
     // Exit at top-left open cell
     exitX = 1;
     exitY = 1;
-    board[exitY][exitX] = 0; // make sure exit cell is clear
+    board[exitY][exitX] = 0; // ensure exit cell is clear
 
     // Ghosts
     ghosts.clear();
@@ -94,7 +98,6 @@ void MainWindow::initLevel()
     frightenedTicksLeft = 0;
 
     // Ghost speed: move every N ticks. Decreases with level (faster ghosts).
-    // Level 1: every 3 ticks, Level 2: every 2, Level 3+: every 1
     ghostMoveEveryN = std::max(1, 4 - currentLevel);
     ghostTickCounter = 0;
 
@@ -102,8 +105,29 @@ void MainWindow::initLevel()
     activeFruits.clear();
     fruitSpawnCounter = QRandomGenerator::global()->bounded(15, 40);
 
+    // Initial fog-of-war vision around starting position
+    updateFogOfWar();
+
     // Reset timer
     elapsedTimer.start();
+}
+
+void MainWindow::updateFogOfWar()
+{
+    for (int r = 0; r < ROWS; ++r) {
+        for (int c = 0; c < COLS; ++c) {
+            double dist = std::hypot(c - pacmanX, r - pacmanY);
+            if (dist <= VISION_RADIUS) {
+                explored[r][c] = true;
+            }
+        }
+    }
+}
+
+bool MainWindow::isCellVisible(int x, int y) const
+{
+    if (!fogOfWarEnabled) return true;
+    return std::hypot(x - pacmanX, y - pacmanY) <= VISION_RADIUS;
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
@@ -125,6 +149,13 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
+    // Toggle Fog of War
+    if (event->key() == Qt::Key_F) {
+        fogOfWarEnabled = !fogOfWarEnabled;
+        update();
+        return;
+    }
+
     Direction attemptDir = STOP;
     switch (event->key()) {
         case Qt::Key_Up:    attemptDir = UP; break;
@@ -139,6 +170,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         pacmanNextDir = attemptDir;
         movePacman();
         moveCount++;
+        updateFogOfWar();
         checkFruitPickup();
         checkGhostCollisions();
 
@@ -207,9 +239,9 @@ void MainWindow::movePacman()
 void MainWindow::moveGhosts()
 {
     for (Ghost &g : ghosts) {
-        // Frightened ghosts move slower (skip every other move)
+        // Frightened ghosts move slower
         if (ghostsFrightened && QRandomGenerator::global()->bounded(3) == 0) {
-            continue; // skip this ghost's move ~33% of the time when frightened
+            continue;
         }
 
         QVector<Direction> possibleDirs;
@@ -232,7 +264,6 @@ void MainWindow::moveGhosts()
         } else {
             // Level 3+: Blinky (red ghost, index 0) actively chases Pacman
             if (!ghostsFrightened && g.colorIndex == 0 && currentLevel >= 3) {
-                // Chase mode: pick direction that gets closest to Pacman
                 int bestDist = 999;
                 Direction bestDir = possibleDirs[0];
                 for (Direction d : possibleDirs) {
@@ -251,7 +282,7 @@ void MainWindow::moveGhosts()
                 }
                 g.dir = bestDir;
             } else if (ghostsFrightened) {
-                // Frightened: run AWAY from Pacman
+                // Frightened: run away from Pacman
                 int bestDist = -1;
                 Direction bestDir = possibleDirs[0];
                 for (Direction d : possibleDirs) {
@@ -290,7 +321,6 @@ void MainWindow::checkGhostCollisions()
     for (Ghost &g : ghosts) {
         if (g.x == pacmanX && g.y == pacmanY) {
             if (ghostsFrightened) {
-                // Eat the ghost! +200 points, respawn it far away
                 score += 200;
                 respawnGhostFarAway(g);
             } else {
@@ -302,18 +332,15 @@ void MainWindow::checkGhostCollisions()
 
 void MainWindow::respawnGhostFarAway(Ghost &g)
 {
-    // Find the open cell farthest from Pacman
     int bestDist = -1;
     int bestX = 10, bestY = 10;
 
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
             if (board[r][c] == 1) continue;
-            // Not on Pacman
             if (c == pacmanX && r == pacmanY) continue;
-            // Not on exit
             if (c == exitX && r == exitY) continue;
-            // Not on another ghost
+
             bool onGhost = false;
             for (const Ghost &other : ghosts) {
                 if (&other != &g && other.x == c && other.y == r) { onGhost = true; break; }
@@ -472,8 +499,6 @@ void MainWindow::gameLoop()
     if (ghostTickCounter >= ghostMoveEveryN) {
         ghostTickCounter = 0;
         moveGhosts();
-
-        // Check ghost collisions after they move
         checkGhostCollisions();
     }
 
@@ -508,23 +533,49 @@ void MainWindow::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    // 1. Draw Maze Tiles & Pellets
+    // 1. Draw Maze Tiles & Pellets (with Fog of War)
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
             int cx = c * CELL_SIZE;
             int cy = r * CELL_SIZE;
 
+            bool visible = isCellVisible(c, r);
+            bool wasExplored = explored[r][c];
+
+            // If in fog of war and tile is completely unvisited and out of sight:
+            if (fogOfWarEnabled && !visible && !wasExplored) {
+                painter.fillRect(cx, cy, CELL_SIZE, CELL_SIZE, QColor(0, 0, 0));
+                continue;
+            }
+
             if (board[r][c] == 1) {
-                painter.setBrush(QColor(25, 45, 130));
-                painter.setPen(QPen(QColor(40, 80, 200), 1));
+                // Wall tile
+                if (visible) {
+                    painter.setBrush(QColor(25, 45, 130));
+                    painter.setPen(QPen(QColor(40, 80, 200), 1));
+                } else {
+                    // Explored breadcrumb memory: dim midnight blue
+                    painter.setBrush(QColor(14, 22, 50));
+                    painter.setPen(QPen(QColor(24, 38, 80), 1));
+                }
                 painter.drawRoundedRect(cx + 1, cy + 1, CELL_SIZE - 2, CELL_SIZE - 2, 4, 4);
             } else {
-                painter.fillRect(cx, cy, CELL_SIZE, CELL_SIZE, QColor(8, 8, 16));
-
-                if (board[r][c] == 2) {
-                    painter.setBrush(QColor(255, 230, 180));
-                    painter.setPen(Qt::NoPen);
-                    painter.drawEllipse(cx + CELL_SIZE/2 - 2, cy + CELL_SIZE/2 - 2, 5, 5);
+                // Open floor corridor
+                if (visible) {
+                    painter.fillRect(cx, cy, CELL_SIZE, CELL_SIZE, QColor(8, 8, 16));
+                    if (board[r][c] == 2) {
+                        painter.setBrush(QColor(255, 230, 180));
+                        painter.setPen(Qt::NoPen);
+                        painter.drawEllipse(cx + CELL_SIZE/2 - 2, cy + CELL_SIZE/2 - 2, 5, 5);
+                    }
+                } else {
+                    // Dimly remembered floor corridor
+                    painter.fillRect(cx, cy, CELL_SIZE, CELL_SIZE, QColor(4, 4, 10));
+                    if (board[r][c] == 2) {
+                        painter.setBrush(QColor(100, 95, 80, 75));
+                        painter.setPen(Qt::NoPen);
+                        painter.drawEllipse(cx + CELL_SIZE/2 - 1, cy + CELL_SIZE/2 - 1, 3, 3);
+                    }
                 }
             }
         }
@@ -532,27 +583,45 @@ void MainWindow::paintEvent(QPaintEvent *)
 
     // 2. Draw EXIT portal
     {
-        int ex = exitX * CELL_SIZE;
-        int ey = exitY * CELL_SIZE;
+        bool exitVisible = isCellVisible(exitX, exitY);
+        bool exitExplored = explored[exitY][exitX];
 
-        // Outer glow
-        painter.setBrush(QColor(0, 255, 100, 50));
-        painter.setPen(QPen(QColor(0, 255, 120, 180), 2));
-        painter.drawRoundedRect(ex + 2, ey + 2, CELL_SIZE - 4, CELL_SIZE - 4, 6, 6);
+        if (!fogOfWarEnabled || exitVisible || exitExplored) {
+            int ex = exitX * CELL_SIZE;
+            int ey = exitY * CELL_SIZE;
 
-        // Inner portal
-        painter.setBrush(QColor(0, 255, 100, 120));
-        painter.setPen(Qt::NoPen);
-        painter.drawEllipse(ex + 5, ey + 5, CELL_SIZE - 10, CELL_SIZE - 10);
+            if (exitVisible) {
+                // Outer glow
+                painter.setBrush(QColor(0, 255, 100, 50));
+                painter.setPen(QPen(QColor(0, 255, 120, 180), 2));
+                painter.drawRoundedRect(ex + 2, ey + 2, CELL_SIZE - 4, CELL_SIZE - 4, 6, 6);
 
-        // "EXIT" text
-        painter.setPen(QColor(255, 255, 255));
-        painter.setFont(QFont("Arial", 7, QFont::Bold));
-        painter.drawText(ex + 3, ey + CELL_SIZE/2 + 4, "EXIT");
+                // Inner portal
+                painter.setBrush(QColor(0, 255, 100, 120));
+                painter.setPen(Qt::NoPen);
+                painter.drawEllipse(ex + 5, ey + 5, CELL_SIZE - 10, CELL_SIZE - 10);
+
+                // "EXIT" text
+                painter.setPen(QColor(255, 255, 255));
+                painter.setFont(QFont("Arial", 7, QFont::Bold));
+                painter.drawText(ex + 3, ey + CELL_SIZE/2 + 4, "EXIT");
+            } else {
+                // Dim memory of discovered exit
+                painter.setBrush(QColor(0, 120, 50, 30));
+                painter.setPen(QPen(QColor(0, 140, 60, 90), 1));
+                painter.drawRoundedRect(ex + 2, ey + 2, CELL_SIZE - 4, CELL_SIZE - 4, 6, 6);
+
+                painter.setPen(QColor(140, 200, 140, 140));
+                painter.setFont(QFont("Arial", 6, QFont::Bold));
+                painter.drawText(ex + 4, ey + CELL_SIZE/2 + 3, "EXIT");
+            }
+        }
     }
 
-    // 3. Draw Bonus Fruits
+    // 3. Draw Bonus Fruits (Only when visible in player's light!)
     for (const BonusFruit &fruit : activeFruits) {
+        if (!isCellVisible(fruit.x, fruit.y)) continue;
+
         int fx = fruit.x * CELL_SIZE;
         int fy = fruit.y * CELL_SIZE;
 
@@ -584,7 +653,7 @@ void MainWindow::paintEvent(QPaintEvent *)
                         CELL_SIZE - 4, CELL_SIZE - 4, startAngle * 16, spanAngle * 16);
     }
 
-    // 5. Draw Ghosts
+    // 5. Draw Ghosts (Only visible when within Pacman's lantern vision!)
     QColor ghostNormalColors[] = {
         QColor(255, 50, 50),   // Blinky (Red)
         QColor(255, 180, 220), // Pinky (Pink)
@@ -593,15 +662,17 @@ void MainWindow::paintEvent(QPaintEvent *)
     };
 
     for (const Ghost &g : ghosts) {
+        // Ghost is invisible in the dark unless inside lantern radius!
+        if (!isCellVisible(g.x, g.y)) continue;
+
         int gx = g.x * CELL_SIZE;
         int gy = g.y * CELL_SIZE;
 
         if (ghostsFrightened) {
-            // Frightened appearance: dark blue, flashing if almost over
             if (frightenedTicksLeft <= 8 && (frightenedTicksLeft % 2 == 0)) {
-                painter.setBrush(QColor(255, 255, 255)); // white flash
+                painter.setBrush(QColor(255, 255, 255));
             } else {
-                painter.setBrush(QColor(30, 30, 200)); // dark blue
+                painter.setBrush(QColor(30, 30, 200));
             }
         } else {
             painter.setBrush(ghostNormalColors[g.colorIndex]);
@@ -624,7 +695,6 @@ void MainWindow::paintEvent(QPaintEvent *)
             painter.setBrush(QColor(255, 200, 200));
             painter.drawEllipse(gx + 8, gy + 10, 4, 4);
             painter.drawEllipse(gx + 18, gy + 10, 4, 4);
-            // Wavy mouth
             painter.setPen(QPen(QColor(255, 200, 200), 1));
             for (int m = 0; m < 4; ++m) {
                 int mx = gx + 6 + m * 5;
@@ -643,52 +713,75 @@ void MainWindow::paintEvent(QPaintEvent *)
         }
     }
 
-    // 6. Draw HUD
+    // 6. Draw Atmospheric Lantern Light Spotlight / Ambient Vignette
+    if (fogOfWarEnabled) {
+        int pxCenter = pacmanX * CELL_SIZE + CELL_SIZE / 2;
+        int pyCenter = pacmanY * CELL_SIZE + CELL_SIZE / 2;
+
+        QRadialGradient lantern(pxCenter, pyCenter, (VISION_RADIUS + 0.6) * CELL_SIZE);
+        lantern.setColorAt(0.0, QColor(255, 235, 170, 25)); // soft lantern center
+        lantern.setColorAt(0.45, QColor(255, 200, 100, 10));
+        lantern.setColorAt(0.75, QColor(0, 0, 0, 60));
+        lantern.setColorAt(1.0, QColor(0, 0, 0, 220));
+
+        painter.fillRect(0, 0, COLS * CELL_SIZE, ROWS * CELL_SIZE, lantern);
+    }
+
+    // 7. Draw HUD
     int hudY = ROWS * CELL_SIZE;
     painter.fillRect(0, hudY, width(), height() - hudY, QColor(14, 16, 26));
     painter.setPen(QPen(QColor(40, 60, 100), 2));
     painter.drawLine(0, hudY, width(), hudY);
 
-    // Line 1: Score, Level, Moves, Time
+    // Line 1: Score, Level, Moves, Time, Fog status
     painter.setFont(QFont("Arial", 11, QFont::Bold));
     painter.setPen(Qt::white);
     painter.drawText(12, hudY + 20, QString("SCORE: %1").arg(score));
 
     painter.setPen(QColor(0, 230, 160));
-    painter.drawText(130, hudY + 20, QString("LEVEL: %1").arg(currentLevel));
+    painter.drawText(125, hudY + 20, QString("LEVEL: %1").arg(currentLevel));
 
     painter.setPen(QColor(180, 200, 255));
-    painter.drawText(240, hudY + 20, QString("MOVES: %1").arg(moveCount));
+    painter.drawText(220, hudY + 20, QString("MOVES: %1").arg(moveCount));
 
     // Elapsed time
     qint64 elapsedSec = elapsedTimer.elapsed() / 1000;
     int mins = elapsedSec / 60;
     int secs = elapsedSec % 60;
     painter.setPen(QColor(255, 200, 100));
-    painter.drawText(370, hudY + 20, QString("TIME: %1:%2")
+    painter.drawText(330, hudY + 20, QString("TIME: %1:%2")
                      .arg(mins, 2, 10, QChar('0'))
                      .arg(secs, 2, 10, QChar('0')));
 
+    // Fog of war status badge
+    if (fogOfWarEnabled) {
+        painter.setPen(QColor(120, 220, 255));
+        painter.drawText(440, hudY + 20, "[FOG: ON 🌑]");
+    } else {
+        painter.setPen(QColor(150, 150, 160));
+        painter.drawText(440, hudY + 20, "[FOG: OFF ☀️]");
+    }
+
     // Frightened indicator
     if (ghostsFrightened) {
-        painter.setPen(QColor(100, 100, 255));
-        painter.drawText(490, hudY + 20, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
+        painter.setPen(QColor(255, 100, 140));
+        painter.drawText(545, hudY + 20, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
     }
 
     // Line 2: Controls
     painter.setFont(QFont("Arial", 9));
     painter.setPen(QColor(130, 150, 180));
     painter.drawText(12, hudY + 42,
-        "[Arrows] Move  |  [R] Reset  |  Eat Fruit = Ghosts Edible!  |  Reach EXIT to clear level!");
+        "[Arrows] Move  |  [F] Toggle Fog  |  [R] Reset  |  Eat Fruit = Ghosts Edible!  |  Reach EXIT to Win!");
 
-    // 7. Game Over / Level Complete Banner
+    // 8. Game Over / Level Complete Banner
     if (gameOver) {
-        painter.fillRect(0, ROWS * CELL_SIZE / 2 - 30, width(), 60, QColor(0, 0, 0, 210));
+        painter.fillRect(0, ROWS * CELL_SIZE / 2 - 30, width(), 60, QColor(0, 0, 0, 220));
         painter.setPen(QColor(255, 60, 60));
         painter.setFont(QFont("Arial", 18, QFont::Bold));
         painter.drawText(rect(), Qt::AlignCenter, "GAME OVER! Press [R] to Restart");
     } else if (levelComplete) {
-        painter.fillRect(0, ROWS * CELL_SIZE / 2 - 35, width(), 70, QColor(0, 0, 0, 210));
+        painter.fillRect(0, ROWS * CELL_SIZE / 2 - 35, width(), 70, QColor(0, 0, 0, 220));
         painter.setPen(QColor(60, 255, 120));
         painter.setFont(QFont("Arial", 16, QFont::Bold));
         QString levelMsg = QString("LEVEL %1 COMPLETE! +500 Bonus").arg(currentLevel);
