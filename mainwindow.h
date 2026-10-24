@@ -5,6 +5,7 @@
 #include <QKeyEvent>
 #include <QTimer>
 #include <QVector>
+#include <QElapsedTimer>
 
 enum Direction {
     UP,
@@ -31,7 +32,7 @@ enum FruitType {
 struct BonusFruit {
     int x, y;
     FruitType type;
-    int ticksRemaining; // disappears after this many game ticks
+    int ticksRemaining;
 };
 
 class MainWindow : public QWidget
@@ -51,11 +52,14 @@ private slots:
 
 private:
     void initGame();
+    void initLevel();
     void movePacman();
     void moveGhosts();
     bool canMove(int x, int y, Direction dir);
     void trySpawnFruit();
     void checkFruitPickup();
+    void checkGhostCollisions();
+    void respawnGhostFarAway(Ghost &g);
     void drawCherry(QPainter &painter, int cx, int cy);
     void drawApple(QPainter &painter, int cx, int cy);
     void drawStrawberry(QPainter &painter, int cx, int cy);
@@ -75,16 +79,36 @@ private:
     bool pacmanMouthOpening;
 
     int score;
+    int moveCount;
     bool gameOver;
-    bool gameWon;
+    bool levelComplete;
+
+    // Level system
+    int currentLevel;
+    int ghostTimerInterval;   // ms between ghost ticks — decreases each level
+
+    // Exit point
+    int exitX, exitY;
+
+    // Frightened mode (power-up from eating fruit)
+    bool ghostsFrightened;
+    int frightenedTicksLeft;
+    static const int FRIGHTEN_DURATION = 25; // ~3.2 seconds at 130ms tick
+
+    // Timer display
+    QElapsedTimer elapsedTimer;
 
     QTimer *timer;
     QVector<Ghost> ghosts;
 
     // Bonus fruit system
     QVector<BonusFruit> activeFruits;
-    int fruitSpawnCounter;       // ticks until next spawn attempt
-    static const int MAX_FRUITS = 3; // max fruits on screen at once
+    int fruitSpawnCounter;
+    static const int MAX_FRUITS = 3;
+
+    // Ghost speed control
+    int ghostTickCounter;
+    int ghostMoveEveryN; // ghosts move every N ticks (decreases with level)
 };
 
 #endif // MAINWINDOW_H
