@@ -258,7 +258,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
-    // Toggle Fog of War: When turned OFF, automatically turns back ON after 3 seconds!
+    // Toggle Fog of War: When turned OFF, automatically turns back ON after 1.5 seconds!
     if (event->key() == Qt::Key_F) {
         if (fogOfWarEnabled) {
             fogOfWarEnabled = false;
@@ -919,7 +919,7 @@ void MainWindow::paintEvent(QPaintEvent *)
     painter.setFont(QFont("Arial", baseFont2));
     painter.setPen(QColor(130, 150, 180));
     painter.drawText(20, hudY + 45,
-        "[Arrows] Move  |  [F] 3s Map Peek  |  [F11 / Esc] Fullscreen  |  [R] New Maze/Reset  |  Reach EXIT to Win!");
+        "[Arrows] Move  |  [F] 1.5s Map Peek  |  [F11 / Esc] Fullscreen  |  [R] New Maze/Reset  |  Reach EXIT to Win!");
 
     // 8. Game Over / Level Complete Banner
     if (gameOver) {

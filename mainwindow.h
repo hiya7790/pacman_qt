@@ -71,7 +71,7 @@ private:
     static const int ROWS = 21;
     static const int COLS = 21;
     static constexpr double VISION_RADIUS = 3.6;
-    static const int FOG_PEEK_DURATION_MS = 3000; // 3 seconds temporary peek
+    static const int FOG_PEEK_DURATION_MS = 1500; // 1.5 seconds temporary peek
 
     int board[ROWS][COLS]; // 0 = empty, 1 = wall, 2 = dot
 
