@@ -40,6 +40,8 @@ MainWindow::MainWindow(QWidget *parent)
     newSectorJustDiscovered = false;
 
     isMultiplayer = false;
+    singlePlayerHero = 1; // 1 = Yellow Pacman, 2 = Pink Ms. Pacman
+    arrowPlayer = 1;      // Arrow keys control Player 1 (Yellow) by default
     scoreP1 = 0;
     scoreP2 = 0;
     p1Alive = true;
@@ -398,17 +400,32 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             startLevel(selectedMapLevel);
             return;
         }
-        if (event->key() == Qt::Key_Tab || event->key() == Qt::Key_P) {
-            isMultiplayer = !isMultiplayer;
+        if (event->key() == Qt::Key_Tab || event->key() == Qt::Key_C || event->key() == Qt::Key_P) {
+            if (!isMultiplayer && singlePlayerHero == 1) {
+                singlePlayerHero = 2; // Switch to Pink solo
+                isMultiplayer = false;
+            } else if (!isMultiplayer && singlePlayerHero == 2) {
+                isMultiplayer = true; // Switch to 2P Co-op
+            } else {
+                isMultiplayer = false;
+                singlePlayerHero = 1; // Switch to Yellow solo
+            }
             update();
             return;
         }
         if (event->key() == Qt::Key_1) {
             isMultiplayer = false;
+            singlePlayerHero = 1;
             update();
             return;
         }
         if (event->key() == Qt::Key_2) {
+            isMultiplayer = false;
+            singlePlayerHero = 2;
+            update();
+            return;
+        }
+        if (event->key() == Qt::Key_3) {
             isMultiplayer = true;
             update();
             return;
@@ -491,19 +508,61 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
+    // In-Game Switch Active Arrow-Controlled Hero: [Tab] or [C]
+    if (event->key() == Qt::Key_Tab || event->key() == Qt::Key_C) {
+        if (!isMultiplayer) {
+            // In Solo mode, flip hero between Yellow and Pink
+            singlePlayerHero = (singlePlayerHero == 1 ? 2 : 1);
+            arrowPlayer = singlePlayerHero;
+        } else {
+            // In Co-op mode, switch which character is steered by Arrow keys
+            arrowPlayer = (arrowPlayer == 1 ? 2 : 1);
+        }
+        update();
+        return;
+    }
+
+    // Toggle 2-Player Co-op drop-in on the fly with [2]
+    if (event->key() == Qt::Key_2 && !isMultiplayer) {
+        isMultiplayer = true;
+        p2Alive = true;
+        p2RespawnTicks = 0;
+        p2X = (pacmanX > 1 && board[currentSectorY][currentSectorX][pacmanY][pacmanX - 1] != 1) ? pacmanX - 1 : pacmanX;
+        p2Y = pacmanY;
+        update();
+        return;
+    }
+
     // Prevent input during active camera window slide transition
     if (isTransitioning) return;
 
-    // Player 1 controls (Arrow keys)
-    Direction p1Attempt = STOP;
-    if (event->key() == Qt::Key_Up) p1Attempt = UP;
-    else if (event->key() == Qt::Key_Down) p1Attempt = DOWN;
-    else if (event->key() == Qt::Key_Left) p1Attempt = LEFT;
-    else if (event->key() == Qt::Key_Right) p1Attempt = RIGHT;
+    // Arrow keys input
+    Direction arrowAttempt = STOP;
+    if (event->key() == Qt::Key_Up) arrowAttempt = UP;
+    else if (event->key() == Qt::Key_Down) arrowAttempt = DOWN;
+    else if (event->key() == Qt::Key_Left) arrowAttempt = LEFT;
+    else if (event->key() == Qt::Key_Right) arrowAttempt = RIGHT;
 
-    if (p1Attempt != STOP) {
-        if (p1Alive) {
-            pacmanNextDir = p1Attempt;
+    // WASD keys input
+    Direction wasdAttempt = STOP;
+    int k = event->key();
+    QString txt = event->text().toLower();
+    if (k == Qt::Key_W || txt == "w") wasdAttempt = UP;
+    else if (k == Qt::Key_S || txt == "s") wasdAttempt = DOWN;
+    else if (k == Qt::Key_A || txt == "a") wasdAttempt = LEFT;
+    else if (k == Qt::Key_D || txt == "d") wasdAttempt = RIGHT;
+
+    // Neither movement key pressed
+    if (arrowAttempt == STOP && wasdAttempt == STOP) {
+        QWidget::keyPressEvent(event);
+        return;
+    }
+
+    // 1. Single Player Mode (Move your chosen hero with Arrows OR WASD)
+    if (!isMultiplayer) {
+        Direction dir = (arrowAttempt != STOP) ? arrowAttempt : wasdAttempt;
+        if (dir != STOP && p1Alive) {
+            pacmanNextDir = dir;
             movePacman();
             moveCount++;
             checkFruitPickup();
@@ -514,45 +573,31 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
-    // Player 2 controls (W, A, S, D keys) - Instant Drop-In Co-op!
-    Direction p2Attempt = STOP;
-    int k = event->key();
-    QString txt = event->text().toLower();
-    if (k == Qt::Key_W || txt == "w") p2Attempt = UP;
-    else if (k == Qt::Key_S || txt == "s") p2Attempt = DOWN;
-    else if (k == Qt::Key_A || txt == "a") p2Attempt = LEFT;
-    else if (k == Qt::Key_D || txt == "d") p2Attempt = RIGHT;
+    // 2. 2-Player Co-op Mode
+    // arrowPlayer determines who responds to the Arrow Keys!
+    // The other player responds to WASD!
+    Direction p1Cmd = (arrowPlayer == 1) ? arrowAttempt : wasdAttempt;
+    Direction p2Cmd = (arrowPlayer == 2) ? arrowAttempt : wasdAttempt;
 
-    if (p2Attempt != STOP) {
-        // If not already in multiplayer, drop-in Player 2 right now!
-        if (!isMultiplayer) {
-            isMultiplayer = true;
-            p2Alive = true;
-            p2RespawnTicks = 0;
-            // Spawn safely beside Player 1
-            if (pacmanX > 1 && board[currentSectorY][currentSectorX][pacmanY][pacmanX - 1] != 1) {
-                p2X = pacmanX - 1;
-                p2Y = pacmanY;
-            } else if (pacmanX < COLS - 2 && board[currentSectorY][currentSectorX][pacmanY][pacmanX + 1] != 1) {
-                p2X = pacmanX + 1;
-                p2Y = pacmanY;
-            } else {
-                p2X = pacmanX;
-                p2Y = pacmanY;
-            }
-            p2Dir = STOP;
-            p2NextDir = p2Attempt;
-        }
+    if (p1Cmd != STOP && p1Alive) {
+        pacmanNextDir = p1Cmd;
+        movePacman();
+        moveCount++;
+        checkFruitPickup();
+        checkGhostCollisions();
+        checkLevelExit();
+        update();
+        return;
+    }
 
-        if (p2Alive) {
-            p2NextDir = p2Attempt;
-            movePlayer2();
-            moveCount++;
-            checkFruitPickup();
-            checkGhostCollisions();
-            checkLevelExit();
-            update();
-        }
+    if (p2Cmd != STOP && p2Alive) {
+        p2NextDir = p2Cmd;
+        movePlayer2();
+        moveCount++;
+        checkFruitPickup();
+        checkGhostCollisions();
+        checkLevelExit();
+        update();
         return;
     }
 
@@ -1222,12 +1267,19 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         painter.drawText(fx + 3, fy + cellSize - 1, "100");
     }
 
-    // 5. Draw Player 1 (Yellow Pacman) (if in this sector)
+    // 5. Draw Primary Hero / Player 1 (if in this sector)
     if (isCurrent && (p1Alive || (p1RespawnTicks > 0 && p1RespawnTicks % 4 < 2))) {
         int px = originX + pacmanX * cellSize;
         int py = originY + pacmanY * cellSize;
 
-        painter.setBrush(p1Alive ? QColor(255, 220, 0) : QColor(255, 240, 100, 110));
+        bool isPinkSolo = (!isMultiplayer && singlePlayerHero == 2);
+
+        if (isPinkSolo) {
+            // Drawn as Pink Ms. Pacman in solo mode
+            painter.setBrush(p1Alive ? QColor(255, 105, 180) : QColor(255, 150, 200, 110));
+        } else {
+            painter.setBrush(p1Alive ? QColor(255, 220, 0) : QColor(255, 240, 100, 110));
+        }
         painter.setPen(Qt::NoPen);
         int startAngle = 0;
         if (pacmanDir == RIGHT) startAngle = pacmanMouthAngle;
@@ -1238,10 +1290,32 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         int spanAngle = 360 - 2 * pacmanMouthAngle;
         painter.drawPie(px + 2, py + 2, cellSize - 4, cellSize - 4, startAngle * 16, spanAngle * 16);
 
+        if (isPinkSolo) {
+            // Cute Red Ribbon Bow on head
+            painter.setBrush(QColor(235, 20, 60));
+            int bowSize = std::max(4, cellSize / 4);
+            int bx = px + cellSize / 2;
+            int by = py + 2;
+            painter.drawEllipse(bx - bowSize, by, bowSize * 3 / 4, bowSize / 2);
+            painter.drawEllipse(bx, by, bowSize * 3 / 4, bowSize / 2);
+            painter.setBrush(QColor(255, 220, 230));
+            painter.drawEllipse(bx - bowSize / 4, by + bowSize / 6, bowSize / 2, bowSize / 2);
+
+            // Eye beauty mark
+            painter.setBrush(QColor(20, 20, 60));
+            painter.drawEllipse(px + cellSize * 3 / 5, py + cellSize / 3, std::max(2, cellSize / 7), std::max(2, cellSize / 7));
+        }
+
+        // Active control indicator badge
+        painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
         if (isMultiplayer) {
-            painter.setFont(QFont("Arial", std::max(7, cellSize / 3), QFont::Bold));
-            painter.setPen(QColor(255, 240, 0));
-            painter.drawText(px, py - 3, cellSize, cellSize / 2, Qt::AlignCenter, "P1");
+            if (arrowPlayer == 1) {
+                painter.setPen(QColor(255, 240, 0));
+                painter.drawText(px - 10, py - 4, cellSize + 20, cellSize / 2, Qt::AlignCenter, "P1 [ARROWS]");
+            } else {
+                painter.setPen(QColor(200, 200, 140));
+                painter.drawText(px - 10, py - 4, cellSize + 20, cellSize / 2, Qt::AlignCenter, "P1 [WASD]");
+            }
         }
     }
 
@@ -1275,9 +1349,15 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         painter.setBrush(QColor(20, 20, 60));
         painter.drawEllipse(px + cellSize * 3 / 5, py + cellSize / 3, std::max(2, cellSize / 7), std::max(2, cellSize / 7));
 
-        painter.setFont(QFont("Arial", std::max(7, cellSize / 3), QFont::Bold));
-        painter.setPen(QColor(255, 130, 190));
-        painter.drawText(px, py - 3, cellSize, cellSize / 2, Qt::AlignCenter, "P2");
+        // Active control indicator badge
+        painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
+        if (arrowPlayer == 2) {
+            painter.setPen(QColor(255, 130, 200));
+            painter.drawText(px - 10, py - 4, cellSize + 20, cellSize / 2, Qt::AlignCenter, "P2 [ARROWS]");
+        } else {
+            painter.setPen(QColor(220, 160, 200));
+            painter.drawText(px - 10, py - 4, cellSize + 20, cellSize / 2, Qt::AlignCenter, "P2 [WASD]");
+        }
     }
 
     // 6. Draw Ghosts in this sector
@@ -1930,11 +2010,21 @@ void MainWindow::paintEvent(QPaintEvent *)
     painter.setFont(QFont("Arial", baseFont2));
     painter.setPen(QColor(140, 160, 190));
     if (!isMultiplayer) {
-        painter.drawText(20, hudY + 62,
-            "[Arrows] Move Pacman  |  [F] 1.5s Fog Peek  |  [M] Saga Map  |  [R] Retry Level  |  [F11] Fullscreen");
+        if (singlePlayerHero == 2) {
+            painter.drawText(20, hudY + 62,
+                "HERO: [🎀 Pink Ms. Pacman]  |  [Arrows] or [WASD] Move  |  [Tab] Switch to Yellow  |  [F] Fog Peek  |  [M] Saga Map  |  [F11] Fullscreen");
+        } else {
+            painter.drawText(20, hudY + 62,
+                "HERO: [🟡 Yellow Pacman]  |  [Arrows] or [WASD] Move  |  [Tab] Switch to Pink  |  [F] Fog Peek  |  [M] Saga Map  |  [F11] Fullscreen");
+        }
     } else {
-        painter.drawText(20, hudY + 62,
-            "P1: [Arrows] Yellow Pacman  |  P2: [W, A, S, D] Pink Pacman  |  [F] Fog Peek  |  [M] Saga Map  |  [R] Retry Level  |  [F11] Fullscreen");
+        if (arrowPlayer == 2) {
+            painter.drawText(20, hudY + 62,
+                "ARROWS STEER: [🎀 Pink P2]  |  WASD: [🟡 Yellow P1]  |  [Tab] Swap Arrows to Yellow!  |  [F] Fog Peek  |  [M] Saga Map");
+        } else {
+            painter.drawText(20, hudY + 62,
+                "ARROWS STEER: [🟡 Yellow P1]  |  WASD: [🎀 Pink P2]  |  [Tab] Swap Arrows to Pink!  |  [F] Fog Peek  |  [M] Saga Map");
+        }
     }
 
     // Game Over / Level Complete Banner
@@ -1998,7 +2088,7 @@ QRect MainWindow::getPlayButtonRect() const
 
 QRect MainWindow::getModeSelectorRect() const
 {
-    int selW = std::min(350, int(width() * 0.52));
+    int selW = std::min(460, int(width() * 0.62));
     int selH = std::max(36, int(height() * 0.046));
     if (selH > 42) selH = 42;
     int selX = (width() - selW) / 2;
@@ -2006,16 +2096,25 @@ QRect MainWindow::getModeSelectorRect() const
     return QRect(selX, selY, selW, selH);
 }
 
-QRect MainWindow::getMode1PlayerRect() const
+QRect MainWindow::getModeYellowRect() const
 {
     QRect total = getModeSelectorRect();
-    return QRect(total.left(), total.top(), total.width() / 2, total.height());
+    int w3 = total.width() / 3;
+    return QRect(total.left(), total.top(), w3, total.height());
 }
 
-QRect MainWindow::getMode2PlayerRect() const
+QRect MainWindow::getModePinkRect() const
 {
     QRect total = getModeSelectorRect();
-    return QRect(total.left() + total.width() / 2, total.top(), total.width() - total.width() / 2, total.height());
+    int w3 = total.width() / 3;
+    return QRect(total.left() + w3, total.top(), w3, total.height());
+}
+
+QRect MainWindow::getModeCoopRect() const
+{
+    QRect total = getModeSelectorRect();
+    int w3 = total.width() / 3;
+    return QRect(total.left() + 2 * w3, total.top(), total.width() - 2 * w3, total.height());
 }
 
 QRect MainWindow::getMapButtonRect() const
@@ -2045,12 +2144,21 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         QPoint pos = event->pos();
 
         // 1. Clicked Mode Selector buttons
-        if (getMode1PlayerRect().contains(pos)) {
+        if (getModeYellowRect().contains(pos)) {
             isMultiplayer = false;
+            singlePlayerHero = 1;
+            arrowPlayer = 1;
             update();
             return;
         }
-        if (getMode2PlayerRect().contains(pos)) {
+        if (getModePinkRect().contains(pos)) {
+            isMultiplayer = false;
+            singlePlayerHero = 2;
+            arrowPlayer = 2;
+            update();
+            return;
+        }
+        if (getModeCoopRect().contains(pos)) {
             isMultiplayer = true;
             update();
             return;
@@ -2090,6 +2198,31 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         if (getMapButtonRect().contains(pos)) {
             currentScreen = SCREEN_HOME_MAP;
             selectedMapLevel = currentLevel;
+            update();
+            return;
+        }
+
+        // Click on Pacman to toggle arrow control!
+        int hudHeight = 72;
+        int availW = width();
+        int availH = height() - hudHeight;
+        int cellSize = std::min(availW / COLS, availH / ROWS);
+        int originX = (availW - COLS * cellSize) / 2;
+        int originY = (availH - ROWS * cellSize) / 2;
+
+        int p1CenterX = originX + pacmanX * cellSize + cellSize / 2;
+        int p1CenterY = originY + pacmanY * cellSize + cellSize / 2;
+        int p2CenterX = originX + p2X * cellSize + cellSize / 2;
+        int p2CenterY = originY + p2Y * cellSize + cellSize / 2;
+
+        if (std::hypot(pos.x() - p1CenterX, pos.y() - p1CenterY) <= cellSize * 1.5) {
+            arrowPlayer = 1;
+            if (!isMultiplayer) singlePlayerHero = 1;
+            update();
+            return;
+        }
+        if (isMultiplayer && std::hypot(pos.x() - p2CenterX, pos.y() - p2CenterY) <= cellSize * 1.5) {
+            arrowPlayer = 2;
             update();
             return;
         }
@@ -2372,6 +2505,8 @@ void MainWindow::drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int r
         if (isMultiplayer) {
             drawPacmanAvatar(painter, cx - 18, cy - r - 22 + bob, std::max(20, r - 3));
             drawMsPacmanAvatar(painter, cx + 18, cy - r - 22 - bob, std::max(20, r - 3));
+        } else if (singlePlayerHero == 2) {
+            drawMsPacmanAvatar(painter, cx, cy - r - 22 + bob, std::max(22, r));
         } else {
             drawPacmanAvatar(painter, cx, cy - r - 22 + bob, std::max(22, r));
         }
@@ -2519,13 +2654,15 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.drawText(pbx, pby, pbW, pbH, Qt::AlignCenter,
                      QString("⭐ LEVEL %1 / %2").arg(highestUnlockedLevel).arg(TOTAL_LEVELS));
 
-    // 5. Mode Selector: [ 1 PLAYER (SOLO) ] vs [ 2 PLAYERS (CO-OP) ]
+    // 5. Mode & Hero Selector: [ 🟡 YELLOW (1P) ]  [ 🎀 PINK (1P) ]  [ 👥 CO-OP (2P) ]
     QRect selRect = getModeSelectorRect();
-    QRect p1Rect = getMode1PlayerRect().adjusted(2, 2, -2, -2);
-    QRect p2Rect = getMode2PlayerRect().adjusted(2, 2, -2, -2);
+    QRect pYellow = getModeYellowRect().adjusted(2, 2, -2, -2);
+    QRect pPink = getModePinkRect().adjusted(2, 2, -2, -2);
+    QRect pCoop = getModeCoopRect().adjusted(2, 2, -2, -2);
     QPoint mousePos = mapFromGlobal(QCursor::pos());
-    bool p1Hover = p1Rect.contains(mousePos);
-    bool p2Hover = p2Rect.contains(mousePos);
+    bool yellowHover = pYellow.contains(mousePos);
+    bool pinkHover = pPink.contains(mousePos);
+    bool coopHover = pCoop.contains(mousePos);
 
     // Pill container shadow & background
     painter.setPen(Qt::NoPen);
@@ -2536,52 +2673,78 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.setPen(QPen(QColor(130, 80, 180), 2));
     painter.drawRoundedRect(selRect, selRect.height() / 2, selRect.height() / 2);
 
-    // Option 1: 1 Player (Solo)
-    if (!isMultiplayer) {
-        QLinearGradient g1(p1Rect.left(), p1Rect.top(), p1Rect.left(), p1Rect.bottom());
-        g1.setColorAt(0.0, QColor(255, 220, 50));
-        g1.setColorAt(0.5, QColor(240, 160, 20));
-        g1.setColorAt(1.0, QColor(200, 110, 10));
-        painter.setBrush(g1);
-        painter.setPen(QPen(QColor(255, 250, 200), p1Hover ? 2.5 : 1.5));
-        painter.drawRoundedRect(p1Rect, p1Rect.height() / 2, p1Rect.height() / 2);
+    // Button 1: Yellow Solo
+    bool yellowActive = (!isMultiplayer && singlePlayerHero == 1);
+    if (yellowActive) {
+        QLinearGradient g(pYellow.left(), pYellow.top(), pYellow.left(), pYellow.bottom());
+        g.setColorAt(0.0, QColor(255, 225, 50));
+        g.setColorAt(0.5, QColor(240, 160, 20));
+        g.setColorAt(1.0, QColor(200, 110, 10));
+        painter.setBrush(g);
+        painter.setPen(QPen(QColor(255, 250, 200), yellowHover ? 2.5 : 1.5));
+        painter.drawRoundedRect(pYellow, pYellow.height() / 2, pYellow.height() / 2);
 
-        painter.setFont(QFont("Arial", std::max(10, p1Rect.height() * 2 / 5), QFont::Bold));
+        painter.setFont(QFont("Arial", std::max(9, pYellow.height() * 3 / 8), QFont::Bold));
         painter.setPen(QColor(40, 20, 5));
-        painter.drawText(p1Rect, Qt::AlignCenter, "🟡 1 PLAYER (SOLO)");
+        painter.drawText(pYellow, Qt::AlignCenter, "🟡 YELLOW (1P)");
     } else {
-        if (p1Hover) {
+        if (yellowHover) {
             painter.setBrush(QColor(70, 40, 100, 180));
             painter.setPen(QPen(QColor(180, 140, 220), 1));
-            painter.drawRoundedRect(p1Rect, p1Rect.height() / 2, p1Rect.height() / 2);
+            painter.drawRoundedRect(pYellow, pYellow.height() / 2, pYellow.height() / 2);
         }
-        painter.setFont(QFont("Arial", std::max(10, p1Rect.height() * 2 / 5)));
+        painter.setFont(QFont("Arial", std::max(9, pYellow.height() * 3 / 8)));
         painter.setPen(QColor(220, 200, 140));
-        painter.drawText(p1Rect, Qt::AlignCenter, "1 PLAYER");
+        painter.drawText(pYellow, Qt::AlignCenter, "🟡 YELLOW");
     }
 
-    // Option 2: 2 Players (Co-op)
-    if (isMultiplayer) {
-        QLinearGradient g2(p2Rect.left(), p2Rect.top(), p2Rect.left(), p2Rect.bottom());
-        g2.setColorAt(0.0, QColor(255, 90, 175));
-        g2.setColorAt(0.5, QColor(230, 40, 130));
-        g2.setColorAt(1.0, QColor(175, 15, 90));
-        painter.setBrush(g2);
-        painter.setPen(QPen(QColor(255, 230, 245), p2Hover ? 2.5 : 1.5));
-        painter.drawRoundedRect(p2Rect, p2Rect.height() / 2, p2Rect.height() / 2);
+    // Button 2: Pink Solo
+    bool pinkActive = (!isMultiplayer && singlePlayerHero == 2);
+    if (pinkActive) {
+        QLinearGradient g(pPink.left(), pPink.top(), pPink.left(), pPink.bottom());
+        g.setColorAt(0.0, QColor(255, 110, 185));
+        g.setColorAt(0.5, QColor(235, 45, 135));
+        g.setColorAt(1.0, QColor(180, 15, 90));
+        painter.setBrush(g);
+        painter.setPen(QPen(QColor(255, 230, 245), pinkHover ? 2.5 : 1.5));
+        painter.drawRoundedRect(pPink, pPink.height() / 2, pPink.height() / 2);
 
-        painter.setFont(QFont("Arial", std::max(10, p2Rect.height() * 2 / 5), QFont::Bold));
+        painter.setFont(QFont("Arial", std::max(9, pPink.height() * 3 / 8), QFont::Bold));
         painter.setPen(Qt::white);
-        painter.drawText(p2Rect, Qt::AlignCenter, "🎀 2 PLAYERS (CO-OP)");
+        painter.drawText(pPink, Qt::AlignCenter, "🎀 PINK (1P)");
     } else {
-        if (p2Hover) {
+        if (pinkHover) {
             painter.setBrush(QColor(90, 30, 80, 180));
             painter.setPen(QPen(QColor(220, 120, 190), 1));
-            painter.drawRoundedRect(p2Rect, p2Rect.height() / 2, p2Rect.height() / 2);
+            painter.drawRoundedRect(pPink, pPink.height() / 2, pPink.height() / 2);
         }
-        painter.setFont(QFont("Arial", std::max(10, p2Rect.height() * 2 / 5)));
+        painter.setFont(QFont("Arial", std::max(9, pPink.height() * 3 / 8)));
         painter.setPen(QColor(230, 160, 200));
-        painter.drawText(p2Rect, Qt::AlignCenter, "2 PLAYERS");
+        painter.drawText(pPink, Qt::AlignCenter, "🎀 PINK");
+    }
+
+    // Button 3: 2-Player Co-op
+    if (isMultiplayer) {
+        QLinearGradient g(pCoop.left(), pCoop.top(), pCoop.left(), pCoop.bottom());
+        g.setColorAt(0.0, QColor(40, 210, 255));
+        g.setColorAt(0.5, QColor(10, 140, 240));
+        g.setColorAt(1.0, QColor(5, 80, 180));
+        painter.setBrush(g);
+        painter.setPen(QPen(QColor(200, 245, 255), coopHover ? 2.5 : 1.5));
+        painter.drawRoundedRect(pCoop, pCoop.height() / 2, pCoop.height() / 2);
+
+        painter.setFont(QFont("Arial", std::max(9, pCoop.height() * 3 / 8), QFont::Bold));
+        painter.setPen(Qt::white);
+        painter.drawText(pCoop, Qt::AlignCenter, "👥 CO-OP (2P)");
+    } else {
+        if (coopHover) {
+            painter.setBrush(QColor(30, 50, 100, 180));
+            painter.setPen(QPen(QColor(100, 180, 240), 1));
+            painter.drawRoundedRect(pCoop, pCoop.height() / 2, pCoop.height() / 2);
+        }
+        painter.setFont(QFont("Arial", std::max(9, pCoop.height() * 3 / 8)));
+        painter.setPen(QColor(160, 210, 245));
+        painter.drawText(pCoop, Qt::AlignCenter, "👥 CO-OP");
     }
 
     // 6. Big PLAY Button at the Bottom
@@ -2609,9 +2772,14 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.drawRoundedRect(btnRect, btnRect.height() / 2, btnRect.height() / 2);
 
     // Button text
-    QString playText = isMultiplayer
-        ? QString("▶ PLAY CO-OP (LEVEL %1)").arg(selectedMapLevel)
-        : QString("▶ PLAY SOLO (LEVEL %1)").arg(selectedMapLevel);
+    QString playText;
+    if (isMultiplayer) {
+        playText = QString("▶ PLAY 2-PLAYER CO-OP (LVL %1)").arg(selectedMapLevel);
+    } else if (singlePlayerHero == 2) {
+        playText = QString("▶ PLAY AS PINK MS. PACMAN (LVL %1)").arg(selectedMapLevel);
+    } else {
+        playText = QString("▶ PLAY AS YELLOW PACMAN (LVL %1)").arg(selectedMapLevel);
+    }
 
     painter.setFont(QFont("Arial", std::max(12, btnRect.height() * 3 / 8), QFont::Bold));
     painter.setPen(QColor(40, 20, 5));
@@ -2620,9 +2788,14 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.drawText(btnRect, Qt::AlignCenter, playText);
 
     // Subtitle below button
-    QString subText = isMultiplayer
-        ? QString("%1  •  P1: [Arrows] Yellow Pacman  |  P2: [W, A, S, D] Pink Pacman").arg(getLevelTitle(selectedMapLevel))
-        : QString("%1  •  [Arrows] Move Pacman").arg(getLevelTitle(selectedMapLevel));
+    QString subText;
+    if (isMultiplayer) {
+        subText = QString("%1  •  [Arrows] Steer Active Hero  •  [Tab] Swap Arrows to Partner!").arg(getLevelTitle(selectedMapLevel));
+    } else if (singlePlayerHero == 2) {
+        subText = QString("%1  •  Steer Pink Ms. Pacman with [Arrows] or [WASD]!").arg(getLevelTitle(selectedMapLevel));
+    } else {
+        subText = QString("%1  •  Steer Yellow Pacman with [Arrows] or [WASD]!").arg(getLevelTitle(selectedMapLevel));
+    }
 
     painter.setFont(QFont("Arial", std::max(8, btnRect.height() / 4)));
     painter.setPen(QColor(230, 215, 245));

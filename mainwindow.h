@@ -89,8 +89,9 @@ private:
     QRect getPlayButtonRect() const;
     QRect getMapButtonRect() const;
     QRect getModeSelectorRect() const;
-    QRect getMode1PlayerRect() const;
-    QRect getMode2PlayerRect() const;
+    QRect getModeYellowRect() const;
+    QRect getModePinkRect() const;
+    QRect getModeCoopRect() const;
     QString getLevelTitle(int lvl) const;
 
     // Movement & Level Exit Helpers
@@ -103,8 +104,10 @@ private:
     int selectedMapLevel;
     int hoveredMapLevel;
 
-    // Multiplayer Mode
+    // Multiplayer & Character Selection
     bool isMultiplayer;
+    int singlePlayerHero; // 1 = Yellow Pacman, 2 = Pink Ms. Pacman
+    int arrowPlayer;      // Which character uses Arrow Keys: 1 = Yellow, 2 = Pink
     int scoreP1;
     int scoreP2;
     bool p1Alive;
