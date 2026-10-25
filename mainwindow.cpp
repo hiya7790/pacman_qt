@@ -239,6 +239,7 @@ void MainWindow::initLevel()
     levelComplete = false;
     gameOver = false;
     isTransitioning = false;
+    newSectorJustDiscovered = false;
 
     // 5. Spawn Ghosts across sectors
     ghosts.clear();
@@ -438,6 +439,10 @@ void MainWindow::movePacman()
             pacmanX = 0;
             isTransitioning = true;
             transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
             sectorDiscovered[currentSectorY][currentSectorX] = true;
         } else if (nextX < 0) {
             fromSectorX = currentSectorX; fromSectorY = currentSectorY;
@@ -447,6 +452,10 @@ void MainWindow::movePacman()
             pacmanX = COLS - 1;
             isTransitioning = true;
             transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
             sectorDiscovered[currentSectorY][currentSectorX] = true;
         } else if (nextY >= ROWS) {
             fromSectorX = currentSectorX; fromSectorY = currentSectorY;
@@ -456,6 +465,10 @@ void MainWindow::movePacman()
             pacmanY = 0;
             isTransitioning = true;
             transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
             sectorDiscovered[currentSectorY][currentSectorX] = true;
         } else if (nextY < 0) {
             fromSectorX = currentSectorX; fromSectorY = currentSectorY;
@@ -465,6 +478,10 @@ void MainWindow::movePacman()
             pacmanY = ROWS - 1;
             isTransitioning = true;
             transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
             sectorDiscovered[currentSectorY][currentSectorX] = true;
         } else {
             pacmanX = nextX;
@@ -960,7 +977,9 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         // Glowing badge label
         painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
         painter.setPen(QColor(0, 255, 240));
-        painter.drawText(gx - cellSize * 3 - 6, gy + cellSize * 1.1, QString("WINDOW %1 ▶").arg(sx + 2));
+        bool isEastDiscovered = (sx + 1 < sectorCols && sectorDiscovered[sy][sx + 1]);
+        QString eastLabel = isEastDiscovered ? QString("SECTOR (%1,%2) ▶").arg(sx + 2).arg(sy + 1) : "EXPLORE ▶";
+        painter.drawText(gx - cellSize * 3 - 6, gy + cellSize * 1.1, eastLabel);
     }
 
     // West Gateway (Connects to sector sx - 1)
@@ -987,7 +1006,9 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
         painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
         painter.setPen(QColor(0, 255, 240));
-        painter.drawText(gx + gw + 4, gy + cellSize * 1.1, QString("◀ WINDOW %1").arg(sx));
+        bool isWestDiscovered = (sx - 1 >= 0 && sectorDiscovered[sy][sx - 1]);
+        QString westLabel = isWestDiscovered ? QString("◀ SECTOR (%1,%2)").arg(sx).arg(sy + 1) : "◀ EXPLORE";
+        painter.drawText(gx + gw + 4, gy + cellSize * 1.1, westLabel);
     }
 
     // South Gateway (Connects to sector sy + 1)
@@ -1014,7 +1035,9 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
         painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
         painter.setPen(QColor(0, 255, 240));
-        painter.drawText(gx - 4, gy - 6, QString("▼ WINDOW (ROW %1) ▼").arg(sy + 2));
+        bool isSouthDiscovered = (sy + 1 < sectorRows && sectorDiscovered[sy + 1][sx]);
+        QString southLabel = isSouthDiscovered ? QString("▼ SECTOR (%1,%2) ▼").arg(sx + 1).arg(sy + 2) : "▼ EXPLORE ▼";
+        painter.drawText(gx - 4, gy - 6, southLabel);
     }
 
     // North Gateway (Connects to sector sy - 1)
@@ -1041,7 +1064,9 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
         painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
         painter.setPen(QColor(0, 255, 240));
-        painter.drawText(gx - 4, gy + gh + 14, QString("▲ WINDOW (ROW %1) ▲").arg(sy));
+        bool isNorthDiscovered = (sy - 1 >= 0 && sectorDiscovered[sy - 1][sx]);
+        QString northLabel = isNorthDiscovered ? QString("▲ SECTOR (%1,%2) ▲").arg(sx + 1).arg(sy) : "▲ EXPLORE ▲";
+        painter.drawText(gx - 4, gy + gh + 14, northLabel);
     }
 
     // 7. Glowing EXIT Portal (Visible beacon shining through fog)
@@ -1183,58 +1208,100 @@ void MainWindow::paintEvent(QPaintEvent *)
     }
 
     // ========================================================
-    // Sector Mini-Map (Top-Right HUD Corner)
+    // Toast Notification Banner when a new sector is revealed/unfolded
+    // ========================================================
+    if (newSectorJustDiscovered) {
+        qint64 ms = newSectorTimer.elapsed();
+        if (ms < 1800) {
+            float alpha = 1.0f;
+            if (ms > 1200) alpha = (1800 - ms) / 600.0f;
+            int a = int(220 * alpha);
+
+            int bannerW = std::min(420, mazeW - 20);
+            int bannerH = 34;
+            int bx = startX + (mazeW - bannerW) / 2;
+            int by = startY + 16;
+
+            painter.setBrush(QColor(8, 22, 50, a));
+            painter.setPen(QPen(QColor(0, 240, 255, a), 2));
+            painter.drawRoundedRect(bx, by, bannerW, bannerH, 8, 8);
+
+            painter.setPen(QColor(255, 235, 100, int(255 * alpha)));
+            painter.setFont(QFont("Arial", std::max(11, bannerH / 3), QFont::Bold));
+            painter.drawText(bx, by, bannerW, bannerH, Qt::AlignCenter,
+                             "✨ UNCHARTED SECTOR UNFOLDED! ✨");
+        } else {
+            newSectorJustDiscovered = false;
+        }
+    }
+
+    // ========================================================
+    // Dynamic Unfolding Sector Mini-Map (Top-Right HUD Corner)
     // ========================================================
     {
-        int mapBoxSize = std::max(16, cellSize / 2);
-        int mapGap = 3;
-        int totalMapW = sectorCols * mapBoxSize + (sectorCols - 1) * mapGap;
-        int totalMapH = sectorRows * mapBoxSize + (sectorRows - 1) * mapGap;
-        int mapX = startX + mazeW - totalMapW - 14;
-        int mapY = startY + 14;
-
+        // 1. Calculate bounding box of all discovered sectors
+        int minSx = currentSectorX, maxSx = currentSectorX;
+        int minSy = currentSectorY, maxSy = currentSectorY;
         int discCount = 0;
+
         for (int sy = 0; sy < sectorRows; ++sy) {
             for (int sx = 0; sx < sectorCols; ++sx) {
-                if (sectorDiscovered[sy][sx]) discCount++;
+                if (sectorDiscovered[sy][sx]) {
+                    discCount++;
+                    minSx = std::min(minSx, sx);
+                    maxSx = std::max(maxSx, sx);
+                    minSy = std::min(minSy, sy);
+                    maxSy = std::max(maxSy, sy);
+                }
             }
         }
 
-        // Map container background
-        painter.fillRect(mapX - 6, mapY - 18, totalMapW + 12, totalMapH + 24, QColor(0, 0, 0, 200));
-        painter.setPen(QPen(QColor(40, 80, 140, 180), 1));
-        painter.drawRect(mapX - 6, mapY - 18, totalMapW + 12, totalMapH + 24);
+        int unfoldCols = maxSx - minSx + 1;
+        int unfoldRows = maxSy - minSy + 1;
+        int mapBoxSize = std::max(20, cellSize * 3 / 5);
+        int mapGap = 5;
+        int totalMapW = unfoldCols * mapBoxSize + (unfoldCols - 1) * mapGap;
+        int totalMapH = unfoldRows * mapBoxSize + (unfoldRows - 1) * mapGap;
+        int mapX = startX + mazeW - totalMapW - 16;
+        int mapY = startY + 16;
 
-        painter.setFont(QFont("Arial", std::max(7, mapBoxSize / 2), QFont::Bold));
-        painter.setPen(QColor(180, 220, 255));
-        painter.drawText(mapX - 2, mapY - 5, QString("WINDOWS (%1/%2)").arg(discCount).arg(sectorCols * sectorRows));
+        // Map container frame
+        painter.fillRect(mapX - 8, mapY - 20, totalMapW + 16, totalMapH + 28, QColor(6, 10, 20, 215));
+        painter.setPen(QPen(QColor(0, 180, 255, 120), 1));
+        painter.drawRoundedRect(mapX - 8, mapY - 20, totalMapW + 16, totalMapH + 28, 6, 6);
 
-        for (int sy = 0; sy < sectorRows; ++sy) {
-            for (int sx = 0; sx < sectorCols; ++sx) {
-                int rx = mapX + sx * (mapBoxSize + mapGap);
-                int ry = mapY + sy * (mapBoxSize + mapGap);
+        // Map title: strictly reveals ONLY discovered count, no totals!
+        painter.setFont(QFont("Arial", std::max(7, mapBoxSize / 3), QFont::Bold));
+        painter.setPen(QColor(0, 220, 255));
+        QString mapTitle = (discCount == 1) ? "MAP (1 SECTOR)" : QString("MAP (%1 SECTORS)").arg(discCount);
+        painter.drawText(mapX - 2, mapY - 6, mapTitle);
 
-                if (!sectorDiscovered[sy][sx]) {
-                    // Undiscovered window
-                    painter.fillRect(rx, ry, mapBoxSize, mapBoxSize, QColor(14, 18, 25));
-                    painter.setPen(QColor(50, 60, 75));
-                    painter.drawRect(rx, ry, mapBoxSize, mapBoxSize);
-                    painter.drawText(rx + mapBoxSize/3, ry + mapBoxSize * 2/3, "?");
+        // Render ONLY discovered sectors as they unfold
+        for (int sy = minSy; sy <= maxSy; ++sy) {
+            for (int sx = minSx; sx <= maxSx; ++sx) {
+                if (!sectorDiscovered[sy][sx]) continue;
+
+                int rx = mapX + (sx - minSx) * (mapBoxSize + mapGap);
+                int ry = mapY + (sy - minSy) * (mapBoxSize + mapGap);
+
+                // Sector base tile
+                painter.fillRect(rx, ry, mapBoxSize, mapBoxSize, QColor(18, 42, 85));
+                painter.setPen(QPen(QColor(50, 130, 220), 1));
+                painter.drawRect(rx, ry, mapBoxSize, mapBoxSize);
+
+                // Mark EXIT only if this discovered sector contains the exit
+                if (sx == exitSectorX && sy == exitSectorY) {
+                    painter.setPen(QColor(0, 255, 120));
+                    painter.setFont(QFont("Arial", std::max(7, mapBoxSize / 3), QFont::Bold));
+                    painter.drawText(rx, ry, mapBoxSize, mapBoxSize, Qt::AlignCenter, "EXIT");
                 } else {
-                    // Discovered window
-                    painter.fillRect(rx, ry, mapBoxSize, mapBoxSize, QColor(20, 45, 90));
-                    painter.setPen(QColor(60, 140, 220));
-                    painter.drawRect(rx, ry, mapBoxSize, mapBoxSize);
-
-                    // Mark Exit Window
-                    if (sx == exitSectorX && sy == exitSectorY) {
-                        painter.setPen(QColor(0, 255, 120));
-                        painter.setFont(QFont("Arial", std::max(8, mapBoxSize / 2), QFont::Bold));
-                        painter.drawText(rx + mapBoxSize/4, ry + mapBoxSize * 3/4, "E");
-                    }
+                    // Small sector coordinate label
+                    painter.setFont(QFont("Arial", std::max(6, mapBoxSize / 4)));
+                    painter.setPen(QColor(130, 180, 240, 160));
+                    painter.drawText(rx + 2, ry + mapBoxSize - 3, QString("%1,%2").arg(sx + 1).arg(sy + 1));
                 }
 
-                // Current window cursor (Yellow outline + Pacman dot)
+                // Current window cursor (Golden pulsing outline + Pacman dot)
                 if (sx == currentSectorX && sy == currentSectorY) {
                     painter.setPen(QPen(QColor(255, 220, 0), 2));
                     painter.drawRect(rx - 1, ry - 1, mapBoxSize + 2, mapBoxSize + 2);
@@ -1242,16 +1309,35 @@ void MainWindow::paintEvent(QPaintEvent *)
                     painter.setBrush(QColor(255, 220, 0));
                     painter.setPen(Qt::NoPen);
                     painter.drawEllipse(rx + mapBoxSize/2 - 2, ry + mapBoxSize/2 - 2, 4, 4);
+
+                    // Show small pulsing exploration chevrons on edges that lead to UNCHARTED sectors!
+                    float chevPulse = (std::sin(elapsedTimer.elapsed() * 0.008f) + 1.0f) * 0.5f;
+                    int chevAlpha = 140 + int(115 * chevPulse);
+                    painter.setPen(QColor(0, 255, 240, chevAlpha));
+                    painter.setFont(QFont("Arial", std::max(7, mapBoxSize / 3), QFont::Bold));
+
+                    if (sx + 1 < sectorCols && !sectorDiscovered[sy][sx + 1]) {
+                        painter.drawText(rx + mapBoxSize - 1, ry + mapBoxSize * 3 / 4, "▶");
+                    }
+                    if (sx - 1 >= 0 && !sectorDiscovered[sy][sx - 1]) {
+                        painter.drawText(rx - 7, ry + mapBoxSize * 3 / 4, "◀");
+                    }
+                    if (sy + 1 < sectorRows && !sectorDiscovered[sy + 1][sx]) {
+                        painter.drawText(rx + mapBoxSize / 3, ry + mapBoxSize + 7, "▼");
+                    }
+                    if (sy - 1 >= 0 && !sectorDiscovered[sy - 1][sx]) {
+                        painter.drawText(rx + mapBoxSize / 3, ry - 1, "▲");
+                    }
                 }
 
-                // Inter-window doorway connectors
-                if (sx < sectorCols - 1) {
-                    painter.setPen(QPen(QColor(0, 220, 255, 180), 2));
+                // Pathway bridge connectors between adjacent DISCOVERED sectors
+                if (sx < maxSx && sectorDiscovered[sy][sx + 1]) {
+                    painter.setPen(QPen(QColor(0, 230, 255, 200), 2));
                     int cy = ry + mapBoxSize / 2;
                     painter.drawLine(rx + mapBoxSize, cy, rx + mapBoxSize + mapGap, cy);
                 }
-                if (sy < sectorRows - 1) {
-                    painter.setPen(QPen(QColor(0, 220, 255, 180), 2));
+                if (sy < maxSy && sectorDiscovered[sy + 1][sx]) {
+                    painter.setPen(QPen(QColor(0, 230, 255, 200), 2));
                     int cx = rx + mapBoxSize / 2;
                     painter.drawLine(cx, ry + mapBoxSize, cx, ry + mapBoxSize + mapGap);
                 }
@@ -1270,6 +1356,14 @@ void MainWindow::paintEvent(QPaintEvent *)
     int baseFont1 = std::max(11, width() / 110);
     int baseFont2 = std::max(9, width() / 135);
 
+    // Count discovered sectors for HUD
+    int discCount = 0;
+    for (int sy = 0; sy < sectorRows; ++sy) {
+        for (int sx = 0; sx < sectorCols; ++sx) {
+            if (sectorDiscovered[sy][sx]) discCount++;
+        }
+    }
+
     // Line 1: Stats & Window location (hudY + 20)
     painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
     painter.setPen(Qt::white);
@@ -1280,18 +1374,20 @@ void MainWindow::paintEvent(QPaintEvent *)
 
     painter.setPen(QColor(0, 210, 255));
     painter.drawText(width() * 0.28, hudY + 20,
-                     QString("WINDOW: [%1, %2] of [%3x%4]")
-                     .arg(currentSectorX + 1).arg(currentSectorY + 1)
-                     .arg(sectorCols).arg(sectorRows));
+                     QString("SECTOR: (%1, %2)").arg(currentSectorX + 1).arg(currentSectorY + 1));
+
+    painter.setPen(QColor(255, 180, 0));
+    painter.drawText(width() * 0.42, hudY + 20,
+                     QString("EXPLORED: %1").arg(discCount));
 
     painter.setPen(QColor(180, 200, 255));
-    painter.drawText(width() * 0.48, hudY + 20, QString("MOVES: %1").arg(moveCount));
+    painter.drawText(width() * 0.54, hudY + 20, QString("MOVES: %1").arg(moveCount));
 
     qint64 elapsedSec = elapsedTimer.elapsed() / 1000;
     int mins = elapsedSec / 60;
     int secs = elapsedSec % 60;
     painter.setPen(QColor(255, 200, 100));
-    painter.drawText(width() * 0.60, hudY + 20, QString("TIME: %1:%2")
+    painter.drawText(width() * 0.65, hudY + 20, QString("TIME: %1:%2")
                      .arg(mins, 2, 10, QChar('0'))
                      .arg(secs, 2, 10, QChar('0')));
 
@@ -1299,28 +1395,21 @@ void MainWindow::paintEvent(QPaintEvent *)
         int msLeft = std::max(0, FOG_PEEK_DURATION_MS - (int)fogPeekTimer.elapsed());
         double secLeft = msLeft / 1000.0;
         painter.setPen(QColor(255, 215, 0));
-        painter.drawText(width() * 0.74, hudY + 20, QString("[PEEK: %1s ☀️]").arg(secLeft, 0, 'f', 1));
+        painter.drawText(width() * 0.77, hudY + 20, QString("[PEEK: %1s ☀️]").arg(secLeft, 0, 'f', 1));
     } else if (fogOfWarEnabled) {
         painter.setPen(QColor(120, 220, 255));
-        painter.drawText(width() * 0.74, hudY + 20, "[FOG: ON 🌑 (F)]");
+        painter.drawText(width() * 0.77, hudY + 20, "[FOG: ON 🌑 (F)]");
     } else {
         painter.setPen(QColor(150, 150, 160));
-        painter.drawText(width() * 0.74, hudY + 20, "[FOG: OFF ☀️]");
+        painter.drawText(width() * 0.77, hudY + 20, "[FOG: OFF ☀️]");
     }
 
     if (ghostsFrightened) {
         painter.setPen(QColor(255, 100, 140));
-        painter.drawText(width() * 0.88, hudY + 20, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
+        painter.drawText(width() * 0.89, hudY + 20, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
     }
 
     // Line 2: Prominent Mission Objective Guidance (hudY + 42)
-    int discCount = 0;
-    for (int sy = 0; sy < sectorRows; ++sy) {
-        for (int sx = 0; sx < sectorCols; ++sx) {
-            if (sectorDiscovered[sy][sx]) discCount++;
-        }
-    }
-
     QString objectiveText;
     if (currentSectorX == exitSectorX && currentSectorY == exitSectorY) {
         objectiveText = QString("🏁 OBJECTIVE: Find and enter the green [EXIT] portal in this window to complete Level %1!").arg(currentLevel);
@@ -1332,8 +1421,7 @@ void MainWindow::paintEvent(QPaintEvent *)
         else if (currentSectorY < exitSectorY) dirStr = "BOTTOM wall [▼ GATEWAY]";
         else if (currentSectorY > exitSectorY) dirStr = "TOP wall [▲ GATEWAY]";
 
-        objectiveText = QString("🚪 OBJECTIVE: Walk into the glowing cyan %1 to transition into the next window! (%2/%3 windows discovered)")
-            .arg(dirStr).arg(discCount).arg(sectorCols * sectorRows);
+        objectiveText = QString("🧭 OBJECTIVE: Venture through the glowing %1 into uncharted territory!").arg(dirStr);
         painter.setPen(QColor(255, 220, 80));
     }
     painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
@@ -1343,7 +1431,7 @@ void MainWindow::paintEvent(QPaintEvent *)
     painter.setFont(QFont("Arial", baseFont2));
     painter.setPen(QColor(140, 160, 190));
     painter.drawText(20, hudY + 62,
-        "[Arrows] Move Pacman  |  [F] 1.5s Fog Peek  |  [F11] Fullscreen  |  [R] Reset  |  Follow glowing Gateways to next windows!");
+        "[Arrows] Move Pacman  |  [F] 1.5s Fog Peek  |  [F11] Fullscreen  |  [R] Reset  |  Explore the unfolding labyrinth to find the EXIT!");
 
     // Game Over / Level Complete Banner
     if (gameOver) {
@@ -1355,11 +1443,11 @@ void MainWindow::paintEvent(QPaintEvent *)
         painter.fillRect(0, height() / 2 - 45, width(), 90, QColor(0, 0, 0, 225));
         painter.setPen(QColor(60, 255, 120));
         painter.setFont(QFont("Arial", std::max(16, width() / 60), QFont::Bold));
-        QString levelMsg = QString("LEVEL %1 COMPLETE! All Windows Cleared!").arg(currentLevel);
+        QString levelMsg = QString("LEVEL %1 COMPLETE! Labyrinth Escaped!").arg(currentLevel);
         painter.drawText(0, height() / 2 - 12, width(), 25, Qt::AlignCenter, levelMsg);
         painter.setPen(QColor(255, 220, 100));
         painter.setFont(QFont("Arial", std::max(12, width() / 75)));
         painter.drawText(0, height() / 2 + 16, width(), 25, Qt::AlignCenter,
-                         "Press [Space] for Next Level (Bigger Multi-Window World!)");
+                         "Press [Space] for Next Level (Uncharted Depths Await...)");
     }
 }

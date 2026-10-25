@@ -108,6 +108,10 @@ private:
     bool gameOver;
     bool levelComplete;
 
+    // Sector Unfolding notification
+    bool newSectorJustDiscovered;
+    QElapsedTimer newSectorTimer;
+
     // Fog of War / Dark Maze system
     bool fogOfWarEnabled;
     bool fogPeekActive;
