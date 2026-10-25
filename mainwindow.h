@@ -4,6 +4,7 @@
 #include <QWidget>
 #include <QKeyEvent>
 #include <QMouseEvent>
+#include <QWheelEvent>
 #include <QTimer>
 #include <QVector>
 #include <QElapsedTimer>
@@ -56,6 +57,7 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void wheelEvent(QWheelEvent *event) override;
 
 private slots:
     void gameLoop();
@@ -64,6 +66,7 @@ private:
     void initGame();
     void initLevel();
     void startLevel(int lvl);
+    void getSectorDimsForLevel(int lvl, int &cols, int &rows) const;
     void generateSectorMaze(int sx, int sy);
     void movePacman();
     void moveGhosts();
@@ -87,18 +90,22 @@ private:
     void drawMsPacmanAvatar(QPainter &painter, int cx, int cy, int size);
     QPoint getLevelNodePos(int lvl, int mapW, int mapH) const;
     QRect getPlayButtonRect() const;
+    QRect getPrevWorldButtonRect() const;
+    QRect getNextWorldButtonRect() const;
     QRect getMapButtonRect() const;
     QRect getModeSelectorRect() const;
     QRect getModeYellowRect() const;
     QRect getModePinkRect() const;
     QRect getModeCoopRect() const;
     QString getLevelTitle(int lvl) const;
+    QString getWorldName(int world) const;
 
     // Movement & Level Exit Helpers
     void movePlayer2();
     void checkLevelExit();
 
-    static constexpr int TOTAL_LEVELS = 8;
+    static constexpr int LEVELS_PER_WORLD = 8;
+    int viewedMapWorld;
     GameScreen currentScreen;
     int highestUnlockedLevel;
     int selectedMapLevel;
@@ -117,9 +124,11 @@ private:
 
     static constexpr int ROWS = 21;
     static constexpr int COLS = 21;
-    static constexpr int MAX_SECTORS_X = 3;
-    static constexpr int MAX_SECTORS_Y = 3;
-    static constexpr double VISION_RADIUS = 3.6;
+    static constexpr int MAX_SECTORS_X = 6;
+    static constexpr int MAX_SECTORS_Y = 6;
+    static constexpr double DEFAULT_VISION_RADIUS = 3.8;
+    double currentVisionRadius;
+    int currentFrightenDuration;
     static constexpr int FOG_PEEK_DURATION_MS = 1500; // 1.5 seconds temporary peek
     static constexpr int TRANSITION_DURATION_MS = 240; // 240ms smooth camera slide
 

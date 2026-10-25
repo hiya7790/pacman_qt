@@ -9,12 +9,12 @@
 #include <utility>
 
 // Definitions for static constexpr members ensuring ODR linkage across all compiler versions
-constexpr int MainWindow::TOTAL_LEVELS;
+constexpr int MainWindow::LEVELS_PER_WORLD;
 constexpr int MainWindow::ROWS;
 constexpr int MainWindow::COLS;
 constexpr int MainWindow::MAX_SECTORS_X;
 constexpr int MainWindow::MAX_SECTORS_Y;
-constexpr double MainWindow::VISION_RADIUS;
+constexpr double MainWindow::DEFAULT_VISION_RADIUS;
 constexpr int MainWindow::FOG_PEEK_DURATION_MS;
 constexpr int MainWindow::TRANSITION_DURATION_MS;
 constexpr int MainWindow::FRIGHTEN_DURATION;
@@ -31,9 +31,12 @@ MainWindow::MainWindow(QWidget *parent)
     currentScreen = SCREEN_HOME_MAP;
     highestUnlockedLevel = 1;
     selectedMapLevel = 1;
+    viewedMapWorld = 1;
     hoveredMapLevel = 0;
     currentLevel = 1;
 
+    currentVisionRadius = DEFAULT_VISION_RADIUS;
+    currentFrightenDuration = FRIGHTEN_DURATION;
     fogOfWarEnabled = true;
     fogPeekActive = false;
     isTransitioning = false;
@@ -85,13 +88,63 @@ void MainWindow::initGame()
 
 void MainWindow::startLevel(int lvl)
 {
-    currentLevel = std::max(1, std::min(TOTAL_LEVELS, lvl));
+    currentLevel = std::max(1, lvl);
     selectedMapLevel = currentLevel;
+    viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
     currentScreen = SCREEN_PLAYING;
     gameOver = false;
     levelComplete = false;
     initLevel();
     update();
+}
+
+void MainWindow::getSectorDimsForLevel(int lvl, int &cols, int &rows) const
+{
+    if (lvl <= 1) { cols = 2; rows = 1; }      // 2 windows side-by-side
+    else if (lvl == 2) { cols = 2; rows = 2; } // 4 windows (2x2)
+    else if (lvl == 3) { cols = 3; rows = 2; } // 6 windows (3x2)
+    else if (lvl == 4) { cols = 2; rows = 3; } // 6 vertical windows (2x3)
+    else if (lvl == 5) { cols = 3; rows = 3; } // 9 windows (3x3)
+    else if (lvl == 6) { cols = 4; rows = 3; } // 12 windows (4x3)
+    else if (lvl == 7) { cols = 3; rows = 4; } // 12 windows (3x4)
+    else if (lvl == 8) { cols = 4; rows = 4; } // 16 windows (4x4) (World 1 Grand Vault!)
+    else if (lvl == 9) { cols = 5; rows = 4; } // 20 windows (5x4)
+    else if (lvl == 10) { cols = 4; rows = 5; } // 20 windows (4x5)
+    else if (lvl == 11) { cols = 5; rows = 5; } // 25 windows (5x5)
+    else if (lvl == 12) { cols = 6; rows = 5; } // 30 windows (6x5)
+    else if (lvl == 13) { cols = 5; rows = 6; } // 30 windows (5x6)
+    else {
+        // Beyond Level 13, cycles through massive layouts: 6x6, 5x6, 6x5, 6x6 (up to 36 windows!)
+        int cycle = (lvl - 14) % 4;
+        if (cycle == 0) { cols = 6; rows = 6; }
+        else if (cycle == 1) { cols = 5; rows = 6; }
+        else if (cycle == 2) { cols = 6; rows = 5; }
+        else { cols = 6; rows = 6; }
+    }
+    cols = std::clamp(cols, 1, MAX_SECTORS_X);
+    rows = std::clamp(rows, 1, MAX_SECTORS_Y);
+}
+
+QString MainWindow::getWorldName(int world) const
+{
+    static const QString worldNames[] = {
+        "Sweet Peppermint Plains",
+        "Caramel Lava Caverns",
+        "Gummy Bear Galaxy",
+        "Cotton Candy Clouds",
+        "Chocolate Chip Chasm",
+        "Neon Licorice Labyrinth",
+        "Frosted Marshmallow Mountain",
+        "Sugar Plum Palace",
+        "Bubblegum Bay",
+        "Rainbow Lollipop Lagoon"
+    };
+    int count = sizeof(worldNames) / sizeof(worldNames[0]);
+    if (world >= 1 && world <= count) {
+        return QString("WORLD %1: %2").arg(world).arg(worldNames[world - 1]);
+    }
+    int idx = (world - 1) % count;
+    return QString("WORLD %1: %2 (Ch.%3)").arg(world).arg(worldNames[idx]).arg((world - 1) / count + 1);
 }
 
 void MainWindow::generateSectorMaze(int sx, int sy)
@@ -156,18 +209,19 @@ void MainWindow::generateSectorMaze(int sx, int sy)
     board[sy][sx][8][10] = 0;
     board[sy][sx][12][10] = 0;
 
-    // 4. Loop braiding: Remove ~28% of internal dividing walls
+    // 4. Loop braiding: Dynamic wall removal (reduces at higher levels for tricky labyrinth turns!)
+    int braidChance = std::clamp(32 - currentLevel, 14, 32);
     for (int r = 2; r < ROWS - 2; ++r) {
         for (int c = 2; c < COLS - 2; ++c) {
             if (board[sy][sx][r][c] == 1) {
                 if (board[sy][sx][r-1][c] == 0 && board[sy][sx][r+1][c] == 0 &&
                     board[sy][sx][r][c-1] == 1 && board[sy][sx][r][c+1] == 1) {
-                    if (QRandomGenerator::global()->bounded(100) < 28) {
+                    if (QRandomGenerator::global()->bounded(100) < braidChance) {
                         board[sy][sx][r][c] = 0;
                     }
                 } else if (board[sy][sx][r][c-1] == 0 && board[sy][sx][r][c+1] == 0 &&
                            board[sy][sx][r-1][c] == 1 && board[sy][sx][r+1][c] == 1) {
-                    if (QRandomGenerator::global()->bounded(100) < 28) {
+                    if (QRandomGenerator::global()->bounded(100) < braidChance) {
                         board[sy][sx][r][c] = 0;
                     }
                 }
@@ -189,20 +243,19 @@ void MainWindow::generateSectorMaze(int sx, int sy)
 
 void MainWindow::initLevel()
 {
-    // Determine number of interconnected windows for this level
-    if (currentLevel == 1) {
-        sectorCols = 2; sectorRows = 1; // 2 windows side-by-side
-    } else if (currentLevel == 2) {
-        sectorCols = 2; sectorRows = 2; // 2x2 = 4 windows
-    } else if (currentLevel == 3) {
-        sectorCols = 3; sectorRows = 2; // 3x2 = 6 windows
-    } else if (currentLevel == 4) {
-        sectorCols = 2; sectorRows = 3; // 2x3 = 6 vertical windows
-    } else {
-        sectorCols = 3; sectorRows = 3; // 3x3 = 9 windows (mega labyrinth!)
+    // Determine dynamic sector grid dimensions for this level
+    getSectorDimsForLevel(currentLevel, sectorCols, sectorRows);
+
+    // Dynamic difficulty scaling
+    currentVisionRadius = std::max(2.6, 3.8 - (currentLevel - 1) * 0.08);
+    currentFrightenDuration = std::max(12, 28 - (currentLevel / 2) * 2);
+    ghostMoveEveryN = std::max(1, 4 - currentLevel / 3);
+    ghostTickCounter = 0;
+
+    int baseInterval = std::max(85, 130 - (currentLevel / 4) * 5);
+    if (timer) {
+        timer->setInterval(baseInterval);
     }
-    sectorCols = std::clamp(sectorCols, 1, MAX_SECTORS_X);
-    sectorRows = std::clamp(sectorRows, 1, MAX_SECTORS_Y);
 
     // 1. Generate every sector
     for (int sy = 0; sy < sectorRows; ++sy) {
@@ -310,9 +363,9 @@ void MainWindow::initLevel()
     isTransitioning = false;
     newSectorJustDiscovered = false;
 
-    // 5. Spawn Ghosts across sectors
+    // 5. Spawn Ghosts across sectors dynamically based on level
     ghosts.clear();
-    // 2 ghosts in the starting window
+    // Always 2 ghosts in starting window
     ghosts.push_back({currentSectorX, currentSectorY, 10, 9, UP, 0});     // Blinky (Red)
     ghosts.push_back({currentSectorX, currentSectorY, 9, 10, LEFT, 1});   // Pinky (Pink)
 
@@ -321,26 +374,34 @@ void MainWindow::initLevel()
         ghosts.push_back({exitSectorX, exitSectorY, 10, 10, RIGHT, 2}); // Inky (Cyan)
     }
 
-    // Additional roaming ghost in intermediate window if available
-    if (sectorCols * sectorRows > 2) {
-        int midSx = sectorCols / 2;
-        int midSy = sectorRows / 2;
-        ghosts.push_back({midSx, midSy, 10, 10, DOWN, 3}); // Clyde (Orange)
+    // Ghost count scales progressively with level (up to 12 ghosts!)
+    int targetGhostCount = std::clamp(2 + currentLevel, 2, 12);
+    int colorCycle = 3; // Clyde (Orange = 3)
+
+    // Spread roaming ghosts evenly across other sectors
+    for (int sy = 0; sy < sectorRows && (int)ghosts.size() < targetGhostCount; ++sy) {
+        for (int sx = 0; sx < sectorCols && (int)ghosts.size() < targetGhostCount; ++sx) {
+            if (sx == currentSectorX && sy == currentSectorY) continue;
+            if (sx == exitSectorX && sy == exitSectorY && currentLevel < 6) continue;
+
+            Direction initDir = static_cast<Direction>(colorCycle % 4);
+            ghosts.push_back({sx, sy, 10, 10, initDir, colorCycle % 4});
+            colorCycle++;
+        }
     }
 
-    // Extra ghosts for higher levels (Level 6+)
-    if (currentLevel >= 6) {
-        ghosts.push_back({0, 0, 10, 10, UP, 0});
-    }
-    if (currentLevel >= 7) {
-        ghosts.push_back({exitSectorX, exitSectorY, 9, 9, DOWN, 1});
+    // If still have ghost slots, add sentries in sectors
+    while ((int)ghosts.size() < targetGhostCount) {
+        int randSx = QRandomGenerator::global()->bounded(sectorCols);
+        int randSy = QRandomGenerator::global()->bounded(sectorRows);
+        int gx = 9 + QRandomGenerator::global()->bounded(3);
+        int gy = 9 + QRandomGenerator::global()->bounded(3);
+        ghosts.push_back({randSx, randSy, gx, gy, UP, colorCycle % 4});
+        colorCycle++;
     }
 
     ghostsFrightened = false;
     frightenedTicksLeft = 0;
-
-    ghostMoveEveryN = std::max(1, 4 - currentLevel / 2);
-    ghostTickCounter = 0;
 
     activeFruits.clear();
     fruitSpawnCounter = QRandomGenerator::global()->bounded(15, 35);
@@ -358,7 +419,7 @@ void MainWindow::updateFogOfWar()
         for (int c = 0; c < COLS; ++c) {
             double dist1 = (p1Alive ? std::hypot(c - pacmanX, r - pacmanY) : 999.0);
             double dist2 = (isMultiplayer && p2Alive ? std::hypot(c - p2X, r - p2Y) : 999.0);
-            if (dist1 <= VISION_RADIUS || dist2 <= VISION_RADIUS) {
+            if (dist1 <= currentVisionRadius || dist2 <= currentVisionRadius) {
                 explored[currentSectorY][currentSectorX][r][c] = true;
             }
         }
@@ -371,7 +432,7 @@ bool MainWindow::isCellVisible(int sx, int sy, int x, int y) const
     if (sx != currentSectorX || sy != currentSectorY) return false;
     double dist1 = (p1Alive ? std::hypot(x - pacmanX, y - pacmanY) : 999.0);
     double dist2 = (isMultiplayer && p2Alive ? std::hypot(x - p2X, y - p2Y) : 999.0);
-    return (dist1 <= VISION_RADIUS || dist2 <= VISION_RADIUS);
+    return (dist1 <= currentVisionRadius || dist2 <= currentVisionRadius);
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
@@ -433,6 +494,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         if (event->key() == Qt::Key_Up || event->key() == Qt::Key_Right) {
             if (selectedMapLevel < highestUnlockedLevel) {
                 selectedMapLevel++;
+                viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
                 update();
             }
             return;
@@ -440,6 +502,24 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         if (event->key() == Qt::Key_Down || event->key() == Qt::Key_Left) {
             if (selectedMapLevel > 1) {
                 selectedMapLevel--;
+                viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
+                update();
+            }
+            return;
+        }
+        if (event->key() == Qt::Key_PageUp || event->key() == Qt::Key_BracketRight) {
+            int maxUnlockedWorld = (highestUnlockedLevel - 1) / LEVELS_PER_WORLD + 1;
+            if (viewedMapWorld < maxUnlockedWorld + 1) {
+                viewedMapWorld++;
+                selectedMapLevel = std::min(highestUnlockedLevel, (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1);
+                update();
+            }
+            return;
+        }
+        if (event->key() == Qt::Key_PageDown || event->key() == Qt::Key_BracketLeft) {
+            if (viewedMapWorld > 1) {
+                viewedMapWorld--;
+                selectedMapLevel = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
                 update();
             }
             return;
@@ -456,24 +536,26 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         } else if (event->key() == Qt::Key_M) {
             currentScreen = SCREEN_HOME_MAP;
             selectedMapLevel = currentLevel;
+            viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
             update();
         }
         return;
     }
 
-    // In-Game Level Complete
+    // In-Game Level Complete (Infinite progression!)
     if (levelComplete) {
         if (event->key() == Qt::Key_Space) {
             currentLevel++;
-            if (currentLevel > TOTAL_LEVELS) currentLevel = TOTAL_LEVELS;
             if (currentLevel > highestUnlockedLevel) highestUnlockedLevel = currentLevel;
             selectedMapLevel = currentLevel;
+            viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
             initLevel();
             levelComplete = false;
             update();
         } else if (event->key() == Qt::Key_M) {
             currentScreen = SCREEN_HOME_MAP;
-            selectedMapLevel = std::min(TOTAL_LEVELS, currentLevel + 1);
+            selectedMapLevel = currentLevel + 1;
+            viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
             update();
         }
         return;
@@ -611,7 +693,7 @@ void MainWindow::checkLevelExit()
 
     if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && (p1Won || p2Won)) {
         levelComplete = true;
-        int clearBonus = 500 * (sectorCols * sectorRows);
+        int clearBonus = (300 + currentLevel * 100) * (sectorCols * sectorRows);
         if (p1Won && p2Won) {
             scoreP1 += clearBonus / 2;
             scoreP2 += clearBonus / 2;
@@ -622,9 +704,10 @@ void MainWindow::checkLevelExit()
         }
         score = scoreP1 + scoreP2;
         if (currentLevel >= highestUnlockedLevel) {
-            highestUnlockedLevel = std::min(TOTAL_LEVELS, currentLevel + 1);
+            highestUnlockedLevel = currentLevel + 1;
         }
-        selectedMapLevel = std::min(TOTAL_LEVELS, currentLevel + 1);
+        selectedMapLevel = currentLevel + 1;
+        viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
     }
 }
 
@@ -763,7 +846,7 @@ void MainWindow::movePacman()
         // Eat dot
         if (board[currentSectorY][currentSectorX][pacmanY][pacmanX] == 2) {
             board[currentSectorY][currentSectorX][pacmanY][pacmanX] = 0;
-            scoreP1 += 10;
+            scoreP1 += 10 + (currentLevel - 1) * 2;
             score = scoreP1 + scoreP2;
         }
 
@@ -864,7 +947,7 @@ void MainWindow::movePlayer2()
         // Eat dot
         if (board[currentSectorY][currentSectorX][p2Y][p2X] == 2) {
             board[currentSectorY][currentSectorX][p2Y][p2X] = 0;
-            scoreP2 += 10;
+            scoreP2 += 10 + (currentLevel - 1) * 2;
             score = scoreP1 + scoreP2;
         }
 
@@ -1103,7 +1186,7 @@ void MainWindow::checkFruitPickup()
                 activeFruits.removeAt(i);
 
                 ghostsFrightened = true;
-                frightenedTicksLeft = FRIGHTEN_DURATION;
+                frightenedTicksLeft = currentFrightenDuration;
             }
         }
     }
@@ -1430,7 +1513,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
             int pxCenter = originX + pacmanX * cellSize + cellSize / 2;
             int pyCenter = originY + pacmanY * cellSize + cellSize / 2;
 
-            QRadialGradient lantern(pxCenter, pyCenter, (VISION_RADIUS + 0.6) * cellSize);
+            QRadialGradient lantern(pxCenter, pyCenter, (currentVisionRadius + 0.6) * cellSize);
             lantern.setColorAt(0.0, QColor(255, 235, 170, 25));
             lantern.setColorAt(0.45, QColor(255, 200, 100, 10));
             lantern.setColorAt(0.75, QColor(0, 0, 0, 60));
@@ -1442,7 +1525,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
             int p2xCenter = originX + p2X * cellSize + cellSize / 2;
             int p2yCenter = originY + p2Y * cellSize + cellSize / 2;
 
-            QRadialGradient lantern2(p2xCenter, p2yCenter, (VISION_RADIUS + 0.6) * cellSize);
+            QRadialGradient lantern2(p2xCenter, p2yCenter, (currentVisionRadius + 0.6) * cellSize);
             lantern2.setColorAt(0.0, QColor(255, 190, 230, 25));
             lantern2.setColorAt(0.45, QColor(255, 150, 200, 10));
             lantern2.setColorAt(0.75, QColor(0, 0, 0, 60));
@@ -1812,8 +1895,9 @@ void MainWindow::paintEvent(QPaintEvent *)
 
         int unfoldCols = maxSx - minSx + 1;
         int unfoldRows = maxSy - minSy + 1;
-        int mapBoxSize = std::max(20, cellSize * 3 / 5);
-        int mapGap = 5;
+        int maxDim = std::max(unfoldCols, unfoldRows);
+        int mapBoxSize = std::clamp(int((cellSize * 11) / std::max(4, maxDim)), 9, 24);
+        int mapGap = std::max(2, mapBoxSize / 5);
         int totalMapW = unfoldCols * mapBoxSize + (unfoldCols - 1) * mapGap;
         int totalMapH = unfoldRows * mapBoxSize + (unfoldRows - 1) * mapGap;
         int mapX = startX + mazeW - totalMapW - 16;
@@ -2063,17 +2147,12 @@ void MainWindow::paintEvent(QPaintEvent *)
 
 QString MainWindow::getLevelTitle(int lvl) const
 {
-    switch (lvl) {
-        case 1: return "Level 1: Dual Chamber (2 Windows)";
-        case 2: return "Level 2: Quad Labyrinth (4 Windows)";
-        case 3: return "Level 3: Twin Hallways (6 Windows)";
-        case 4: return "Level 4: Vertical Depths (6 Windows)";
-        case 5: return "Level 5: Nine Realms (9 Windows)";
-        case 6: return "Level 6: Ghost Citadel (9 Windows)";
-        case 7: return "Level 7: Nightmare Labyrinth (9 Windows)";
-        case 8: return "Level 8: The Grand Master Vault (9 Windows)";
-        default: return QString("Level %1").arg(lvl);
-    }
+    int cols, rows;
+    getSectorDimsForLevel(lvl, cols, rows);
+    int windows = cols * rows;
+    int world = (lvl - 1) / LEVELS_PER_WORLD + 1;
+    int stage = (lvl - 1) % LEVELS_PER_WORLD + 1;
+    return QString("World %1 • Stage %2 (Level %3: %4 Windows)").arg(world).arg(stage).arg(lvl).arg(windows);
 }
 
 QRect MainWindow::getPlayButtonRect() const
@@ -2084,6 +2163,18 @@ QRect MainWindow::getPlayButtonRect() const
     int btnX = (width() - btnW) / 2;
     int btnY = height() - btnH - 12;
     return QRect(btnX, btnY, btnW, btnH);
+}
+
+QRect MainWindow::getPrevWorldButtonRect() const
+{
+    int btnW = std::clamp(int(width() * 0.16), 110, 150);
+    return QRect(16, 22, btnW, 36);
+}
+
+QRect MainWindow::getNextWorldButtonRect() const
+{
+    int btnW = std::clamp(int(width() * 0.16), 110, 150);
+    return QRect(width() - btnW - 16, 22, btnW, 36);
 }
 
 QRect MainWindow::getModeSelectorRect() const
@@ -2125,17 +2216,37 @@ QRect MainWindow::getMapButtonRect() const
 QPoint MainWindow::getLevelNodePos(int lvl, int mapW, int mapH) const
 {
     static const double coords[8][2] = {
-        {0.48, 0.81}, // Level 1 (bottom center)
-        {0.68, 0.72}, // Level 2 (lower right)
-        {0.72, 0.58}, // Level 3 (mid right)
-        {0.50, 0.50}, // Level 4 (center)
-        {0.28, 0.42}, // Level 5 (mid left)
-        {0.32, 0.28}, // Level 6 (upper left)
-        {0.52, 0.20}, // Level 7 (upper center)
-        {0.65, 0.12}  // Level 8 (top crown peak)
+        {0.48, 0.81}, // Stage 1 (bottom center)
+        {0.68, 0.72}, // Stage 2 (lower right)
+        {0.72, 0.58}, // Stage 3 (mid right)
+        {0.50, 0.50}, // Stage 4 (center)
+        {0.28, 0.42}, // Stage 5 (mid left)
+        {0.32, 0.28}, // Stage 6 (upper left)
+        {0.52, 0.20}, // Stage 7 (upper center)
+        {0.65, 0.12}  // Stage 8 (top crown peak)
     };
-    int idx = std::max(1, std::min(8, lvl)) - 1;
-    return QPoint(int(coords[idx][0] * mapW), int(coords[idx][1] * mapH));
+    int stageIdx = (lvl - 1) % LEVELS_PER_WORLD;
+    if (stageIdx < 0) stageIdx = 0;
+    if (stageIdx > 7) stageIdx = 7;
+    return QPoint(int(coords[stageIdx][0] * mapW), int(coords[stageIdx][1] * mapH));
+}
+
+void MainWindow::wheelEvent(QWheelEvent *event)
+{
+    if (currentScreen == SCREEN_HOME_MAP) {
+        int delta = event->angleDelta().y();
+        int maxUnlockedWorld = (highestUnlockedLevel - 1) / LEVELS_PER_WORLD + 1;
+        if (delta > 0 && viewedMapWorld > 1) {
+            viewedMapWorld--;
+            selectedMapLevel = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
+            update();
+        } else if (delta < 0 && viewedMapWorld < maxUnlockedWorld + 1) {
+            viewedMapWorld++;
+            selectedMapLevel = std::min(highestUnlockedLevel, (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1);
+            update();
+        }
+    }
+    QWidget::wheelEvent(event);
 }
 
 void MainWindow::mousePressEvent(QMouseEvent *event)
@@ -2143,7 +2254,22 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
     if (currentScreen == SCREEN_HOME_MAP) {
         QPoint pos = event->pos();
 
-        // 1. Clicked Mode Selector buttons
+        // 1. Clicked Prev / Next World buttons
+        if (getPrevWorldButtonRect().contains(pos) && viewedMapWorld > 1) {
+            viewedMapWorld--;
+            selectedMapLevel = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
+            update();
+            return;
+        }
+        int maxUnlockedWorld = (highestUnlockedLevel - 1) / LEVELS_PER_WORLD + 1;
+        if (getNextWorldButtonRect().contains(pos) && viewedMapWorld < maxUnlockedWorld + 1) {
+            viewedMapWorld++;
+            selectedMapLevel = std::min(highestUnlockedLevel, (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1);
+            update();
+            return;
+        }
+
+        // 2. Clicked Mode Selector buttons
         if (getModeYellowRect().contains(pos)) {
             isMultiplayer = false;
             singlePlayerHero = 1;
@@ -2164,18 +2290,20 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
             return;
         }
 
-        // 2. Clicked Play button
+        // 3. Clicked Play button
         if (getPlayButtonRect().contains(pos)) {
             startLevel(selectedMapLevel);
             return;
         }
 
-        // 3. Clicked Level Node
+        // 4. Clicked Level Node
         int radius = std::min(width(), height()) / 22;
         if (radius < 24) radius = 24;
         if (radius > 36) radius = 36;
 
-        for (int lvl = 1; lvl <= TOTAL_LEVELS; ++lvl) {
+        int worldStartLvl = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
+        int worldEndLvl = worldStartLvl + LEVELS_PER_WORLD - 1;
+        for (int lvl = worldStartLvl; lvl <= worldEndLvl; ++lvl) {
             QPoint np = getLevelNodePos(lvl, width(), height());
             int dx = pos.x() - np.x();
             int dy = pos.y() - np.y();
@@ -2198,6 +2326,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         if (getMapButtonRect().contains(pos)) {
             currentScreen = SCREEN_HOME_MAP;
             selectedMapLevel = currentLevel;
+            viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
             update();
             return;
         }
@@ -2236,9 +2365,9 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
 
         if (levelComplete) {
             currentLevel++;
-            if (currentLevel > TOTAL_LEVELS) currentLevel = TOTAL_LEVELS;
             if (currentLevel > highestUnlockedLevel) highestUnlockedLevel = currentLevel;
             selectedMapLevel = currentLevel;
+            viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
             initLevel();
             levelComplete = false;
             update();
@@ -2257,7 +2386,9 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
         if (radius < 24) radius = 24;
         if (radius > 36) radius = 36;
 
-        for (int lvl = 1; lvl <= TOTAL_LEVELS; ++lvl) {
+        int worldStartLvl = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
+        int worldEndLvl = worldStartLvl + LEVELS_PER_WORLD - 1;
+        for (int lvl = worldStartLvl; lvl <= worldEndLvl; ++lvl) {
             QPoint np = getLevelNodePos(lvl, width(), height());
             int dx = pos.x() - np.x();
             int dy = pos.y() - np.y();
@@ -2267,9 +2398,12 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
             }
         }
 
+        int maxUnlockedWorld = (highestUnlockedLevel - 1) / LEVELS_PER_WORLD + 1;
+        bool onPrev = (getPrevWorldButtonRect().contains(pos) && viewedMapWorld > 1);
+        bool onNext = (getNextWorldButtonRect().contains(pos) && viewedMapWorld < maxUnlockedWorld + 1);
         bool onMode = getModeSelectorRect().contains(pos);
         if ((hoveredMapLevel != 0 && hoveredMapLevel <= highestUnlockedLevel) ||
-            getPlayButtonRect().contains(pos) || onMode) {
+            getPlayButtonRect().contains(pos) || onMode || onPrev || onNext) {
             setCursor(Qt::PointingHandCursor);
         } else {
             setCursor(Qt::ArrowCursor);
@@ -2481,8 +2615,8 @@ void MainWindow::drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int r
         }
     }
 
-    // 6. Level 8 Crown Trophy
-    if (lvl == TOTAL_LEVELS) {
+    // 6. Stage 8 Crown Trophy (Final stage of each World!)
+    if (lvl % LEVELS_PER_WORLD == 0) {
         int cw = 28, ch = 18;
         int cx0 = cx - cw / 2;
         int cy0 = cy - r - ch - 4;
@@ -2499,8 +2633,8 @@ void MainWindow::drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int r
         painter.drawPolygon(crown);
     }
 
-    // 7. Pacman Avatar on the Current Level
-    if (lvl == highestUnlockedLevel) {
+    // 7. Pacman Avatar on the Selected Level Node
+    if (lvl == selectedMapLevel) {
         int bob = int(4 * std::sin(elapsedTimer.elapsed() * 0.007f));
         if (isMultiplayer) {
             drawPacmanAvatar(painter, cx - 18, cy - r - 22 + bob, std::max(20, r - 3));
@@ -2520,12 +2654,50 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     int w = width();
     int h = height();
 
-    // 1. Rich Candy Twilight Fantasy Gradient Background
+    int currentWorld = viewedMapWorld;
+    int worldStartLvl = (currentWorld - 1) * LEVELS_PER_WORLD + 1;
+    int worldEndLvl = worldStartLvl + LEVELS_PER_WORLD - 1;
+
+    // 1. Rich Candy Twilight Fantasy Gradient Background (Shifts per World!)
     QLinearGradient bg(0, 0, 0, h);
-    bg.setColorAt(0.0, QColor(20, 10, 42));   // Cosmic night
-    bg.setColorAt(0.35, QColor(48, 16, 70));  // Deep plum
-    bg.setColorAt(0.70, QColor(90, 24, 85));  // Warm raspberry
-    bg.setColorAt(1.0, QColor(36, 12, 50));   // Dark violet
+    int themeIdx = (currentWorld - 1) % 6;
+    if (themeIdx == 0) {
+        // World 1 (Plum / Raspberry Twilight - Sweet Peppermint Plains)
+        bg.setColorAt(0.0, QColor(20, 10, 42));
+        bg.setColorAt(0.35, QColor(48, 16, 70));
+        bg.setColorAt(0.70, QColor(90, 24, 85));
+        bg.setColorAt(1.0, QColor(36, 12, 50));
+    } else if (themeIdx == 1) {
+        // World 2 (Molten Amber / Warm Caramel Lava)
+        bg.setColorAt(0.0, QColor(35, 12, 10));
+        bg.setColorAt(0.35, QColor(75, 28, 15));
+        bg.setColorAt(0.70, QColor(130, 55, 18));
+        bg.setColorAt(1.0, QColor(50, 18, 12));
+    } else if (themeIdx == 2) {
+        // World 3 (Cosmic Indigo & Violet Nebula - Gummy Bear Galaxy)
+        bg.setColorAt(0.0, QColor(10, 8, 38));
+        bg.setColorAt(0.35, QColor(22, 15, 68));
+        bg.setColorAt(0.70, QColor(50, 25, 110));
+        bg.setColorAt(1.0, QColor(18, 10, 52));
+    } else if (themeIdx == 3) {
+        // World 4 (Pastel Strawberry Frost & Lavender - Cotton Candy Clouds)
+        bg.setColorAt(0.0, QColor(38, 12, 45));
+        bg.setColorAt(0.35, QColor(80, 25, 75));
+        bg.setColorAt(0.70, QColor(125, 45, 105));
+        bg.setColorAt(1.0, QColor(48, 15, 55));
+    } else if (themeIdx == 4) {
+        // World 5 (Dark Mocha & Golden Hazelnut - Chocolate Chip Chasm)
+        bg.setColorAt(0.0, QColor(25, 14, 10));
+        bg.setColorAt(0.35, QColor(55, 28, 18));
+        bg.setColorAt(0.70, QColor(95, 48, 25));
+        bg.setColorAt(1.0, QColor(38, 18, 12));
+    } else {
+        // World 6 (Electric Emerald & Cyber Licorice)
+        bg.setColorAt(0.0, QColor(8, 22, 28));
+        bg.setColorAt(0.35, QColor(12, 52, 58));
+        bg.setColorAt(0.70, QColor(18, 88, 75));
+        bg.setColorAt(1.0, QColor(10, 36, 40));
+    }
     painter.fillRect(rect(), bg);
 
     // Gentle candy hills rolling in bottom background
@@ -2564,10 +2736,10 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
         painter.drawEllipse(sx, sy, starD, starD);
     }
 
-    // 2. The Winding Serpentine Candy Road
+    // 2. The Winding Serpentine Candy Road connecting this world's stages
     QPainterPath roadPath;
-    roadPath.moveTo(getLevelNodePos(1, w, h));
-    for (int lvl = 2; lvl <= TOTAL_LEVELS; ++lvl) {
+    roadPath.moveTo(getLevelNodePos(worldStartLvl, w, h));
+    for (int lvl = worldStartLvl + 1; lvl <= worldEndLvl; ++lvl) {
         QPoint p0 = getLevelNodePos(lvl - 1, w, h);
         QPoint p1 = getLevelNodePos(lvl, w, h);
         QPoint cp1(p0.x(), (p0.y() + p1.y()) / 2);
@@ -2583,7 +2755,7 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.strokePath(roadPath, QPen(QColor(255, 230, 110, 240), 5, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
 
     // Decorative Power Dots along the road
-    for (int lvl = 1; lvl < TOTAL_LEVELS; ++lvl) {
+    for (int lvl = worldStartLvl; lvl < worldEndLvl; ++lvl) {
         QPoint p0 = getLevelNodePos(lvl, w, h);
         QPoint p1 = getLevelNodePos(lvl + 1, w, h);
         for (int step = 1; step <= 3; ++step) {
@@ -2604,13 +2776,45 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     if (radius < 24) radius = 24;
     if (radius > 36) radius = 36;
 
-    for (int lvl = 1; lvl <= TOTAL_LEVELS; ++lvl) {
+    for (int lvl = worldStartLvl; lvl <= worldEndLvl; ++lvl) {
         QPoint np = getLevelNodePos(lvl, w, h);
         drawLevelNode(painter, lvl, np.x(), np.y(), radius);
     }
 
-    // 4. Header Ribbon Banner
-    int headerW = std::min(580, int(w * 0.8));
+    // 4. World Navigation Buttons: [ ◀ WORLD %1 ] and [ WORLD %1 ▶ ]
+    int maxUnlockedWorld = (highestUnlockedLevel - 1) / LEVELS_PER_WORLD + 1;
+    bool hasPrevWorld = (viewedMapWorld > 1);
+    bool hasNextWorld = (viewedMapWorld < maxUnlockedWorld + 1);
+
+    QRect prevBtn = getPrevWorldButtonRect();
+    QRect nextBtn = getNextWorldButtonRect();
+    QPoint mousePos = mapFromGlobal(QCursor::pos());
+    bool prevHover = prevBtn.contains(mousePos);
+    bool nextHover = nextBtn.contains(mousePos);
+
+    if (hasPrevWorld) {
+        painter.setBrush(prevHover ? QColor(45, 20, 65, 230) : QColor(25, 12, 40, 200));
+        painter.setPen(QPen(prevHover ? QColor(255, 220, 100) : QColor(200, 160, 240), 1.5));
+        painter.drawRoundedRect(prevBtn, 8, 8);
+
+        painter.setFont(QFont("Arial", std::max(9, prevBtn.height() * 3 / 8), QFont::Bold));
+        painter.setPen(prevHover ? Qt::white : QColor(230, 215, 255));
+        painter.drawText(prevBtn, Qt::AlignCenter, QString("◀ WORLD %1").arg(viewedMapWorld - 1));
+    }
+
+    if (hasNextWorld) {
+        painter.setBrush(nextHover ? QColor(45, 20, 65, 230) : QColor(25, 12, 40, 200));
+        painter.setPen(QPen(nextHover ? QColor(255, 220, 100) : QColor(200, 160, 240), 1.5));
+        painter.drawRoundedRect(nextBtn, 8, 8);
+
+        painter.setFont(QFont("Arial", std::max(9, nextBtn.height() * 3 / 8), QFont::Bold));
+        painter.setPen(nextHover ? Qt::white : QColor(230, 215, 255));
+        painter.drawText(nextBtn, Qt::AlignCenter, QString("WORLD %1 ▶").arg(viewedMapWorld + 1));
+    }
+
+    // 5. Header Ribbon Banner
+    int headerW = std::min(int(w - prevBtn.width() * 2 - 48), 560);
+    if (headerW < 320) headerW = 320;
     int headerH = 64;
     int hx = (w - headerW) / 2;
     int hy = 16;
@@ -2630,36 +2834,35 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.drawRoundedRect(hx, hy, headerW, headerH, 14, 14);
 
     // Title text
-    painter.setFont(QFont("Arial", std::max(15, headerH * 3 / 8), QFont::Bold));
+    painter.setFont(QFont("Arial", std::max(14, headerH * 3 / 8), QFont::Bold));
     painter.setPen(QColor(60, 10, 20));
     painter.drawText(hx + 1, hy + 2, headerW, headerH * 5 / 8, Qt::AlignCenter, "PAC-MAN LABYRINTH SAGA");
     painter.setPen(QColor(255, 235, 120));
     painter.drawText(hx, hy, headerW, headerH * 5 / 8, Qt::AlignCenter, "PAC-MAN LABYRINTH SAGA");
 
-    painter.setFont(QFont("Arial", std::max(9, headerH / 6)));
+    painter.setFont(QFont("Arial", std::max(8, headerH / 6), QFont::Bold));
     painter.setPen(QColor(255, 220, 230));
     painter.drawText(hx, hy + headerH * 4 / 8, headerW, headerH * 3 / 8, Qt::AlignCenter,
-                     "Explore the Unfolding Multi-Window Labyrinths!");
+                     QString("%1  •  Levels %2-%3").arg(getWorldName(viewedMapWorld)).arg(worldStartLvl).arg(worldEndLvl));
 
-    // Progress Badge on top-right
-    int pbW = 160, pbH = 34;
-    int pbx = w - pbW - 20;
-    int pby = 22;
-    painter.setBrush(QColor(15, 20, 45, 200));
+    // Highest Unlocked Badge centered directly under ribbon banner
+    int pbW = 210, pbH = 26;
+    int pbx = (w - pbW) / 2;
+    int pby = hy + headerH + 6;
+    painter.setBrush(QColor(15, 20, 45, 220));
     painter.setPen(QPen(QColor(0, 220, 255), 1.5));
-    painter.drawRoundedRect(pbx, pby, pbW, pbH, 8, 8);
+    painter.drawRoundedRect(pbx, pby, pbW, pbH, pbH / 2, pbH / 2);
 
     painter.setFont(QFont("Arial", 9, QFont::Bold));
     painter.setPen(QColor(255, 215, 0));
     painter.drawText(pbx, pby, pbW, pbH, Qt::AlignCenter,
-                     QString("⭐ LEVEL %1 / %2").arg(highestUnlockedLevel).arg(TOTAL_LEVELS));
+                     QString("⭐ HIGHEST UNLOCKED: LEVEL %1").arg(highestUnlockedLevel));
 
     // 5. Mode & Hero Selector: [ 🟡 YELLOW (1P) ]  [ 🎀 PINK (1P) ]  [ 👥 CO-OP (2P) ]
     QRect selRect = getModeSelectorRect();
     QRect pYellow = getModeYellowRect().adjusted(2, 2, -2, -2);
     QRect pPink = getModePinkRect().adjusted(2, 2, -2, -2);
     QRect pCoop = getModeCoopRect().adjusted(2, 2, -2, -2);
-    QPoint mousePos = mapFromGlobal(QCursor::pos());
     bool yellowHover = pYellow.contains(mousePos);
     bool pinkHover = pPink.contains(mousePos);
     bool coopHover = pCoop.contains(mousePos);
