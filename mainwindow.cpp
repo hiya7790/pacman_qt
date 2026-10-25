@@ -11,10 +11,11 @@ MainWindow::MainWindow(QWidget *parent)
 {
     setMinimumSize(700, 750);
     setStyleSheet("background-color: black;");
-    setWindowTitle("Pacman: Dark Maze Escape (Fullscreen)");
+    setWindowTitle("Pacman: Multi-Window Maze Escape (Fullscreen)");
 
     fogOfWarEnabled = true;
     fogPeekActive = false;
+    isTransitioning = false;
 
     initGame();
 
@@ -40,22 +41,22 @@ void MainWindow::initGame()
     initLevel();
 }
 
-void MainWindow::generateMaze()
+void MainWindow::generateSectorMaze(int sx, int sy)
 {
-    // 1. Fill entire board with walls and reset explored fog
+    // 1. Fill sector with walls
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
-            board[r][c] = 1;
-            explored[r][c] = false;
+            board[sy][sx][r][c] = 1;
+            explored[sy][sx][r][c] = false;
         }
     }
 
-    // 2. Randomized Depth-First Search (DFS) carving on odd grid nodes
+    // 2. Randomized DFS carving on odd coordinates
     bool visited[ROWS][COLS] = {};
     QVector<QPoint> stack;
 
     visited[1][1] = true;
-    board[1][1] = 0;
+    board[sy][sx][1][1] = 0;
     stack.push_back(QPoint(1, 1));
 
     const int dr[] = {-2, 2, 0, 0};
@@ -83,9 +84,9 @@ void MainWindow::generateMaze()
 
             int wallR = curr.y() + dr[pick] / 2;
             int wallC = curr.x() + dc[pick] / 2;
-            board[wallR][wallC] = 0;
+            board[sy][sx][wallR][wallC] = 0;
 
-            board[nr][nc] = 0;
+            board[sy][sx][nr][nc] = 0;
             visited[nr][nc] = true;
             stack.push_back(QPoint(nc, nr));
         } else {
@@ -93,77 +94,41 @@ void MainWindow::generateMaze()
         }
     }
 
-    // 3. Central Ghost House room (rows 9..11, cols 8..12)
+    // 3. Central open area in each sector for smooth maneuvering
     for (int r = 9; r <= 11; ++r) {
-        for (int c = 8; c <= 12; ++c) {
-            board[r][c] = 0;
+        for (int c = 9; c <= 11; ++c) {
+            board[sy][sx][r][c] = 0;
         }
     }
-    board[8][10] = 0;
-    board[7][10] = 0;
-    board[12][10] = 0;
-    board[13][10] = 0;
+    board[sy][sx][8][10] = 0;
+    board[sy][sx][12][10] = 0;
 
-    // 4. Side Warp Tunnels on Row 10
-    board[10][0] = 0;
-    board[10][1] = 0;
-    board[10][COLS - 2] = 0;
-    board[10][COLS - 1] = 0;
-
-    // 5. Braid the maze: Randomly remove ~28% of internal dividing walls
+    // 4. Loop braiding: Remove ~28% of internal dividing walls
     for (int r = 2; r < ROWS - 2; ++r) {
         for (int c = 2; c < COLS - 2; ++c) {
-            if (board[r][c] == 1) {
-                if (board[r-1][c] == 0 && board[r+1][c] == 0 && board[r][c-1] == 1 && board[r][c+1] == 1) {
+            if (board[sy][sx][r][c] == 1) {
+                if (board[sy][sx][r-1][c] == 0 && board[sy][sx][r+1][c] == 0 &&
+                    board[sy][sx][r][c-1] == 1 && board[sy][sx][r][c+1] == 1) {
                     if (QRandomGenerator::global()->bounded(100) < 28) {
-                        board[r][c] = 0;
+                        board[sy][sx][r][c] = 0;
                     }
-                }
-                else if (board[r][c-1] == 0 && board[r][c+1] == 0 && board[r-1][c] == 1 && board[r+1][c] == 1) {
+                } else if (board[sy][sx][r][c-1] == 0 && board[sy][sx][r][c+1] == 0 &&
+                           board[sy][sx][r-1][c] == 1 && board[sy][sx][r+1][c] == 1) {
                     if (QRandomGenerator::global()->bounded(100) < 28) {
-                        board[r][c] = 0;
+                        board[sy][sx][r][c] = 0;
                     }
                 }
             }
         }
     }
 
-    // 6. Set EXIT point at top-left corner (1, 1)
-    exitX = 1;
-    exitY = 1;
-    board[exitY][exitX] = 0;
-
-    // 7. Find Pacman start position in bottom corridor near center
-    pacmanX = 10;
-    pacmanY = ROWS - 2;
-    bool foundStart = false;
-    for (int r = ROWS - 2; r >= ROWS - 5; --r) {
-        for (int offset = 0; offset < COLS / 2; ++offset) {
-            for (int sign : {0, -1, 1}) {
-                int c = 10 + sign * offset;
-                if (c >= 1 && c < COLS - 1 && board[r][c] == 0) {
-                    pacmanX = c;
-                    pacmanY = r;
-                    foundStart = true;
-                    break;
-                }
-            }
-            if (foundStart) break;
-        }
-        if (foundStart) break;
-    }
-    board[pacmanY][pacmanX] = 0;
-
-    // 8. Populate Dots (2)
-    for (int r = 0; r < ROWS; ++r) {
-        for (int c = 0; c < COLS; ++c) {
-            if (board[r][c] == 0) {
-                if (c == exitX && r == exitY) continue;
-                if (c == pacmanX && r == pacmanY) continue;
-                if (r >= 9 && r <= 11 && c >= 8 && c <= 12) continue;
-                if ((c == 0 || c == COLS - 1) && r == 10) continue;
-
-                board[r][c] = 2; // Dot
+    // 5. Populate dots (2) on floor tiles
+    for (int r = 1; r < ROWS - 1; ++r) {
+        for (int c = 1; c < COLS - 1; ++c) {
+            if (board[sy][sx][r][c] == 0) {
+                // Keep center room clear of dots
+                if (r >= 9 && r <= 11 && c >= 9 && c <= 11) continue;
+                board[sy][sx][r][c] = 2; // Dot
             }
         }
     }
@@ -171,7 +136,62 @@ void MainWindow::generateMaze()
 
 void MainWindow::initLevel()
 {
-    generateMaze();
+    // Determine number of interconnected windows for this level
+    if (currentLevel == 1) {
+        sectorCols = 2; sectorRows = 1; // 2 windows side-by-side
+    } else if (currentLevel == 2) {
+        sectorCols = 2; sectorRows = 2; // 2x2 = 4 windows
+    } else if (currentLevel == 3) {
+        sectorCols = 3; sectorRows = 2; // 3x2 = 6 windows
+    } else {
+        sectorCols = 3; sectorRows = 3; // 3x3 = 9 windows (mega labyrinth!)
+    }
+
+    // 1. Generate every sector
+    for (int sy = 0; sy < sectorRows; ++sy) {
+        for (int sx = 0; sx < sectorCols; ++sx) {
+            generateSectorMaze(sx, sy);
+            sectorDiscovered[sy][sx] = false;
+        }
+    }
+
+    // 2. Carve seamless inter-window connecting doorways
+    for (int sy = 0; sy < sectorRows; ++sy) {
+        for (int sx = 0; sx < sectorCols; ++sx) {
+            // East-West connections at rows 9 and 10
+            if (sx < sectorCols - 1) {
+                board[sy][sx][9][COLS - 1] = 0;   board[sy][sx][10][COLS - 1] = 0;
+                board[sy][sx][9][COLS - 2] = 0;   board[sy][sx][10][COLS - 2] = 0;
+                board[sy][sx+1][9][0] = 0;        board[sy][sx+1][10][0] = 0;
+                board[sy][sx+1][9][1] = 0;        board[sy][sx+1][10][1] = 0;
+            }
+            // North-South connections at cols 9 and 10
+            if (sy < sectorRows - 1) {
+                board[sy][sx][ROWS - 1][9] = 0;   board[sy][sx][ROWS - 1][10] = 0;
+                board[sy][sx][ROWS - 2][9] = 0;   board[sy][sx][ROWS - 2][10] = 0;
+                board[sy+1][sx][0][9] = 0;        board[sy+1][sx][0][10] = 0;
+                board[sy+1][sx][1][9] = 0;        board[sy+1][sx][1][10] = 0;
+            }
+        }
+    }
+
+    // 3. Set Start Sector and Exit Sector
+    // Start at bottom-left sector
+    currentSectorX = 0;
+    currentSectorY = sectorRows - 1;
+    sectorDiscovered[currentSectorY][currentSectorX] = true;
+
+    // Exit at top-right sector (furthest from start!)
+    exitSectorX = sectorCols - 1;
+    exitSectorY = 0;
+    exitX = 1;
+    exitY = 1;
+    board[exitSectorY][exitSectorX][exitY][exitX] = 0;
+
+    // 4. Place Pacman in the bottom corridor of start sector
+    pacmanX = 10;
+    pacmanY = ROWS - 2;
+    board[currentSectorY][currentSectorX][pacmanY][pacmanX] = 0;
 
     pacmanDir = LEFT;
     pacmanNextDir = LEFT;
@@ -180,12 +200,25 @@ void MainWindow::initLevel()
 
     levelComplete = false;
     gameOver = false;
+    isTransitioning = false;
 
+    // 5. Spawn Ghosts across sectors
     ghosts.clear();
-    ghosts.push_back({10, 9, UP, 0});     // Blinky (Red)
-    ghosts.push_back({9, 10, LEFT, 1});   // Pinky (Pink)
-    ghosts.push_back({11, 10, RIGHT, 2}); // Inky (Cyan)
-    ghosts.push_back({10, 10, DOWN, 3});  // Clyde (Orange)
+    // 2 ghosts in the starting window
+    ghosts.push_back({currentSectorX, currentSectorY, 10, 9, UP, 0});     // Blinky (Red)
+    ghosts.push_back({currentSectorX, currentSectorY, 9, 10, LEFT, 1});   // Pinky (Pink)
+
+    // 1 ghost guarding the Exit window
+    if (exitSectorX != currentSectorX || exitSectorY != currentSectorY) {
+        ghosts.push_back({exitSectorX, exitSectorY, 10, 10, RIGHT, 2}); // Inky (Cyan)
+    }
+
+    // Additional roaming ghost in intermediate window if available
+    if (sectorCols * sectorRows > 2) {
+        int midSx = sectorCols / 2;
+        int midSy = sectorRows / 2;
+        ghosts.push_back({midSx, midSy, 10, 10, DOWN, 3}); // Clyde (Orange)
+    }
 
     ghostsFrightened = false;
     frightenedTicksLeft = 0;
@@ -194,7 +227,7 @@ void MainWindow::initLevel()
     ghostTickCounter = 0;
 
     activeFruits.clear();
-    fruitSpawnCounter = QRandomGenerator::global()->bounded(15, 40);
+    fruitSpawnCounter = QRandomGenerator::global()->bounded(15, 35);
 
     fogOfWarEnabled = true;
     fogPeekActive = false;
@@ -209,15 +242,16 @@ void MainWindow::updateFogOfWar()
         for (int c = 0; c < COLS; ++c) {
             double dist = std::hypot(c - pacmanX, r - pacmanY);
             if (dist <= VISION_RADIUS) {
-                explored[r][c] = true;
+                explored[currentSectorY][currentSectorX][r][c] = true;
             }
         }
     }
 }
 
-bool MainWindow::isCellVisible(int x, int y) const
+bool MainWindow::isCellVisible(int sx, int sy, int x, int y) const
 {
     if (!fogOfWarEnabled) return true;
+    if (sx != currentSectorX || sy != currentSectorY) return false;
     return std::hypot(x - pacmanX, y - pacmanY) <= VISION_RADIUS;
 }
 
@@ -258,20 +292,22 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
-    // Toggle Fog of War: When turned OFF, automatically turns back ON after 1.5 seconds!
+    // Toggle Fog of War: 1.5-second temporary peek
     if (event->key() == Qt::Key_F) {
         if (fogOfWarEnabled) {
             fogOfWarEnabled = false;
             fogPeekActive = true;
             fogPeekTimer.start();
         } else {
-            // If already peeking, pressing F again re-enables Fog immediately
             fogOfWarEnabled = true;
             fogPeekActive = false;
         }
         update();
         return;
     }
+
+    // Prevent input during active camera window slide transition
+    if (isTransitioning) return;
 
     Direction attemptDir = STOP;
     switch (event->key()) {
@@ -287,13 +323,14 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         pacmanNextDir = attemptDir;
         movePacman();
         moveCount++;
-        updateFogOfWar();
         checkFruitPickup();
         checkGhostCollisions();
 
-        if (pacmanX == exitX && pacmanY == exitY) {
+        // Check if reached EXIT in the Exit window
+        if (currentSectorX == exitSectorX && currentSectorY == exitSectorY &&
+            pacmanX == exitX && pacmanY == exitY) {
             levelComplete = true;
-            score += 500;
+            score += 500 * (sectorCols * sectorRows);
         }
 
         update();
@@ -302,19 +339,42 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
 
 bool MainWindow::canMove(int x, int y, Direction dir)
 {
-    int nextX = x;
-    int nextY = y;
-
+    int nextX = x, nextY = y;
     if (dir == UP) nextY--;
     else if (dir == DOWN) nextY++;
     else if (dir == LEFT) nextX--;
     else if (dir == RIGHT) nextX++;
 
-    if (nextX < 0 || nextX >= COLS) return true;
-
-    if (nextY >= 0 && nextY < ROWS) {
-        if (board[nextY][nextX] != 1) return true;
+    // Inside current sector
+    if (nextX >= 0 && nextX < COLS && nextY >= 0 && nextY < ROWS) {
+        return board[currentSectorY][currentSectorX][nextY][nextX] != 1;
     }
+
+    // Crossing to East window
+    if (nextX >= COLS) {
+        return (currentSectorX + 1 < sectorCols) &&
+               (board[currentSectorY][currentSectorX][y][x] != 1) &&
+               (board[currentSectorY][currentSectorX + 1][y][0] != 1);
+    }
+    // Crossing to West window
+    if (nextX < 0) {
+        return (currentSectorX - 1 >= 0) &&
+               (board[currentSectorY][currentSectorX][y][x] != 1) &&
+               (board[currentSectorY][currentSectorX - 1][y][COLS - 1] != 1);
+    }
+    // Crossing to South window
+    if (nextY >= ROWS) {
+        return (currentSectorY + 1 < sectorRows) &&
+               (board[currentSectorY][currentSectorX][y][x] != 1) &&
+               (board[currentSectorY + 1][currentSectorX][0][x] != 1);
+    }
+    // Crossing to North window
+    if (nextY < 0) {
+        return (currentSectorY - 1 >= 0) &&
+               (board[currentSectorY][currentSectorX][y][x] != 1) &&
+               (board[currentSectorY - 1][currentSectorX][ROWS - 1][x] != 1);
+    }
+
     return false;
 }
 
@@ -325,19 +385,63 @@ void MainWindow::movePacman()
     }
 
     if (canMove(pacmanX, pacmanY, pacmanDir)) {
-        if (pacmanDir == UP) pacmanY--;
-        else if (pacmanDir == DOWN) pacmanY++;
-        else if (pacmanDir == LEFT) pacmanX--;
-        else if (pacmanDir == RIGHT) pacmanX++;
+        int nextX = pacmanX, nextY = pacmanY;
+        if (pacmanDir == UP) nextY--;
+        else if (pacmanDir == DOWN) nextY++;
+        else if (pacmanDir == LEFT) nextX--;
+        else if (pacmanDir == RIGHT) nextX++;
 
-        if (pacmanX < 0) pacmanX = COLS - 1;
-        if (pacmanX >= COLS) pacmanX = 0;
+        // Check if crossing into an adjacent window
+        if (nextX >= COLS) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX + 1; toSectorY = currentSectorY;
+            transitionDirX = 1; transitionDirY = 0;
+            currentSectorX = toSectorX;
+            pacmanX = 0;
+            isTransitioning = true;
+            transitionTimer.start();
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else if (nextX < 0) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX - 1; toSectorY = currentSectorY;
+            transitionDirX = -1; transitionDirY = 0;
+            currentSectorX = toSectorX;
+            pacmanX = COLS - 1;
+            isTransitioning = true;
+            transitionTimer.start();
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else if (nextY >= ROWS) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX; toSectorY = currentSectorY + 1;
+            transitionDirX = 0; transitionDirY = 1;
+            currentSectorY = toSectorY;
+            pacmanY = 0;
+            isTransitioning = true;
+            transitionTimer.start();
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else if (nextY < 0) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX; toSectorY = currentSectorY - 1;
+            transitionDirX = 0; transitionDirY = -1;
+            currentSectorY = toSectorY;
+            pacmanY = ROWS - 1;
+            isTransitioning = true;
+            transitionTimer.start();
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else {
+            pacmanX = nextX;
+            pacmanY = nextY;
+        }
 
-        if (board[pacmanY][pacmanX] == 2) {
-            board[pacmanY][pacmanX] = 0;
+        updateFogOfWar();
+
+        // Eat dot
+        if (board[currentSectorY][currentSectorX][pacmanY][pacmanX] == 2) {
+            board[currentSectorY][currentSectorX][pacmanY][pacmanX] = 0;
             score += 10;
         }
 
+        // Mouth animation
         if (pacmanMouthOpening) {
             pacmanMouthAngle += 15;
             if (pacmanMouthAngle >= 45) pacmanMouthOpening = false;
@@ -365,15 +469,24 @@ void MainWindow::moveGhosts()
         if (g.dir == RIGHT) reverseDir = LEFT;
 
         for (Direction d : dirs) {
-            if (canMove(g.x, g.y, d)) {
-                if (d != reverseDir) possibleDirs.push_back(d);
+            int nx = g.x, ny = g.y;
+            if (d == UP) ny--;
+            else if (d == DOWN) ny++;
+            else if (d == LEFT) nx--;
+            else if (d == RIGHT) nx++;
+
+            if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS) {
+                if (board[g.sectorY][g.sectorX][ny][nx] != 1) {
+                    if (d != reverseDir) possibleDirs.push_back(d);
+                }
             }
         }
 
         if (possibleDirs.isEmpty()) {
-            if (canMove(g.x, g.y, reverseDir)) g.dir = reverseDir;
+            g.dir = reverseDir;
         } else {
-            if (!ghostsFrightened && g.colorIndex == 0 && currentLevel >= 3) {
+            // If in the same sector as Pacman, actively hunt Pacman
+            if (g.sectorX == currentSectorX && g.sectorY == currentSectorY && !ghostsFrightened) {
                 int bestDist = 999;
                 Direction bestDir = possibleDirs[0];
                 for (Direction d : possibleDirs) {
@@ -382,8 +495,6 @@ void MainWindow::moveGhosts()
                     else if (d == DOWN) ny++;
                     else if (d == LEFT) nx--;
                     else if (d == RIGHT) nx++;
-                    if (nx < 0) nx = COLS - 1;
-                    if (nx >= COLS) nx = 0;
                     int dist = std::abs(nx - pacmanX) + std::abs(ny - pacmanY);
                     if (dist < bestDist) {
                         bestDist = dist;
@@ -391,7 +502,8 @@ void MainWindow::moveGhosts()
                     }
                 }
                 g.dir = bestDir;
-            } else if (ghostsFrightened) {
+            } else if (g.sectorX == currentSectorX && g.sectorY == currentSectorY && ghostsFrightened) {
+                // Frightened: run away from Pacman
                 int bestDist = -1;
                 Direction bestDir = possibleDirs[0];
                 for (Direction d : possibleDirs) {
@@ -400,8 +512,6 @@ void MainWindow::moveGhosts()
                     else if (d == DOWN) ny++;
                     else if (d == LEFT) nx--;
                     else if (d == RIGHT) nx++;
-                    if (nx < 0) nx = COLS - 1;
-                    if (nx >= COLS) nx = 0;
                     int dist = std::abs(nx - pacmanX) + std::abs(ny - pacmanY);
                     if (dist > bestDist) {
                         bestDist = dist;
@@ -420,15 +530,19 @@ void MainWindow::moveGhosts()
         else if (g.dir == LEFT) g.x--;
         else if (g.dir == RIGHT) g.x++;
 
-        if (g.x < 0) g.x = COLS - 1;
-        if (g.x >= COLS) g.x = 0;
+        // Keep ghost safely in bounds of its sector
+        if (g.x < 1) g.x = 1;
+        if (g.x >= COLS - 1) g.x = COLS - 2;
+        if (g.y < 1) g.y = 1;
+        if (g.y >= ROWS - 1) g.y = ROWS - 2;
     }
 }
 
 void MainWindow::checkGhostCollisions()
 {
     for (Ghost &g : ghosts) {
-        if (g.x == pacmanX && g.y == pacmanY) {
+        if (g.sectorX == currentSectorX && g.sectorY == currentSectorY &&
+            g.x == pacmanX && g.y == pacmanY) {
             if (ghostsFrightened) {
                 score += 200;
                 respawnGhostFarAway(g);
@@ -441,32 +555,25 @@ void MainWindow::checkGhostCollisions()
 
 void MainWindow::respawnGhostFarAway(Ghost &g)
 {
+    // Respawn ghost in a distant sector if available
     int bestDist = -1;
-    int bestX = 10, bestY = 10;
+    int bestSx = currentSectorX, bestSy = currentSectorY;
 
-    for (int r = 0; r < ROWS; ++r) {
-        for (int c = 0; c < COLS; ++c) {
-            if (board[r][c] == 1) continue;
-            if (c == pacmanX && r == pacmanY) continue;
-            if (c == exitX && r == exitY) continue;
-
-            bool onGhost = false;
-            for (const Ghost &other : ghosts) {
-                if (&other != &g && other.x == c && other.y == r) { onGhost = true; break; }
-            }
-            if (onGhost) continue;
-
-            int dist = std::abs(c - pacmanX) + std::abs(r - pacmanY);
-            if (dist > bestDist) {
-                bestDist = dist;
-                bestX = c;
-                bestY = r;
+    for (int sy = 0; sy < sectorRows; ++sy) {
+        for (int sx = 0; sx < sectorCols; ++sx) {
+            int d = std::abs(sx - currentSectorX) + std::abs(sy - currentSectorY);
+            if (d > bestDist) {
+                bestDist = d;
+                bestSx = sx;
+                bestSy = sy;
             }
         }
     }
 
-    g.x = bestX;
-    g.y = bestY;
+    g.sectorX = bestSx;
+    g.sectorY = bestSy;
+    g.x = 10;
+    g.y = 10;
     g.dir = UP;
 }
 
@@ -480,23 +587,27 @@ void MainWindow::trySpawnFruit()
     if (fruitSpawnCounter > 0) return;
 
     fruitSpawnCounter = QRandomGenerator::global()->bounded(20, 50);
-
     if (activeFruits.size() >= MAX_FRUITS) return;
 
+    // Pick any discovered sector to spawn fruit
+    QVector<QPair<int,int>> discSectors;
+    for (int sy = 0; sy < sectorRows; ++sy) {
+        for (int sx = 0; sx < sectorCols; ++sx) {
+            if (sectorDiscovered[sy][sx]) discSectors.push_back({sx, sy});
+        }
+    }
+    if (discSectors.isEmpty()) return;
+
+    int sIdx = QRandomGenerator::global()->bounded(discSectors.size());
+    int fsx = discSectors[sIdx].first;
+    int fsy = discSectors[sIdx].second;
+
     QVector<QPair<int,int>> candidates;
-    for (int r = 0; r < ROWS; ++r) {
-        for (int c = 0; c < COLS; ++c) {
-            if (board[r][c] == 0) {
-                if (c == pacmanX && r == pacmanY) continue;
-                if (c == exitX && r == exitY) continue;
-                bool occupied = false;
-                for (const Ghost &g : ghosts) {
-                    if (g.x == c && g.y == r) { occupied = true; break; }
-                }
-                for (const BonusFruit &f : activeFruits) {
-                    if (f.x == c && f.y == r) { occupied = true; break; }
-                }
-                if (occupied) continue;
+    for (int r = 1; r < ROWS - 1; ++r) {
+        for (int c = 1; c < COLS - 1; ++c) {
+            if (board[fsy][fsx][r][c] == 0) {
+                if (fsx == currentSectorX && fsy == currentSectorY && c == pacmanX && r == pacmanY) continue;
+                if (fsx == exitSectorX && fsy == exitSectorY && c == exitX && r == exitY) continue;
                 candidates.push_back({c, r});
             }
         }
@@ -506,15 +617,16 @@ void MainWindow::trySpawnFruit()
 
     int idx = QRandomGenerator::global()->bounded(candidates.size());
     FruitType type = static_cast<FruitType>(QRandomGenerator::global()->bounded(4));
-    int lifespan = QRandomGenerator::global()->bounded(40, 80);
+    int lifespan = QRandomGenerator::global()->bounded(45, 90);
 
-    activeFruits.push_back({candidates[idx].first, candidates[idx].second, type, lifespan});
+    activeFruits.push_back({fsx, fsy, candidates[idx].first, candidates[idx].second, type, lifespan});
 }
 
 void MainWindow::checkFruitPickup()
 {
     for (int i = activeFruits.size() - 1; i >= 0; --i) {
-        if (activeFruits[i].x == pacmanX && activeFruits[i].y == pacmanY) {
+        if (activeFruits[i].sectorX == currentSectorX && activeFruits[i].sectorY == currentSectorY &&
+            activeFruits[i].x == pacmanX && activeFruits[i].y == pacmanY) {
             score += 100;
             activeFruits.removeAt(i);
 
@@ -538,7 +650,6 @@ void MainWindow::drawCherry(QPainter &painter, int cx, int cy, int s)
     painter.setBrush(QColor(220, 20, 20));
     int cherryD = std::max(6, s * 10 / 30);
     painter.drawEllipse(cx + s/2 - s * 9 / 30, cy + s/2 - s * 3 / 30, cherryD, cherryD);
-
     painter.setBrush(QColor(200, 10, 10));
     painter.drawEllipse(cx + s/2 + s * 1 / 30, cy + s/2 - s * 3 / 30, cherryD, cherryD);
 
@@ -608,88 +719,29 @@ void MainWindow::drawOrangeFruit(QPainter &painter, int cx, int cy, int s)
 }
 
 // ========================================================
-// Game Loop
+// Drawing a Single Sector Window
 // ========================================================
 
-void MainWindow::gameLoop()
+void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int originY, int cellSize)
 {
-    if (gameOver || levelComplete) return;
+    bool isCurrent = (sx == currentSectorX && sy == currentSectorY);
 
-    // Check 3-second fog peek timer: Automatically re-enable Fog of War!
-    if (fogPeekActive) {
-        if (fogPeekTimer.elapsed() >= FOG_PEEK_DURATION_MS) {
-            fogOfWarEnabled = true;
-            fogPeekActive = false;
-        }
-    }
-
-    ghostTickCounter++;
-    if (ghostTickCounter >= ghostMoveEveryN) {
-        ghostTickCounter = 0;
-        moveGhosts();
-        checkGhostCollisions();
-    }
-
-    if (ghostsFrightened) {
-        frightenedTicksLeft--;
-        if (frightenedTicksLeft <= 0) {
-            ghostsFrightened = false;
-        }
-    }
-
-    trySpawnFruit();
-
-    for (int i = activeFruits.size() - 1; i >= 0; --i) {
-        activeFruits[i].ticksRemaining--;
-        if (activeFruits[i].ticksRemaining <= 0) {
-            activeFruits.removeAt(i);
-        }
-    }
-
-    update();
-}
-
-// ========================================================
-// Dynamic Fullscreen Rendering
-// ========================================================
-
-void MainWindow::paintEvent(QPaintEvent *)
-{
-    QPainter painter(this);
-    painter.setRenderHint(QPainter::Antialiasing);
-
-    // Compute responsive cell size and center offset
-    int hudHeight = 58;
-    int availW = width();
-    int availH = height() - hudHeight;
-
-    int cellSize = std::min(availW / COLS, availH / ROWS);
-    if (cellSize < 12) cellSize = 12;
-
-    int mazeW = COLS * cellSize;
-    int mazeH = ROWS * cellSize;
-    int startX = (availW - mazeW) / 2;
-    int startY = (availH - mazeH) / 2;
-
-    // Fill background letterbox with deep black
-    painter.fillRect(rect(), QColor(5, 5, 8));
-
-    // 1. Draw Maze Tiles & Pellets (with Fog of War)
+    // 1. Draw Maze Tiles & Dots
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
-            int cx = startX + c * cellSize;
-            int cy = startY + r * cellSize;
+            int cx = originX + c * cellSize;
+            int cy = originY + r * cellSize;
 
-            bool visible = isCellVisible(c, r);
-            bool wasExplored = explored[r][c];
+            bool visible = isCellVisible(sx, sy, c, r);
+            bool wasExplored = explored[sy][sx][r][c];
 
             if (fogOfWarEnabled && !visible && !wasExplored) {
                 painter.fillRect(cx, cy, cellSize, cellSize, QColor(0, 0, 0));
                 continue;
             }
 
-            if (board[r][c] == 1) {
-                // Wall tile
+            if (board[sy][sx][r][c] == 1) {
+                // Wall
                 if (visible) {
                     painter.setBrush(QColor(25, 45, 130));
                     painter.setPen(QPen(QColor(40, 80, 200), std::max(1, cellSize / 25)));
@@ -703,7 +755,7 @@ void MainWindow::paintEvent(QPaintEvent *)
                 // Open corridor
                 if (visible) {
                     painter.fillRect(cx, cy, cellSize, cellSize, QColor(8, 8, 16));
-                    if (board[r][c] == 2) {
+                    if (board[sy][sx][r][c] == 2) {
                         painter.setBrush(QColor(255, 230, 180));
                         painter.setPen(Qt::NoPen);
                         int dotSize = std::max(4, cellSize * 5 / 30);
@@ -711,7 +763,7 @@ void MainWindow::paintEvent(QPaintEvent *)
                     }
                 } else {
                     painter.fillRect(cx, cy, cellSize, cellSize, QColor(4, 4, 10));
-                    if (board[r][c] == 2) {
+                    if (board[sy][sx][r][c] == 2) {
                         painter.setBrush(QColor(100, 95, 80, 75));
                         painter.setPen(Qt::NoPen);
                         int dotSize = std::max(2, cellSize * 3 / 30);
@@ -722,14 +774,48 @@ void MainWindow::paintEvent(QPaintEvent *)
         }
     }
 
-    // 2. Draw EXIT portal
-    {
-        bool exitVisible = isCellVisible(exitX, exitY);
-        bool exitExplored = explored[exitY][exitX];
+    // 2. Doorway indicators to adjacent windows
+    // East doorway
+    if (sx < sectorCols - 1 && board[sy][sx][10][COLS - 1] == 0) {
+        int ex = originX + (COLS - 1) * cellSize;
+        int ey = originY + 10 * cellSize;
+        painter.setPen(QColor(0, 255, 220, 180));
+        painter.setFont(QFont("Arial", std::max(8, cellSize / 3), QFont::Bold));
+        painter.drawText(ex + 2, ey + cellSize * 2 / 3, "▶");
+    }
+    // West doorway
+    if (sx > 0 && board[sy][sx][10][0] == 0) {
+        int ex = originX;
+        int ey = originY + 10 * cellSize;
+        painter.setPen(QColor(0, 255, 220, 180));
+        painter.setFont(QFont("Arial", std::max(8, cellSize / 3), QFont::Bold));
+        painter.drawText(ex + 2, ey + cellSize * 2 / 3, "◀");
+    }
+    // South doorway
+    if (sy < sectorRows - 1 && board[sy][sx][ROWS - 1][10] == 0) {
+        int ex = originX + 10 * cellSize;
+        int ey = originY + (ROWS - 1) * cellSize;
+        painter.setPen(QColor(0, 255, 220, 180));
+        painter.setFont(QFont("Arial", std::max(8, cellSize / 3), QFont::Bold));
+        painter.drawText(ex + 4, ey + cellSize * 2 / 3, "▼");
+    }
+    // North doorway
+    if (sy > 0 && board[sy][sx][0][10] == 0) {
+        int ex = originX + 10 * cellSize;
+        int ey = originY;
+        painter.setPen(QColor(0, 255, 220, 180));
+        painter.setFont(QFont("Arial", std::max(8, cellSize / 3), QFont::Bold));
+        painter.drawText(ex + 4, ey + cellSize * 2 / 3, "▲");
+    }
+
+    // 3. Draw EXIT Portal (if in this sector)
+    if (sx == exitSectorX && sy == exitSectorY) {
+        bool exitVisible = isCellVisible(sx, sy, exitX, exitY);
+        bool exitExplored = explored[sy][sx][exitY][exitX];
 
         if (!fogOfWarEnabled || exitVisible || exitExplored) {
-            int ex = startX + exitX * cellSize;
-            int ey = startY + exitY * cellSize;
+            int ex = originX + exitX * cellSize;
+            int ey = originY + exitY * cellSize;
 
             if (exitVisible) {
                 painter.setBrush(QColor(0, 255, 100, 50));
@@ -755,12 +841,13 @@ void MainWindow::paintEvent(QPaintEvent *)
         }
     }
 
-    // 3. Draw Bonus Fruits
+    // 4. Draw Bonus Fruits in this sector
     for (const BonusFruit &fruit : activeFruits) {
-        if (!isCellVisible(fruit.x, fruit.y)) continue;
+        if (fruit.sectorX != sx || fruit.sectorY != sy) continue;
+        if (!isCellVisible(sx, sy, fruit.x, fruit.y)) continue;
 
-        int fx = startX + fruit.x * cellSize;
-        int fy = startY + fruit.y * cellSize;
+        int fx = originX + fruit.x * cellSize;
+        int fy = originY + fruit.y * cellSize;
 
         switch (fruit.type) {
             case CHERRY:       drawCherry(painter, fx, fy, cellSize); break;
@@ -774,10 +861,10 @@ void MainWindow::paintEvent(QPaintEvent *)
         painter.drawText(fx + 3, fy + cellSize - 1, "100");
     }
 
-    // 4. Draw Pacman
-    {
-        int px = startX + pacmanX * cellSize;
-        int py = startY + pacmanY * cellSize;
+    // 5. Draw Pacman (if in this sector)
+    if (isCurrent) {
+        int px = originX + pacmanX * cellSize;
+        int py = originY + pacmanY * cellSize;
 
         painter.setBrush(QColor(255, 220, 0));
         painter.setPen(Qt::NoPen);
@@ -791,7 +878,7 @@ void MainWindow::paintEvent(QPaintEvent *)
         painter.drawPie(px + 2, py + 2, cellSize - 4, cellSize - 4, startAngle * 16, spanAngle * 16);
     }
 
-    // 5. Draw Ghosts
+    // 6. Draw Ghosts in this sector
     QColor ghostNormalColors[] = {
         QColor(255, 50, 50),   // Blinky (Red)
         QColor(255, 180, 220), // Pinky (Pink)
@@ -800,10 +887,11 @@ void MainWindow::paintEvent(QPaintEvent *)
     };
 
     for (const Ghost &g : ghosts) {
-        if (!isCellVisible(g.x, g.y)) continue;
+        if (g.sectorX != sx || g.sectorY != sy) continue;
+        if (!isCellVisible(sx, sy, g.x, g.y)) continue;
 
-        int gx = startX + g.x * cellSize;
-        int gy = startY + g.y * cellSize;
+        int gx = originX + g.x * cellSize;
+        int gy = originY + g.y * cellSize;
 
         if (ghostsFrightened) {
             if (frightenedTicksLeft <= 8 && (frightenedTicksLeft % 2 == 0)) {
@@ -816,7 +904,7 @@ void MainWindow::paintEvent(QPaintEvent *)
         }
         painter.setPen(Qt::NoPen);
 
-        // Ghost body
+        // Body
         painter.drawEllipse(gx + 2, gy + 2, cellSize - 4, cellSize - 4);
         painter.drawRect(gx + 2, gy + cellSize/2, cellSize - 4, (cellSize - 4)/2);
 
@@ -854,10 +942,10 @@ void MainWindow::paintEvent(QPaintEvent *)
         }
     }
 
-    // 6. Lantern Light Spotlight / Ambient Vignette
-    if (fogOfWarEnabled) {
-        int pxCenter = startX + pacmanX * cellSize + cellSize / 2;
-        int pyCenter = startY + pacmanY * cellSize + cellSize / 2;
+    // 7. Lantern Light Spotlight (only for current sector)
+    if (isCurrent && fogOfWarEnabled) {
+        int pxCenter = originX + pacmanX * cellSize + cellSize / 2;
+        int pyCenter = originY + pacmanY * cellSize + cellSize / 2;
 
         QRadialGradient lantern(pxCenter, pyCenter, (VISION_RADIUS + 0.6) * cellSize);
         lantern.setColorAt(0.0, QColor(255, 235, 170, 25));
@@ -865,10 +953,179 @@ void MainWindow::paintEvent(QPaintEvent *)
         lantern.setColorAt(0.75, QColor(0, 0, 0, 60));
         lantern.setColorAt(1.0, QColor(0, 0, 0, 220));
 
-        painter.fillRect(startX, startY, mazeW, mazeH, lantern);
+        painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern);
+    }
+}
+
+// ========================================================
+// Game Loop
+// ========================================================
+
+void MainWindow::gameLoop()
+{
+    if (gameOver || levelComplete) return;
+
+    // Check 1.5-second fog peek timer
+    if (fogPeekActive) {
+        if (fogPeekTimer.elapsed() >= FOG_PEEK_DURATION_MS) {
+            fogOfWarEnabled = true;
+            fogPeekActive = false;
+        }
     }
 
-    // 7. Fullscreen Bottom HUD Bar
+    // End transition if time elapsed
+    if (isTransitioning) {
+        if (transitionTimer.elapsed() >= TRANSITION_DURATION_MS) {
+            isTransitioning = false;
+        }
+    }
+
+    ghostTickCounter++;
+    if (ghostTickCounter >= ghostMoveEveryN) {
+        ghostTickCounter = 0;
+        moveGhosts();
+        checkGhostCollisions();
+    }
+
+    if (ghostsFrightened) {
+        frightenedTicksLeft--;
+        if (frightenedTicksLeft <= 0) {
+            ghostsFrightened = false;
+        }
+    }
+
+    trySpawnFruit();
+
+    for (int i = activeFruits.size() - 1; i >= 0; --i) {
+        activeFruits[i].ticksRemaining--;
+        if (activeFruits[i].ticksRemaining <= 0) {
+            activeFruits.removeAt(i);
+        }
+    }
+
+    update();
+}
+
+// ========================================================
+// Dynamic Fullscreen Rendering with Multi-Window Pan & Map
+// ========================================================
+
+void MainWindow::paintEvent(QPaintEvent *)
+{
+    QPainter painter(this);
+    painter.setRenderHint(QPainter::Antialiasing);
+
+    int hudHeight = 58;
+    int availW = width();
+    int availH = height() - hudHeight;
+
+    int cellSize = std::min(availW / COLS, availH / ROWS);
+    if (cellSize < 12) cellSize = 12;
+
+    int mazeW = COLS * cellSize;
+    int mazeH = ROWS * cellSize;
+    int startX = (availW - mazeW) / 2;
+    int startY = (availH - mazeH) / 2;
+
+    // Fill background letterbox
+    painter.fillRect(rect(), QColor(5, 5, 8));
+
+    // Render Sector(s)
+    if (!isTransitioning) {
+        drawSector(painter, currentSectorX, currentSectorY, startX, startY, cellSize);
+    } else {
+        // Smooth camera slide animation between windows
+        float t = std::min(1.0f, transitionTimer.elapsed() / (float)TRANSITION_DURATION_MS);
+        float ease = 0.5f - 0.5f * std::cos(t * 3.14159265f);
+
+        painter.save();
+        painter.setClipRect(startX, startY, mazeW, mazeH);
+
+        // Previous window sliding out
+        int fromOriginX = startX - std::round(ease * transitionDirX * mazeW);
+        int fromOriginY = startY - std::round(ease * transitionDirY * mazeH);
+        drawSector(painter, fromSectorX, fromSectorY, fromOriginX, fromOriginY, cellSize);
+
+        // New window sliding in
+        int toOriginX = startX + std::round((1.0f - ease) * transitionDirX * mazeW);
+        int toOriginY = startY + std::round((1.0f - ease) * transitionDirY * mazeH);
+        drawSector(painter, toSectorX, toSectorY, toOriginX, toOriginY, cellSize);
+
+        painter.restore();
+
+        if (t >= 1.0f) {
+            isTransitioning = false;
+        }
+    }
+
+    // ========================================================
+    // Sector Mini-Map (Top-Right HUD Corner)
+    // ========================================================
+    {
+        int mapBoxSize = std::max(16, cellSize / 2);
+        int mapGap = 3;
+        int totalMapW = sectorCols * mapBoxSize + (sectorCols - 1) * mapGap;
+        int totalMapH = sectorRows * mapBoxSize + (sectorRows - 1) * mapGap;
+        int mapX = startX + mazeW - totalMapW - 14;
+        int mapY = startY + 14;
+
+        int discCount = 0;
+        for (int sy = 0; sy < sectorRows; ++sy) {
+            for (int sx = 0; sx < sectorCols; ++sx) {
+                if (sectorDiscovered[sy][sx]) discCount++;
+            }
+        }
+
+        // Map container background
+        painter.fillRect(mapX - 6, mapY - 18, totalMapW + 12, totalMapH + 24, QColor(0, 0, 0, 200));
+        painter.setPen(QPen(QColor(40, 80, 140, 180), 1));
+        painter.drawRect(mapX - 6, mapY - 18, totalMapW + 12, totalMapH + 24);
+
+        painter.setFont(QFont("Arial", std::max(7, mapBoxSize / 2), QFont::Bold));
+        painter.setPen(QColor(180, 220, 255));
+        painter.drawText(mapX - 2, mapY - 5, QString("WINDOWS (%1/%2)").arg(discCount).arg(sectorCols * sectorRows));
+
+        for (int sy = 0; sy < sectorRows; ++sy) {
+            for (int sx = 0; sx < sectorCols; ++sx) {
+                int rx = mapX + sx * (mapBoxSize + mapGap);
+                int ry = mapY + sy * (mapBoxSize + mapGap);
+
+                if (!sectorDiscovered[sy][sx]) {
+                    // Undiscovered window
+                    painter.fillRect(rx, ry, mapBoxSize, mapBoxSize, QColor(14, 18, 25));
+                    painter.setPen(QColor(50, 60, 75));
+                    painter.drawRect(rx, ry, mapBoxSize, mapBoxSize);
+                    painter.drawText(rx + mapBoxSize/3, ry + mapBoxSize * 2/3, "?");
+                } else {
+                    // Discovered window
+                    painter.fillRect(rx, ry, mapBoxSize, mapBoxSize, QColor(20, 45, 90));
+                    painter.setPen(QColor(60, 140, 220));
+                    painter.drawRect(rx, ry, mapBoxSize, mapBoxSize);
+
+                    // Mark Exit Window
+                    if (sx == exitSectorX && sy == exitSectorY) {
+                        painter.setPen(QColor(0, 255, 120));
+                        painter.setFont(QFont("Arial", std::max(8, mapBoxSize / 2), QFont::Bold));
+                        painter.drawText(rx + mapBoxSize/4, ry + mapBoxSize * 3/4, "E");
+                    }
+                }
+
+                // Current window cursor (Yellow outline + Pacman dot)
+                if (sx == currentSectorX && sy == currentSectorY) {
+                    painter.setPen(QPen(QColor(255, 220, 0), 2));
+                    painter.drawRect(rx - 1, ry - 1, mapBoxSize + 2, mapBoxSize + 2);
+
+                    painter.setBrush(QColor(255, 220, 0));
+                    painter.setPen(Qt::NoPen);
+                    painter.drawEllipse(rx + mapBoxSize/2 - 2, ry + mapBoxSize/2 - 2, 4, 4);
+                }
+            }
+        }
+    }
+
+    // ========================================================
+    // Bottom Fullscreen HUD Bar
+    // ========================================================
     int hudY = height() - hudHeight;
     painter.fillRect(0, hudY, width(), hudHeight, QColor(14, 16, 26));
     painter.setPen(QPen(QColor(40, 60, 100), 2));
@@ -877,65 +1134,70 @@ void MainWindow::paintEvent(QPaintEvent *)
     int baseFont1 = std::max(11, width() / 110);
     int baseFont2 = std::max(9, width() / 135);
 
-    // Line 1: Metrics
+    // Line 1: Stats & Window location
     painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
     painter.setPen(Qt::white);
     painter.drawText(20, hudY + 22, QString("SCORE: %1").arg(score));
 
     painter.setPen(QColor(0, 230, 160));
-    painter.drawText(width() * 0.18, hudY + 22, QString("LEVEL: %1").arg(currentLevel));
+    painter.drawText(width() * 0.16, hudY + 22, QString("LEVEL: %1").arg(currentLevel));
+
+    painter.setPen(QColor(0, 210, 255));
+    painter.drawText(width() * 0.28, hudY + 22,
+                     QString("WINDOW: [%1, %2] of [%3x%4]")
+                     .arg(currentSectorX + 1).arg(currentSectorY + 1)
+                     .arg(sectorCols).arg(sectorRows));
 
     painter.setPen(QColor(180, 200, 255));
-    painter.drawText(width() * 0.32, hudY + 22, QString("MOVES: %1").arg(moveCount));
+    painter.drawText(width() * 0.48, hudY + 22, QString("MOVES: %1").arg(moveCount));
 
     qint64 elapsedSec = elapsedTimer.elapsed() / 1000;
     int mins = elapsedSec / 60;
     int secs = elapsedSec % 60;
     painter.setPen(QColor(255, 200, 100));
-    painter.drawText(width() * 0.48, hudY + 22, QString("TIME: %1:%2")
+    painter.drawText(width() * 0.60, hudY + 22, QString("TIME: %1:%2")
                      .arg(mins, 2, 10, QChar('0'))
                      .arg(secs, 2, 10, QChar('0')));
 
-    // Live Fog / Peek status badge
     if (fogPeekActive) {
         int msLeft = std::max(0, FOG_PEEK_DURATION_MS - (int)fogPeekTimer.elapsed());
         double secLeft = msLeft / 1000.0;
         painter.setPen(QColor(255, 215, 0));
-        painter.drawText(width() * 0.65, hudY + 22, QString("[MAP PEEK: %1s ☀️]").arg(secLeft, 0, 'f', 1));
+        painter.drawText(width() * 0.74, hudY + 22, QString("[PEEK: %1s ☀️]").arg(secLeft, 0, 'f', 1));
     } else if (fogOfWarEnabled) {
         painter.setPen(QColor(120, 220, 255));
-        painter.drawText(width() * 0.65, hudY + 22, "[FOG: ON 🌑 (F: Peek)]");
+        painter.drawText(width() * 0.74, hudY + 22, "[FOG: ON 🌑 (F)]");
     } else {
         painter.setPen(QColor(150, 150, 160));
-        painter.drawText(width() * 0.65, hudY + 22, "[FOG: OFF ☀️]");
+        painter.drawText(width() * 0.74, hudY + 22, "[FOG: OFF ☀️]");
     }
 
     if (ghostsFrightened) {
         painter.setPen(QColor(255, 100, 140));
-        painter.drawText(width() * 0.82, hudY + 22, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
+        painter.drawText(width() * 0.88, hudY + 22, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
     }
 
     // Line 2: Controls
     painter.setFont(QFont("Arial", baseFont2));
     painter.setPen(QColor(130, 150, 180));
     painter.drawText(20, hudY + 45,
-        "[Arrows] Move  |  [F] 1.5s Map Peek  |  [F11 / Esc] Fullscreen  |  [R] New Maze/Reset  |  Reach EXIT to Win!");
+        "[Arrows] Move beyond edge to reveal next window!  |  [F] 1.5s Peek  |  [F11] Fullscreen  |  [R] Reset  |  Reach EXIT to Win!");
 
-    // 8. Game Over / Level Complete Banner
+    // Game Over / Level Complete Banner
     if (gameOver) {
         painter.fillRect(0, height() / 2 - 40, width(), 80, QColor(0, 0, 0, 225));
         painter.setPen(QColor(255, 60, 60));
         painter.setFont(QFont("Arial", std::max(18, width() / 55), QFont::Bold));
-        painter.drawText(rect(), Qt::AlignCenter, "GAME OVER! Press [R] for New Maze");
+        painter.drawText(rect(), Qt::AlignCenter, "GAME OVER! Press [R] to Restart");
     } else if (levelComplete) {
         painter.fillRect(0, height() / 2 - 45, width(), 90, QColor(0, 0, 0, 225));
         painter.setPen(QColor(60, 255, 120));
         painter.setFont(QFont("Arial", std::max(16, width() / 60), QFont::Bold));
-        QString levelMsg = QString("LEVEL %1 COMPLETE! +500 Bonus").arg(currentLevel);
+        QString levelMsg = QString("LEVEL %1 COMPLETE! All Windows Cleared!").arg(currentLevel);
         painter.drawText(0, height() / 2 - 12, width(), 25, Qt::AlignCenter, levelMsg);
         painter.setPen(QColor(255, 220, 100));
         painter.setFont(QFont("Arial", std::max(12, width() / 75)));
         painter.drawText(0, height() / 2 + 16, width(), 25, Qt::AlignCenter,
-                         "Press [Space] for Next Level (Brand New Maze!)");
+                         "Press [Space] for Next Level (Bigger Multi-Window World!)");
     }
 }

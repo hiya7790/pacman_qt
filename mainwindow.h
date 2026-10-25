@@ -16,6 +16,7 @@ enum Direction {
 };
 
 struct Ghost {
+    int sectorX, sectorY;
     int x, y;
     Direction dir;
     int colorIndex;
@@ -30,6 +31,7 @@ enum FruitType {
 };
 
 struct BonusFruit {
+    int sectorX, sectorY;
     int x, y;
     FruitType type;
     int ticksRemaining;
@@ -53,7 +55,7 @@ private slots:
 private:
     void initGame();
     void initLevel();
-    void generateMaze();
+    void generateSectorMaze(int sx, int sy);
     void movePacman();
     void moveGhosts();
     bool canMove(int x, int y, Direction dir);
@@ -62,7 +64,8 @@ private:
     void checkGhostCollisions();
     void respawnGhostFarAway(Ghost &g);
     void updateFogOfWar();
-    bool isCellVisible(int x, int y) const;
+    bool isCellVisible(int sx, int sy, int x, int y) const;
+    void drawSector(QPainter &painter, int sx, int sy, int originX, int originY, int cellSize);
     void drawCherry(QPainter &painter, int cx, int cy, int s);
     void drawApple(QPainter &painter, int cx, int cy, int s);
     void drawStrawberry(QPainter &painter, int cx, int cy, int s);
@@ -70,11 +73,29 @@ private:
 
     static const int ROWS = 21;
     static const int COLS = 21;
+    static const int MAX_SECTORS_X = 3;
+    static const int MAX_SECTORS_Y = 3;
     static constexpr double VISION_RADIUS = 3.6;
     static const int FOG_PEEK_DURATION_MS = 1500; // 1.5 seconds temporary peek
+    static const int TRANSITION_DURATION_MS = 240; // 240ms smooth camera slide
 
-    int board[ROWS][COLS]; // 0 = empty, 1 = wall, 2 = dot
+    // Multi-Window Sector Grid
+    int sectorCols;
+    int sectorRows;
+    int currentSectorX;
+    int currentSectorY;
+    int board[MAX_SECTORS_Y][MAX_SECTORS_X][ROWS][COLS]; // 0 = empty, 1 = wall, 2 = dot
+    bool explored[MAX_SECTORS_Y][MAX_SECTORS_X][ROWS][COLS];
+    bool sectorDiscovered[MAX_SECTORS_Y][MAX_SECTORS_X];
 
+    // Camera sliding transition between windows
+    bool isTransitioning;
+    int fromSectorX, fromSectorY;
+    int toSectorX, toSectorY;
+    int transitionDirX, transitionDirY;
+    QElapsedTimer transitionTimer;
+
+    // Pacman position (local to currentSector)
     int pacmanX;
     int pacmanY;
     Direction pacmanDir;
@@ -91,13 +112,13 @@ private:
     bool fogOfWarEnabled;
     bool fogPeekActive;
     QElapsedTimer fogPeekTimer;
-    bool explored[ROWS][COLS];
 
     // Level system
     int currentLevel;
     int ghostTimerInterval;
 
-    // Exit point
+    // Exit point (located in exitSector)
+    int exitSectorX, exitSectorY;
     int exitX, exitY;
 
     // Frightened mode (power-up from eating fruit)
@@ -114,7 +135,7 @@ private:
     // Bonus fruit system
     QVector<BonusFruit> activeFruits;
     int fruitSpawnCounter;
-    static const int MAX_FRUITS = 3;
+    static const int MAX_FRUITS = 4;
 
     // Ghost speed control
     int ghostTickCounter;
