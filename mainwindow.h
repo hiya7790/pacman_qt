@@ -57,6 +57,7 @@ protected:
     void keyPressEvent(QKeyEvent *event) override;
     void mousePressEvent(QMouseEvent *event) override;
     void mouseMoveEvent(QMouseEvent *event) override;
+    void mouseReleaseEvent(QMouseEvent *event) override;
     void wheelEvent(QWheelEvent *event) override;
 
 private slots:
@@ -83,12 +84,15 @@ private:
     void drawStrawberry(QPainter &painter, int cx, int cy, int s);
     void drawOrangeFruit(QPainter &painter, int cx, int cy, int s);
 
-    // Candy Crush Saga Map Home Page
+    // Candy Crush Saga Map Home Page (50 Stages Per World!)
     void drawCandyCrushMap(QPainter &painter);
     void drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int radius);
     void drawPacmanAvatar(QPainter &painter, int cx, int cy, int size);
     void drawMsPacmanAvatar(QPainter &painter, int cx, int cy, int size);
     QPoint getLevelNodePos(int lvl, int mapW, int mapH) const;
+    int getVirtualMapHeight() const;
+    float getNodeSpacingY() const;
+    void scrollToLevel(int lvl, bool immediate = false);
     QRect getPlayButtonRect() const;
     QRect getPrevWorldButtonRect() const;
     QRect getNextWorldButtonRect() const;
@@ -104,8 +108,14 @@ private:
     void movePlayer2();
     void checkLevelExit();
 
-    static constexpr int LEVELS_PER_WORLD = 8;
+    static constexpr int LEVELS_PER_WORLD = 20;
     int viewedMapWorld;
+    float mapScrollY;
+    float targetMapScrollY;
+    bool isDraggingMap;
+    int dragStartY;
+    float dragStartScrollY;
+
     GameScreen currentScreen;
     int highestUnlockedLevel;
     int selectedMapLevel;

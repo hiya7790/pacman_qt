@@ -35,6 +35,12 @@ MainWindow::MainWindow(QWidget *parent)
     hoveredMapLevel = 0;
     currentLevel = 1;
 
+    mapScrollY = 0.0f;
+    targetMapScrollY = 0.0f;
+    isDraggingMap = false;
+    dragStartY = 0;
+    dragStartScrollY = 0.0f;
+
     currentVisionRadius = DEFAULT_VISION_RADIUS;
     currentFrightenDuration = FRIGHTEN_DURATION;
     fogOfWarEnabled = true;
@@ -59,6 +65,7 @@ MainWindow::MainWindow(QWidget *parent)
     p2MouthOpening = false;
 
     initGame();
+    scrollToLevel(1, true);
 
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &MainWindow::gameLoop);
@@ -100,25 +107,29 @@ void MainWindow::startLevel(int lvl)
 
 void MainWindow::getSectorDimsForLevel(int lvl, int &cols, int &rows) const
 {
-    if (lvl <= 1) { cols = 2; rows = 1; }      // 2 windows side-by-side
-    else if (lvl == 2) { cols = 2; rows = 2; } // 4 windows (2x2)
-    else if (lvl == 3) { cols = 3; rows = 2; } // 6 windows (3x2)
-    else if (lvl == 4) { cols = 2; rows = 3; } // 6 vertical windows (2x3)
-    else if (lvl == 5) { cols = 3; rows = 3; } // 9 windows (3x3)
-    else if (lvl == 6) { cols = 4; rows = 3; } // 12 windows (4x3)
-    else if (lvl == 7) { cols = 3; rows = 4; } // 12 windows (3x4)
-    else if (lvl == 8) { cols = 4; rows = 4; } // 16 windows (4x4) (World 1 Grand Vault!)
-    else if (lvl == 9) { cols = 5; rows = 4; } // 20 windows (5x4)
-    else if (lvl == 10) { cols = 4; rows = 5; } // 20 windows (4x5)
-    else if (lvl == 11) { cols = 5; rows = 5; } // 25 windows (5x5)
-    else if (lvl == 12) { cols = 6; rows = 5; } // 30 windows (6x5)
-    else if (lvl == 13) { cols = 5; rows = 6; } // 30 windows (5x6)
-    else {
-        // Beyond Level 13, cycles through massive layouts: 6x6, 5x6, 6x5, 6x6 (up to 36 windows!)
-        int cycle = (lvl - 14) % 4;
-        if (cycle == 0) { cols = 6; rows = 6; }
-        else if (cycle == 1) { cols = 5; rows = 6; }
+    int stageInWorld = (lvl - 1) % LEVELS_PER_WORLD + 1; // 1 to 20
+    int world = (lvl - 1) / LEVELS_PER_WORLD + 1;
+
+    if (world == 1) {
+        if (stageInWorld == 1) { cols = 2; rows = 1; }      // Stage 1: 2 windows
+        else if (stageInWorld == 2) { cols = 2; rows = 2; } // Stage 2: 4 windows (2x2)
+        else if (stageInWorld == 3) { cols = 3; rows = 2; } // Stage 3: 6 windows (3x2)
+        else if (stageInWorld == 4) { cols = 2; rows = 3; } // Stage 4: 6 vertical windows (2x3)
+        else if (stageInWorld <= 6) { cols = 3; rows = 3; } // Stages 5-6: 9 windows (3x3)
+        else if (stageInWorld <= 8) { cols = 4; rows = 3; } // Stages 7-8: 12 windows (4x3)
+        else if (stageInWorld <= 10) { cols = 3; rows = 4; } // Stages 9-10: 12 windows (3x4)
+        else if (stageInWorld <= 12) { cols = 4; rows = 4; } // Stages 11-12: 16 windows (4x4)
+        else if (stageInWorld <= 14) { cols = 5; rows = 4; } // Stages 13-14: 20 windows (5x4)
+        else if (stageInWorld <= 16) { cols = 4; rows = 5; } // Stages 15-16: 20 windows (4x5)
+        else if (stageInWorld <= 18) { cols = 5; rows = 5; } // Stages 17-18: 25 windows (5x5)
+        else if (stageInWorld == 19) { cols = 6; rows = 5; } // Stage 19: 30 windows (6x5)
+        else { cols = 6; rows = 6; }                         // Stage 20: 36 windows (Summit Grand Vault!)
+    } else {
+        // Worlds 2, 3, etc. maintain grand layouts
+        int cycle = stageInWorld % 4;
+        if (cycle == 1) { cols = 5; rows = 5; }
         else if (cycle == 2) { cols = 6; rows = 5; }
+        else if (cycle == 3) { cols = 5; rows = 6; }
         else { cols = 6; rows = 6; }
     }
     cols = std::clamp(cols, 1, MAX_SECTORS_X);
@@ -246,13 +257,13 @@ void MainWindow::initLevel()
     // Determine dynamic sector grid dimensions for this level
     getSectorDimsForLevel(currentLevel, sectorCols, sectorRows);
 
-    // Dynamic difficulty scaling
-    currentVisionRadius = std::max(2.6, 3.8 - (currentLevel - 1) * 0.08);
-    currentFrightenDuration = std::max(12, 28 - (currentLevel / 2) * 2);
-    ghostMoveEveryN = std::max(1, 4 - currentLevel / 3);
+    // Dynamic difficulty scaling across 20 stages per world
+    currentVisionRadius = std::max(2.6, 3.8 - (currentLevel - 1) * 0.05);
+    currentFrightenDuration = std::max(12, 28 - (currentLevel / 3) * 2);
+    ghostMoveEveryN = std::clamp(4 - currentLevel / 6, 1, 4);
     ghostTickCounter = 0;
 
-    int baseInterval = std::max(85, 130 - (currentLevel / 4) * 5);
+    int baseInterval = std::max(85, 130 - (currentLevel / 5) * 5);
     if (timer) {
         timer->setInterval(baseInterval);
     }
@@ -374,8 +385,8 @@ void MainWindow::initLevel()
         ghosts.push_back({exitSectorX, exitSectorY, 10, 10, RIGHT, 2}); // Inky (Cyan)
     }
 
-    // Ghost count scales progressively with level (up to 12 ghosts!)
-    int targetGhostCount = std::clamp(2 + currentLevel, 2, 12);
+    // Ghost count scales progressively across stages (up to 12 ghosts!)
+    int targetGhostCount = std::clamp(2 + currentLevel / 2, 2, 12);
     int colorCycle = 3; // Clyde (Orange = 3)
 
     // Spread roaming ghosts evenly across other sectors
@@ -495,6 +506,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             if (selectedMapLevel < highestUnlockedLevel) {
                 selectedMapLevel++;
                 viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
+                scrollToLevel(selectedMapLevel, false);
                 update();
             }
             return;
@@ -503,6 +515,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             if (selectedMapLevel > 1) {
                 selectedMapLevel--;
                 viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
+                scrollToLevel(selectedMapLevel, false);
                 update();
             }
             return;
@@ -512,6 +525,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             if (viewedMapWorld < maxUnlockedWorld + 1) {
                 viewedMapWorld++;
                 selectedMapLevel = std::min(highestUnlockedLevel, (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1);
+                scrollToLevel(selectedMapLevel, false);
                 update();
             }
             return;
@@ -520,6 +534,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             if (viewedMapWorld > 1) {
                 viewedMapWorld--;
                 selectedMapLevel = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
+                scrollToLevel(selectedMapLevel, false);
                 update();
             }
             return;
@@ -537,6 +552,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             currentScreen = SCREEN_HOME_MAP;
             selectedMapLevel = currentLevel;
             viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
+            scrollToLevel(selectedMapLevel, false);
             update();
         }
         return;
@@ -556,6 +572,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             currentScreen = SCREEN_HOME_MAP;
             selectedMapLevel = currentLevel + 1;
             viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
+            scrollToLevel(selectedMapLevel, false);
             update();
         }
         return;
@@ -565,6 +582,8 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     if (event->key() == Qt::Key_M) {
         currentScreen = SCREEN_HOME_MAP;
         selectedMapLevel = currentLevel;
+        viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
+        scrollToLevel(selectedMapLevel, false);
         update();
         return;
     }
@@ -708,6 +727,7 @@ void MainWindow::checkLevelExit()
         }
         selectedMapLevel = currentLevel + 1;
         viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
+        scrollToLevel(selectedMapLevel, false);
     }
 }
 
@@ -1704,6 +1724,14 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 void MainWindow::gameLoop()
 {
     if (currentScreen == SCREEN_HOME_MAP) {
+        if (!isDraggingMap) {
+            float diff = targetMapScrollY - mapScrollY;
+            if (std::abs(diff) > 0.4f) {
+                mapScrollY += diff * 0.25f;
+            } else {
+                mapScrollY = targetMapScrollY;
+            }
+        }
         update();
         return;
     }
@@ -2152,7 +2180,7 @@ QString MainWindow::getLevelTitle(int lvl) const
     int windows = cols * rows;
     int world = (lvl - 1) / LEVELS_PER_WORLD + 1;
     int stage = (lvl - 1) % LEVELS_PER_WORLD + 1;
-    return QString("World %1 • Stage %2 (Level %3: %4 Windows)").arg(world).arg(stage).arg(lvl).arg(windows);
+    return QString("World %1 • Stage %2 of 20 (Level %3: %4 Windows)").arg(world).arg(stage).arg(lvl).arg(windows);
 }
 
 QRect MainWindow::getPlayButtonRect() const
@@ -2213,38 +2241,64 @@ QRect MainWindow::getMapButtonRect() const
     return QRect(16, 14, 115, 32);
 }
 
-QPoint MainWindow::getLevelNodePos(int lvl, int mapW, int mapH) const
+float MainWindow::getNodeSpacingY() const
 {
-    static const double coords[8][2] = {
-        {0.48, 0.81}, // Stage 1 (bottom center)
-        {0.68, 0.72}, // Stage 2 (lower right)
-        {0.72, 0.58}, // Stage 3 (mid right)
-        {0.50, 0.50}, // Stage 4 (center)
-        {0.28, 0.42}, // Stage 5 (mid left)
-        {0.32, 0.28}, // Stage 6 (upper left)
-        {0.52, 0.20}, // Stage 7 (upper center)
-        {0.65, 0.12}  // Stage 8 (top crown peak)
-    };
+    return 74.0f;
+}
+
+int MainWindow::getVirtualMapHeight() const
+{
+    return int(LEVELS_PER_WORLD * getNodeSpacingY() + 380);
+}
+
+void MainWindow::scrollToLevel(int lvl, bool immediate)
+{
     int stageIdx = (lvl - 1) % LEVELS_PER_WORLD;
     if (stageIdx < 0) stageIdx = 0;
-    if (stageIdx > 7) stageIdx = 7;
-    return QPoint(int(coords[stageIdx][0] * mapW), int(coords[stageIdx][1] * mapH));
+    if (stageIdx >= LEVELS_PER_WORLD) stageIdx = LEVELS_PER_WORLD - 1;
+
+    int virtualH = getVirtualMapHeight();
+    int nodeVirtualY = virtualH - 220 - int(stageIdx * getNodeSpacingY());
+
+    int maxScroll = std::max(0, virtualH - height());
+    float desired = std::clamp(float(nodeVirtualY - height() / 2), 0.0f, float(maxScroll));
+    targetMapScrollY = desired;
+    if (immediate) {
+        mapScrollY = desired;
+    }
+}
+
+QPoint MainWindow::getLevelNodePos(int lvl, int mapW, int mapH) const
+{
+    Q_UNUSED(mapH);
+    int stageIdx = (lvl - 1) % LEVELS_PER_WORLD;
+    if (stageIdx < 0) stageIdx = 0;
+    if (stageIdx >= LEVELS_PER_WORLD) stageIdx = LEVELS_PER_WORLD - 1;
+
+    // Serpentine horizontal wave: period of ~6.5 stages per S-curve
+    float wave = std::sin(stageIdx * 0.95f);
+    float xNorm = 0.50f + 0.32f * wave;
+    int nodeX = int(mapW * xNorm);
+
+    // Virtual Y goes from bottom (stageIdx = 0) to top (stageIdx = 19)
+    int virtualH = getVirtualMapHeight();
+    int nodeVirtualY = virtualH - 220 - int(stageIdx * getNodeSpacingY());
+
+    // Screen Y applies camera scroll
+    int nodeScreenY = nodeVirtualY - int(mapScrollY);
+
+    return QPoint(nodeX, nodeScreenY);
 }
 
 void MainWindow::wheelEvent(QWheelEvent *event)
 {
     if (currentScreen == SCREEN_HOME_MAP) {
         int delta = event->angleDelta().y();
-        int maxUnlockedWorld = (highestUnlockedLevel - 1) / LEVELS_PER_WORLD + 1;
-        if (delta > 0 && viewedMapWorld > 1) {
-            viewedMapWorld--;
-            selectedMapLevel = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
-            update();
-        } else if (delta < 0 && viewedMapWorld < maxUnlockedWorld + 1) {
-            viewedMapWorld++;
-            selectedMapLevel = std::min(highestUnlockedLevel, (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1);
-            update();
-        }
+        int maxScroll = std::max(0, getVirtualMapHeight() - height());
+        targetMapScrollY -= delta * 0.9f;
+        targetMapScrollY = std::clamp(targetMapScrollY, 0.0f, float(maxScroll));
+        update();
+        return;
     }
     QWidget::wheelEvent(event);
 }
@@ -2258,6 +2312,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         if (getPrevWorldButtonRect().contains(pos) && viewedMapWorld > 1) {
             viewedMapWorld--;
             selectedMapLevel = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
+            scrollToLevel(selectedMapLevel, false);
             update();
             return;
         }
@@ -2265,6 +2320,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         if (getNextWorldButtonRect().contains(pos) && viewedMapWorld < maxUnlockedWorld + 1) {
             viewedMapWorld++;
             selectedMapLevel = std::min(highestUnlockedLevel, (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1);
+            scrollToLevel(selectedMapLevel, false);
             update();
             return;
         }
@@ -2297,14 +2353,15 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         }
 
         // 4. Clicked Level Node
-        int radius = std::min(width(), height()) / 22;
-        if (radius < 24) radius = 24;
-        if (radius > 36) radius = 36;
-
+        int radius = std::clamp(std::min(width(), height()) / 24, 22, 32);
         int worldStartLvl = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
         int worldEndLvl = worldStartLvl + LEVELS_PER_WORLD - 1;
+        bool clickedNode = false;
+
         for (int lvl = worldStartLvl; lvl <= worldEndLvl; ++lvl) {
             QPoint np = getLevelNodePos(lvl, width(), height());
+            if (np.y() < -50 || np.y() > height() + 50) continue;
+
             int dx = pos.x() - np.x();
             int dy = pos.y() - np.y();
             if (dx * dx + dy * dy <= (radius + 8) * (radius + 8)) {
@@ -2313,8 +2370,18 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
                     startLevel(lvl);
                     return;
                 }
+                clickedNode = true;
+                break;
             }
         }
+
+        // 5. If not clicking a node or button, start drag scrolling
+        if (!clickedNode) {
+            isDraggingMap = true;
+            dragStartY = pos.y();
+            dragStartScrollY = targetMapScrollY;
+        }
+
         update();
         return;
     }
@@ -2327,6 +2394,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
             currentScreen = SCREEN_HOME_MAP;
             selectedMapLevel = currentLevel;
             viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
+            scrollToLevel(selectedMapLevel, false);
             update();
             return;
         }
@@ -2380,16 +2448,25 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
 {
     if (currentScreen == SCREEN_HOME_MAP) {
         QPoint pos = event->pos();
-        hoveredMapLevel = 0;
 
-        int radius = std::min(width(), height()) / 22;
-        if (radius < 24) radius = 24;
-        if (radius > 36) radius = 36;
+        if (isDraggingMap) {
+            float delta = pos.y() - dragStartY;
+            int maxScroll = std::max(0, getVirtualMapHeight() - height());
+            targetMapScrollY = std::clamp(dragStartScrollY - delta, 0.0f, float(maxScroll));
+            mapScrollY = targetMapScrollY;
+            update();
+            return;
+        }
+
+        hoveredMapLevel = 0;
+        int radius = std::clamp(std::min(width(), height()) / 24, 22, 32);
 
         int worldStartLvl = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
         int worldEndLvl = worldStartLvl + LEVELS_PER_WORLD - 1;
         for (int lvl = worldStartLvl; lvl <= worldEndLvl; ++lvl) {
             QPoint np = getLevelNodePos(lvl, width(), height());
+            if (np.y() < -50 || np.y() > height() + 50) continue;
+
             int dx = pos.x() - np.x();
             int dy = pos.y() - np.y();
             if (dx * dx + dy * dy <= (radius + 8) * (radius + 8)) {
@@ -2417,6 +2494,12 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
             setCursor(Qt::ArrowCursor);
         }
     }
+}
+
+void MainWindow::mouseReleaseEvent(QMouseEvent *event)
+{
+    Q_UNUSED(event);
+    isDraggingMap = false;
 }
 
 void MainWindow::drawPacmanAvatar(QPainter &painter, int cx, int cy, int size)
@@ -2615,7 +2698,15 @@ void MainWindow::drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int r
         }
     }
 
-    // 6. Stage 8 Crown Trophy (Final stage of each World!)
+    // 6. Milestone Jewel Rings on Stages 5, 10, 15
+    int stageInWorld = (lvl - 1) % LEVELS_PER_WORLD + 1;
+    if (stageInWorld % 5 == 0 && stageInWorld != LEVELS_PER_WORLD) {
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(QColor(255, 215, 0, 190), 2.5, Qt::SolidLine));
+        painter.drawEllipse(cx - r - 4, cy - r - 4, (r + 4) * 2, (r + 4) * 2);
+    }
+
+    // 7. Stage 20 Crown Trophy (Final Summit of each World!)
     if (lvl % LEVELS_PER_WORLD == 0) {
         int cw = 28, ch = 18;
         int cx0 = cx - cw / 2;
@@ -2633,7 +2724,7 @@ void MainWindow::drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int r
         painter.drawPolygon(crown);
     }
 
-    // 7. Pacman Avatar on the Selected Level Node
+    // 8. Pacman Avatar on the Selected Level Node
     if (lvl == selectedMapLevel) {
         int bob = int(4 * std::sin(elapsedTimer.elapsed() * 0.007f));
         if (isMultiplayer) {
@@ -2736,7 +2827,7 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
         painter.drawEllipse(sx, sy, starD, starD);
     }
 
-    // 2. The Winding Serpentine Candy Road connecting this world's stages
+    // 2. The Winding Serpentine Candy Road connecting this world's 20 stages
     QPainterPath roadPath;
     roadPath.moveTo(getLevelNodePos(worldStartLvl, w, h));
     for (int lvl = worldStartLvl + 1; lvl <= worldEndLvl; ++lvl) {
@@ -2754,10 +2845,12 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     // Layer 3: Dashed Yellow Sugar Road Line
     painter.strokePath(roadPath, QPen(QColor(255, 230, 110, 240), 5, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
 
-    // Decorative Power Dots along the road
+    // Decorative Power Dots along the road (culled to screen)
     for (int lvl = worldStartLvl; lvl < worldEndLvl; ++lvl) {
         QPoint p0 = getLevelNodePos(lvl, w, h);
         QPoint p1 = getLevelNodePos(lvl + 1, w, h);
+        if (std::max(p0.y(), p1.y()) < -30 || std::min(p0.y(), p1.y()) > h + 30) continue;
+
         for (int step = 1; step <= 3; ++step) {
             double t = step / 4.0;
             double it = 1.0 - t;
@@ -2771,17 +2864,46 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
         }
     }
 
-    // 3. The Level Nodes
-    int radius = std::min(w, h) / 22;
-    if (radius < 24) radius = 24;
-    if (radius > 36) radius = 36;
-
+    // 3. The 20 Level Nodes (culled to screen)
+    int radius = std::clamp(std::min(w, h) / 24, 22, 32);
     for (int lvl = worldStartLvl; lvl <= worldEndLvl; ++lvl) {
         QPoint np = getLevelNodePos(lvl, w, h);
+        if (np.y() < -60 || np.y() > h + 60) continue;
         drawLevelNode(painter, lvl, np.x(), np.y(), radius);
     }
 
-    // 4. World Navigation Buttons: [ ◀ WORLD %1 ] and [ WORLD %1 ▶ ]
+    // 4. Vertical Mountain Scrollbar Indicator (Right margin)
+    int maxScroll = std::max(1, getVirtualMapHeight() - h);
+    int sbW = 6;
+    int sbH = std::clamp(int(h * (float(h) / getVirtualMapHeight())), 24, h / 3);
+    int sbX = w - sbW - 6;
+    float scrollRatio = std::clamp(mapScrollY / float(maxScroll), 0.0f, 1.0f);
+    int sbY = int(scrollRatio * (h - sbH - 140)) + 70;
+
+    painter.setBrush(QColor(255, 255, 255, 25));
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(sbX, 70, sbW, h - 140, 3, 3);
+
+    painter.setBrush(QColor(255, 215, 100, 190));
+    painter.drawRoundedRect(sbX, sbY, sbW, sbH, 3, 3);
+
+    // Frosted Top Dock to keep Header & World Buttons crisp
+    int hy = 16;
+    int headerH = 64;
+    QLinearGradient topGrad(0, 0, 0, hy + headerH + 36);
+    topGrad.setColorAt(0.0, QColor(10, 5, 20, 230));
+    topGrad.setColorAt(0.75, QColor(10, 5, 20, 180));
+    topGrad.setColorAt(1.0, QColor(10, 5, 20, 0));
+    painter.fillRect(0, 0, w, hy + headerH + 36, topGrad);
+
+    // Frosted Bottom Dock for Mode Selector & Play Button
+    QLinearGradient dockGrad(0, getModeSelectorRect().top() - 14, 0, h);
+    dockGrad.setColorAt(0.0, QColor(10, 5, 20, 0));
+    dockGrad.setColorAt(0.35, QColor(10, 5, 20, 215));
+    dockGrad.setColorAt(1.0, QColor(10, 5, 20, 250));
+    painter.fillRect(0, getModeSelectorRect().top() - 14, w, h - getModeSelectorRect().top() + 14, dockGrad);
+
+    // 5. World Navigation Buttons: [ ◀ WORLD %1 ] and [ WORLD %1 ▶ ]
     int maxUnlockedWorld = (highestUnlockedLevel - 1) / LEVELS_PER_WORLD + 1;
     bool hasPrevWorld = (viewedMapWorld > 1);
     bool hasNextWorld = (viewedMapWorld < maxUnlockedWorld + 1);
@@ -2812,12 +2934,10 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
         painter.drawText(nextBtn, Qt::AlignCenter, QString("WORLD %1 ▶").arg(viewedMapWorld + 1));
     }
 
-    // 5. Header Ribbon Banner
+    // 6. Header Ribbon Banner
     int headerW = std::min(int(w - prevBtn.width() * 2 - 48), 560);
     if (headerW < 320) headerW = 320;
-    int headerH = 64;
     int hx = (w - headerW) / 2;
-    int hy = 16;
 
     // Drop shadow
     painter.setBrush(QColor(0, 0, 0, 140));
@@ -2843,7 +2963,7 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.setFont(QFont("Arial", std::max(8, headerH / 6), QFont::Bold));
     painter.setPen(QColor(255, 220, 230));
     painter.drawText(hx, hy + headerH * 4 / 8, headerW, headerH * 3 / 8, Qt::AlignCenter,
-                     QString("%1  •  Levels %2-%3").arg(getWorldName(viewedMapWorld)).arg(worldStartLvl).arg(worldEndLvl));
+                     QString("%1  •  Stages 1-20 (Levels %2-%3)").arg(getWorldName(viewedMapWorld)).arg(worldStartLvl).arg(worldEndLvl));
 
     // Highest Unlocked Badge centered directly under ribbon banner
     int pbW = 210, pbH = 26;
