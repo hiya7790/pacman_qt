@@ -39,6 +39,20 @@ MainWindow::MainWindow(QWidget *parent)
     isTransitioning = false;
     newSectorJustDiscovered = false;
 
+    isMultiplayer = false;
+    scoreP1 = 0;
+    scoreP2 = 0;
+    p1Alive = true;
+    p2Alive = true;
+    p1RespawnTicks = 0;
+    p2RespawnTicks = 0;
+    p2X = 9;
+    p2Y = 19;
+    p2Dir = STOP;
+    p2NextDir = RIGHT;
+    p2MouthAngle = 45;
+    p2MouthOpening = false;
+
     initGame();
 
     timer = new QTimer(this);
@@ -55,9 +69,15 @@ MainWindow::~MainWindow()
 void MainWindow::initGame()
 {
     score = 0;
+    scoreP1 = 0;
+    scoreP2 = 0;
     moveCount = 0;
     gameOver = false;
     levelComplete = false;
+    p1Alive = true;
+    p2Alive = true;
+    p1RespawnTicks = 0;
+    p2RespawnTicks = 0;
     currentScreen = SCREEN_HOME_MAP;
 }
 
@@ -270,6 +290,18 @@ void MainWindow::initLevel()
     pacmanNextDir = LEFT;
     pacmanMouthAngle = 45;
     pacmanMouthOpening = false;
+    p1Alive = true;
+    p1RespawnTicks = 0;
+
+    // Player 2 starts beside Player 1 in the start room
+    p2X = 9;
+    p2Y = ROWS - 2;
+    p2Dir = RIGHT;
+    p2NextDir = RIGHT;
+    p2MouthAngle = 45;
+    p2MouthOpening = false;
+    p2Alive = true;
+    p2RespawnTicks = 0;
 
     levelComplete = false;
     gameOver = false;
@@ -322,8 +354,9 @@ void MainWindow::updateFogOfWar()
 {
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
-            double dist = std::hypot(c - pacmanX, r - pacmanY);
-            if (dist <= VISION_RADIUS) {
+            double dist1 = (p1Alive ? std::hypot(c - pacmanX, r - pacmanY) : 999.0);
+            double dist2 = (isMultiplayer && p2Alive ? std::hypot(c - p2X, r - p2Y) : 999.0);
+            if (dist1 <= VISION_RADIUS || dist2 <= VISION_RADIUS) {
                 explored[currentSectorY][currentSectorX][r][c] = true;
             }
         }
@@ -334,7 +367,9 @@ bool MainWindow::isCellVisible(int sx, int sy, int x, int y) const
 {
     if (!fogOfWarEnabled) return true;
     if (sx != currentSectorX || sy != currentSectorY) return false;
-    return std::hypot(x - pacmanX, y - pacmanY) <= VISION_RADIUS;
+    double dist1 = (p1Alive ? std::hypot(x - pacmanX, y - pacmanY) : 999.0);
+    double dist2 = (isMultiplayer && p2Alive ? std::hypot(x - p2X, y - p2Y) : 999.0);
+    return (dist1 <= VISION_RADIUS || dist2 <= VISION_RADIUS);
 }
 
 void MainWindow::keyPressEvent(QKeyEvent *event)
@@ -361,6 +396,21 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     if (currentScreen == SCREEN_HOME_MAP) {
         if (event->key() == Qt::Key_Space || event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
             startLevel(selectedMapLevel);
+            return;
+        }
+        if (event->key() == Qt::Key_Tab || event->key() == Qt::Key_P) {
+            isMultiplayer = !isMultiplayer;
+            update();
+            return;
+        }
+        if (event->key() == Qt::Key_1) {
+            isMultiplayer = false;
+            update();
+            return;
+        }
+        if (event->key() == Qt::Key_2) {
+            isMultiplayer = true;
+            update();
             return;
         }
         if (event->key() == Qt::Key_Up || event->key() == Qt::Key_Right) {
@@ -420,6 +470,13 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
+    // Restart current level with [R]
+    if (event->key() == Qt::Key_R) {
+        initLevel();
+        update();
+        return;
+    }
+
     // Toggle Fog of War: 1.5-second temporary peek
     if (event->key() == Qt::Key_F) {
         if (fogOfWarEnabled) {
@@ -437,35 +494,72 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     // Prevent input during active camera window slide transition
     if (isTransitioning) return;
 
-    Direction attemptDir = STOP;
-    switch (event->key()) {
-        case Qt::Key_Up:    attemptDir = UP; break;
-        case Qt::Key_Down:  attemptDir = DOWN; break;
-        case Qt::Key_Left:  attemptDir = LEFT; break;
-        case Qt::Key_Right: attemptDir = RIGHT; break;
-        case Qt::Key_R:     initLevel(); update(); return; // Restart current level!
-        default: QWidget::keyPressEvent(event); return;
+    // Player 1 controls (Arrow keys)
+    Direction p1Attempt = STOP;
+    if (event->key() == Qt::Key_Up) p1Attempt = UP;
+    else if (event->key() == Qt::Key_Down) p1Attempt = DOWN;
+    else if (event->key() == Qt::Key_Left) p1Attempt = LEFT;
+    else if (event->key() == Qt::Key_Right) p1Attempt = RIGHT;
+
+    if (p1Attempt != STOP) {
+        if (p1Alive) {
+            pacmanNextDir = p1Attempt;
+            movePacman();
+            moveCount++;
+            checkFruitPickup();
+            checkGhostCollisions();
+            checkLevelExit();
+            update();
+        }
+        return;
     }
 
-    if (attemptDir != STOP) {
-        pacmanNextDir = attemptDir;
-        movePacman();
-        moveCount++;
-        checkFruitPickup();
-        checkGhostCollisions();
+    // Player 2 controls (WASD keys in multiplayer)
+    if (isMultiplayer) {
+        Direction p2Attempt = STOP;
+        if (event->key() == Qt::Key_W) p2Attempt = UP;
+        else if (event->key() == Qt::Key_S) p2Attempt = DOWN;
+        else if (event->key() == Qt::Key_A) p2Attempt = LEFT;
+        else if (event->key() == Qt::Key_D) p2Attempt = RIGHT;
 
-        // Check if reached EXIT in the Exit window
-        if (currentSectorX == exitSectorX && currentSectorY == exitSectorY &&
-            pacmanX == exitX && pacmanY == exitY) {
-            levelComplete = true;
-            score += 500 * (sectorCols * sectorRows);
-            if (currentLevel >= highestUnlockedLevel) {
-                highestUnlockedLevel = std::min(TOTAL_LEVELS, currentLevel + 1);
+        if (p2Attempt != STOP) {
+            if (p2Alive) {
+                p2NextDir = p2Attempt;
+                movePlayer2();
+                moveCount++;
+                checkFruitPickup();
+                checkGhostCollisions();
+                checkLevelExit();
+                update();
             }
-            selectedMapLevel = std::min(TOTAL_LEVELS, currentLevel + 1);
+            return;
         }
+    }
 
-        update();
+    QWidget::keyPressEvent(event);
+}
+
+void MainWindow::checkLevelExit()
+{
+    bool p1Won = p1Alive && (pacmanX == exitX && pacmanY == exitY);
+    bool p2Won = isMultiplayer && p2Alive && (p2X == exitX && p2Y == exitY);
+
+    if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && (p1Won || p2Won)) {
+        levelComplete = true;
+        int clearBonus = 500 * (sectorCols * sectorRows);
+        if (p1Won && p2Won) {
+            scoreP1 += clearBonus / 2;
+            scoreP2 += clearBonus / 2;
+        } else if (p1Won) {
+            scoreP1 += clearBonus;
+        } else {
+            scoreP2 += clearBonus;
+        }
+        score = scoreP1 + scoreP2;
+        if (currentLevel >= highestUnlockedLevel) {
+            highestUnlockedLevel = std::min(TOTAL_LEVELS, currentLevel + 1);
+        }
+        selectedMapLevel = std::min(TOTAL_LEVELS, currentLevel + 1);
     }
 }
 
@@ -512,6 +606,8 @@ bool MainWindow::canMove(int x, int y, Direction dir)
 
 void MainWindow::movePacman()
 {
+    if (!p1Alive) return;
+
     if (canMove(pacmanX, pacmanY, pacmanNextDir)) {
         pacmanDir = pacmanNextDir;
     }
@@ -530,6 +626,10 @@ void MainWindow::movePacman()
             transitionDirX = 1; transitionDirY = 0;
             currentSectorX = toSectorX;
             pacmanX = 0;
+            if (isMultiplayer) {
+                p2X = 0;
+                p2Y = (pacmanY == 9 ? 10 : 9);
+            }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -543,6 +643,10 @@ void MainWindow::movePacman()
             transitionDirX = -1; transitionDirY = 0;
             currentSectorX = toSectorX;
             pacmanX = COLS - 1;
+            if (isMultiplayer) {
+                p2X = COLS - 1;
+                p2Y = (pacmanY == 9 ? 10 : 9);
+            }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -556,6 +660,10 @@ void MainWindow::movePacman()
             transitionDirX = 0; transitionDirY = 1;
             currentSectorY = toSectorY;
             pacmanY = 0;
+            if (isMultiplayer) {
+                p2Y = 0;
+                p2X = (pacmanX == 9 ? 10 : 9);
+            }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -569,6 +677,10 @@ void MainWindow::movePacman()
             transitionDirX = 0; transitionDirY = -1;
             currentSectorY = toSectorY;
             pacmanY = ROWS - 1;
+            if (isMultiplayer) {
+                p2Y = ROWS - 1;
+                p2X = (pacmanX == 9 ? 10 : 9);
+            }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -586,7 +698,8 @@ void MainWindow::movePacman()
         // Eat dot
         if (board[currentSectorY][currentSectorX][pacmanY][pacmanX] == 2) {
             board[currentSectorY][currentSectorX][pacmanY][pacmanX] = 0;
-            score += 10;
+            scoreP1 += 10;
+            score = scoreP1 + scoreP2;
         }
 
         // Mouth animation
@@ -596,6 +709,107 @@ void MainWindow::movePacman()
         } else {
             pacmanMouthAngle -= 15;
             if (pacmanMouthAngle <= 0) pacmanMouthOpening = true;
+        }
+    }
+}
+
+void MainWindow::movePlayer2()
+{
+    if (!p2Alive) return;
+
+    if (canMove(p2X, p2Y, p2NextDir)) {
+        p2Dir = p2NextDir;
+    }
+
+    if (canMove(p2X, p2Y, p2Dir)) {
+        int nextX = p2X, nextY = p2Y;
+        if (p2Dir == UP) nextY--;
+        else if (p2Dir == DOWN) nextY++;
+        else if (p2Dir == LEFT) nextX--;
+        else if (p2Dir == RIGHT) nextX++;
+
+        // Check if crossing into an adjacent window
+        if (nextX >= COLS) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX + 1; toSectorY = currentSectorY;
+            transitionDirX = 1; transitionDirY = 0;
+            currentSectorX = toSectorX;
+            p2X = 0;
+            pacmanX = 0;
+            pacmanY = (p2Y == 9 ? 10 : 9);
+            isTransitioning = true;
+            transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else if (nextX < 0) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX - 1; toSectorY = currentSectorY;
+            transitionDirX = -1; transitionDirY = 0;
+            currentSectorX = toSectorX;
+            p2X = COLS - 1;
+            pacmanX = COLS - 1;
+            pacmanY = (p2Y == 9 ? 10 : 9);
+            isTransitioning = true;
+            transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else if (nextY >= ROWS) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX; toSectorY = currentSectorY + 1;
+            transitionDirX = 0; transitionDirY = 1;
+            currentSectorY = toSectorY;
+            p2Y = 0;
+            pacmanY = 0;
+            pacmanX = (p2X == 9 ? 10 : 9);
+            isTransitioning = true;
+            transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else if (nextY < 0) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX; toSectorY = currentSectorY - 1;
+            transitionDirX = 0; transitionDirY = -1;
+            currentSectorY = toSectorY;
+            p2Y = ROWS - 1;
+            pacmanY = ROWS - 1;
+            pacmanX = (p2X == 9 ? 10 : 9);
+            isTransitioning = true;
+            transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else {
+            p2X = nextX;
+            p2Y = nextY;
+        }
+
+        updateFogOfWar();
+
+        // Eat dot
+        if (board[currentSectorY][currentSectorX][p2Y][p2X] == 2) {
+            board[currentSectorY][currentSectorX][p2Y][p2X] = 0;
+            scoreP2 += 10;
+            score = scoreP1 + scoreP2;
+        }
+
+        // Mouth animation
+        if (p2MouthOpening) {
+            p2MouthAngle += 15;
+            if (p2MouthAngle >= 45) p2MouthOpening = false;
+        } else {
+            p2MouthAngle -= 15;
+            if (p2MouthAngle <= 0) p2MouthOpening = true;
         }
     }
 }
@@ -633,7 +847,22 @@ void MainWindow::moveGhosts()
         if (possibleDirs.isEmpty()) {
             g.dir = reverseDir;
         } else {
-            // If in the same sector as Pacman, actively hunt Pacman
+            // Target nearest living player
+            int targetX = pacmanX;
+            int targetY = pacmanY;
+            if (isMultiplayer) {
+                if (!p1Alive && p2Alive) {
+                    targetX = p2X; targetY = p2Y;
+                } else if (p1Alive && p2Alive) {
+                    int d1 = std::abs(g.x - pacmanX) + std::abs(g.y - pacmanY);
+                    int d2 = std::abs(g.x - p2X) + std::abs(g.y - p2Y);
+                    if (d2 < d1) {
+                        targetX = p2X; targetY = p2Y;
+                    }
+                }
+            }
+
+            // If in the same sector as target, actively hunt
             if (g.sectorX == currentSectorX && g.sectorY == currentSectorY && !ghostsFrightened) {
                 int bestDist = 999;
                 Direction bestDir = possibleDirs[0];
@@ -643,7 +872,7 @@ void MainWindow::moveGhosts()
                     else if (d == DOWN) ny++;
                     else if (d == LEFT) nx--;
                     else if (d == RIGHT) nx++;
-                    int dist = std::abs(nx - pacmanX) + std::abs(ny - pacmanY);
+                    int dist = std::abs(nx - targetX) + std::abs(ny - targetY);
                     if (dist < bestDist) {
                         bestDist = dist;
                         bestDir = d;
@@ -651,7 +880,7 @@ void MainWindow::moveGhosts()
                 }
                 g.dir = bestDir;
             } else if (g.sectorX == currentSectorX && g.sectorY == currentSectorY && ghostsFrightened) {
-                // Frightened: run away from Pacman
+                // Frightened: run away from target
                 int bestDist = -1;
                 Direction bestDir = possibleDirs[0];
                 for (Direction d : possibleDirs) {
@@ -660,7 +889,7 @@ void MainWindow::moveGhosts()
                     else if (d == DOWN) ny++;
                     else if (d == LEFT) nx--;
                     else if (d == RIGHT) nx++;
-                    int dist = std::abs(nx - pacmanX) + std::abs(ny - pacmanY);
+                    int dist = std::abs(nx - targetX) + std::abs(ny - targetY);
                     if (dist > bestDist) {
                         bestDist = dist;
                         bestDir = d;
@@ -689,13 +918,39 @@ void MainWindow::moveGhosts()
 void MainWindow::checkGhostCollisions()
 {
     for (Ghost &g : ghosts) {
-        if (g.sectorX == currentSectorX && g.sectorY == currentSectorY &&
-            g.x == pacmanX && g.y == pacmanY) {
+        if (g.sectorX != currentSectorX || g.sectorY != currentSectorY) continue;
+
+        // Player 1 collision
+        if (p1Alive && g.x == pacmanX && g.y == pacmanY) {
             if (ghostsFrightened) {
-                score += 200;
+                scoreP1 += 200;
+                score = scoreP1 + scoreP2;
                 respawnGhostFarAway(g);
             } else {
-                gameOver = true;
+                if (!isMultiplayer) {
+                    gameOver = true;
+                } else {
+                    p1Alive = false;
+                    p1RespawnTicks = 30; // ~3.9 seconds
+                    if (!p2Alive) {
+                        gameOver = true;
+                    }
+                }
+            }
+        }
+
+        // Player 2 collision (Multiplayer)
+        if (isMultiplayer && p2Alive && g.x == p2X && g.y == p2Y) {
+            if (ghostsFrightened) {
+                scoreP2 += 200;
+                score = scoreP1 + scoreP2;
+                respawnGhostFarAway(g);
+            } else {
+                p2Alive = false;
+                p2RespawnTicks = 30; // ~3.9 seconds
+                if (!p1Alive) {
+                    gameOver = true;
+                }
             }
         }
     }
@@ -773,13 +1028,18 @@ void MainWindow::trySpawnFruit()
 void MainWindow::checkFruitPickup()
 {
     for (int i = activeFruits.size() - 1; i >= 0; --i) {
-        if (activeFruits[i].sectorX == currentSectorX && activeFruits[i].sectorY == currentSectorY &&
-            activeFruits[i].x == pacmanX && activeFruits[i].y == pacmanY) {
-            score += 100;
-            activeFruits.removeAt(i);
+        if (activeFruits[i].sectorX == currentSectorX && activeFruits[i].sectorY == currentSectorY) {
+            bool p1Picked = p1Alive && (activeFruits[i].x == pacmanX && activeFruits[i].y == pacmanY);
+            bool p2Picked = isMultiplayer && p2Alive && (activeFruits[i].x == p2X && activeFruits[i].y == p2Y);
+            if (p1Picked || p2Picked) {
+                if (p1Picked) scoreP1 += 100;
+                if (p2Picked) scoreP2 += 100;
+                score = scoreP1 + scoreP2;
+                activeFruits.removeAt(i);
 
-            ghostsFrightened = true;
-            frightenedTicksLeft = FRIGHTEN_DURATION;
+                ghostsFrightened = true;
+                frightenedTicksLeft = FRIGHTEN_DURATION;
+            }
         }
     }
 }
@@ -942,12 +1202,12 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         painter.drawText(fx + 3, fy + cellSize - 1, "100");
     }
 
-    // 5. Draw Pacman (if in this sector)
-    if (isCurrent) {
+    // 5. Draw Player 1 (Yellow Pacman) (if in this sector)
+    if (isCurrent && (p1Alive || (p1RespawnTicks > 0 && p1RespawnTicks % 4 < 2))) {
         int px = originX + pacmanX * cellSize;
         int py = originY + pacmanY * cellSize;
 
-        painter.setBrush(QColor(255, 220, 0));
+        painter.setBrush(p1Alive ? QColor(255, 220, 0) : QColor(255, 240, 100, 110));
         painter.setPen(Qt::NoPen);
         int startAngle = 0;
         if (pacmanDir == RIGHT) startAngle = pacmanMouthAngle;
@@ -957,6 +1217,47 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
         int spanAngle = 360 - 2 * pacmanMouthAngle;
         painter.drawPie(px + 2, py + 2, cellSize - 4, cellSize - 4, startAngle * 16, spanAngle * 16);
+
+        if (isMultiplayer) {
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 3), QFont::Bold));
+            painter.setPen(QColor(255, 240, 0));
+            painter.drawText(px, py - 3, cellSize, cellSize / 2, Qt::AlignCenter, "P1");
+        }
+    }
+
+    // Draw Player 2 (Ms. Pacman - Pink with bow) (if multiplayer and in this sector)
+    if (isMultiplayer && isCurrent && (p2Alive || (p2RespawnTicks > 0 && p2RespawnTicks % 4 < 2))) {
+        int px = originX + p2X * cellSize;
+        int py = originY + p2Y * cellSize;
+
+        painter.setBrush(p2Alive ? QColor(255, 105, 180) : QColor(255, 150, 200, 110));
+        painter.setPen(Qt::NoPen);
+        int startAngle = 0;
+        if (p2Dir == RIGHT) startAngle = p2MouthAngle;
+        else if (p2Dir == DOWN) startAngle = 270 + p2MouthAngle;
+        else if (p2Dir == LEFT) startAngle = 180 + p2MouthAngle;
+        else if (p2Dir == UP) startAngle = 90 + p2MouthAngle;
+
+        int spanAngle = 360 - 2 * p2MouthAngle;
+        painter.drawPie(px + 2, py + 2, cellSize - 4, cellSize - 4, startAngle * 16, spanAngle * 16);
+
+        // Cute Red Ribbon Bow on head
+        painter.setBrush(QColor(235, 20, 60));
+        int bowSize = std::max(4, cellSize / 4);
+        int bx = px + cellSize / 2;
+        int by = py + 2;
+        painter.drawEllipse(bx - bowSize, by, bowSize * 3 / 4, bowSize / 2);
+        painter.drawEllipse(bx, by, bowSize * 3 / 4, bowSize / 2);
+        painter.setBrush(QColor(255, 220, 230));
+        painter.drawEllipse(bx - bowSize / 4, by + bowSize / 6, bowSize / 2, bowSize / 2);
+
+        // Eye beauty mark
+        painter.setBrush(QColor(20, 20, 60));
+        painter.drawEllipse(px + cellSize * 3 / 5, py + cellSize / 3, std::max(2, cellSize / 7), std::max(2, cellSize / 7));
+
+        painter.setFont(QFont("Arial", std::max(7, cellSize / 3), QFont::Bold));
+        painter.setPen(QColor(255, 130, 190));
+        painter.drawText(px, py - 3, cellSize, cellSize / 2, Qt::AlignCenter, "P2");
     }
 
     // 6. Draw Ghosts in this sector
@@ -1025,16 +1326,30 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
     // 5. Lantern Light Spotlight (only for current sector)
     if (isCurrent && fogOfWarEnabled) {
-        int pxCenter = originX + pacmanX * cellSize + cellSize / 2;
-        int pyCenter = originY + pacmanY * cellSize + cellSize / 2;
+        if (p1Alive) {
+            int pxCenter = originX + pacmanX * cellSize + cellSize / 2;
+            int pyCenter = originY + pacmanY * cellSize + cellSize / 2;
 
-        QRadialGradient lantern(pxCenter, pyCenter, (VISION_RADIUS + 0.6) * cellSize);
-        lantern.setColorAt(0.0, QColor(255, 235, 170, 25));
-        lantern.setColorAt(0.45, QColor(255, 200, 100, 10));
-        lantern.setColorAt(0.75, QColor(0, 0, 0, 60));
-        lantern.setColorAt(1.0, QColor(0, 0, 0, 220));
+            QRadialGradient lantern(pxCenter, pyCenter, (VISION_RADIUS + 0.6) * cellSize);
+            lantern.setColorAt(0.0, QColor(255, 235, 170, 25));
+            lantern.setColorAt(0.45, QColor(255, 200, 100, 10));
+            lantern.setColorAt(0.75, QColor(0, 0, 0, 60));
+            lantern.setColorAt(1.0, QColor(0, 0, 0, 220));
 
-        painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern);
+            painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern);
+        }
+        if (isMultiplayer && p2Alive) {
+            int p2xCenter = originX + p2X * cellSize + cellSize / 2;
+            int p2yCenter = originY + p2Y * cellSize + cellSize / 2;
+
+            QRadialGradient lantern2(p2xCenter, p2yCenter, (VISION_RADIUS + 0.6) * cellSize);
+            lantern2.setColorAt(0.0, QColor(255, 190, 230, 25));
+            lantern2.setColorAt(0.45, QColor(255, 150, 200, 10));
+            lantern2.setColorAt(0.75, QColor(0, 0, 0, 60));
+            lantern2.setColorAt(1.0, QColor(0, 0, 0, 220));
+
+            painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern2);
+        }
     }
 
     // 6. Glowing Sci-Fi Gateway Portals (Cuts through darkness & visible across fog!)
@@ -1227,6 +1542,28 @@ void MainWindow::gameLoop()
     if (isTransitioning) {
         if (transitionTimer.elapsed() >= TRANSITION_DURATION_MS) {
             isTransitioning = false;
+        }
+    }
+
+    // Multiplayer respawn timer
+    if (isMultiplayer) {
+        if (!p1Alive && p1RespawnTicks > 0) {
+            p1RespawnTicks--;
+            if (p1RespawnTicks == 0) {
+                p1Alive = true;
+                pacmanX = p2X;
+                pacmanY = p2Y;
+                updateFogOfWar();
+            }
+        }
+        if (!p2Alive && p2RespawnTicks > 0) {
+            p2RespawnTicks--;
+            if (p2RespawnTicks == 0) {
+                p2Alive = true;
+                p2X = pacmanX;
+                p2Y = pacmanY;
+                updateFogOfWar();
+            }
         }
     }
 
@@ -1483,22 +1820,47 @@ void MainWindow::paintEvent(QPaintEvent *)
 
     // Line 1: Stats & Window location (hudY + 20)
     painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
-    painter.setPen(Qt::white);
-    painter.drawText(20, hudY + 20, QString("SCORE: %1").arg(score));
+    if (!isMultiplayer) {
+        painter.setPen(Qt::white);
+        painter.drawText(20, hudY + 20, QString("SCORE: %1").arg(score));
 
-    painter.setPen(QColor(0, 230, 160));
-    painter.drawText(width() * 0.16, hudY + 20, QString("LEVEL: %1").arg(currentLevel));
+        painter.setPen(QColor(0, 230, 160));
+        painter.drawText(width() * 0.16, hudY + 20, QString("LEVEL: %1").arg(currentLevel));
 
-    painter.setPen(QColor(0, 210, 255));
-    painter.drawText(width() * 0.28, hudY + 20,
-                     QString("SECTOR: (%1, %2)").arg(currentSectorX + 1).arg(currentSectorY + 1));
+        painter.setPen(QColor(0, 210, 255));
+        painter.drawText(width() * 0.28, hudY + 20,
+                         QString("SECTOR: (%1, %2)").arg(currentSectorX + 1).arg(currentSectorY + 1));
 
-    painter.setPen(QColor(255, 180, 0));
-    painter.drawText(width() * 0.42, hudY + 20,
-                     QString("EXPLORED: %1").arg(discCount));
+        painter.setPen(QColor(255, 180, 0));
+        painter.drawText(width() * 0.42, hudY + 20,
+                         QString("EXPLORED: %1").arg(discCount));
 
-    painter.setPen(QColor(180, 200, 255));
-    painter.drawText(width() * 0.54, hudY + 20, QString("MOVES: %1").arg(moveCount));
+        painter.setPen(QColor(180, 200, 255));
+        painter.drawText(width() * 0.54, hudY + 20, QString("MOVES: %1").arg(moveCount));
+    } else {
+        // P1 Status (Yellow)
+        painter.setPen(p1Alive ? QColor(255, 230, 30) : QColor(160, 160, 80));
+        QString p1Str = p1Alive ? QString("P1 (🟡): %1").arg(scoreP1)
+                                : QString("P1: RESPAWN (%1s)").arg((p1RespawnTicks * 130 + 999) / 1000);
+        painter.drawText(20, hudY + 20, p1Str);
+
+        // P2 Status (Pink)
+        painter.setPen(p2Alive ? QColor(255, 120, 190) : QColor(160, 80, 120));
+        QString p2Str = p2Alive ? QString("P2 (🎀): %1").arg(scoreP2)
+                                : QString("P2: RESPAWN (%1s)").arg((p2RespawnTicks * 130 + 999) / 1000);
+        painter.drawText(width() * 0.18, hudY + 20, p2Str);
+
+        // Team Total Score
+        painter.setPen(Qt::white);
+        painter.drawText(width() * 0.36, hudY + 20, QString("TEAM: %1").arg(score));
+
+        painter.setPen(QColor(0, 230, 160));
+        painter.drawText(width() * 0.48, hudY + 20, QString("LEVEL: %1").arg(currentLevel));
+
+        painter.setPen(QColor(0, 210, 255));
+        painter.drawText(width() * 0.58, hudY + 20,
+                         QString("SECTOR: (%1, %2)").arg(currentSectorX + 1).arg(currentSectorY + 1));
+    }
 
     qint64 elapsedSec = elapsedTimer.elapsed() / 1000;
     int mins = elapsedSec / 60;
@@ -1547,16 +1909,23 @@ void MainWindow::paintEvent(QPaintEvent *)
     // Line 3: Controls (hudY + 62)
     painter.setFont(QFont("Arial", baseFont2));
     painter.setPen(QColor(140, 160, 190));
-    painter.drawText(20, hudY + 62,
-        "[Arrows] Move Pacman  |  [F] 1.5s Fog Peek  |  [M] Saga Map  |  [R] Retry Level  |  [F11] Fullscreen");
+    if (!isMultiplayer) {
+        painter.drawText(20, hudY + 62,
+            "[Arrows] Move Pacman  |  [F] 1.5s Fog Peek  |  [M] Saga Map  |  [R] Retry Level  |  [F11] Fullscreen");
+    } else {
+        painter.drawText(20, hudY + 62,
+            "P1: [Arrows] Yellow Pacman  |  P2: [W, A, S, D] Pink Pacman  |  [F] Fog Peek  |  [M] Saga Map  |  [R] Retry Level  |  [F11] Fullscreen");
+    }
 
     // Game Over / Level Complete Banner
     if (gameOver) {
         painter.fillRect(0, height() / 2 - 45, width(), 95, QColor(0, 0, 0, 235));
         painter.setPen(QColor(255, 60, 60));
         painter.setFont(QFont("Arial", std::max(18, width() / 50), QFont::Bold));
-        painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter,
-                         QString("GAME OVER! (Level %1)").arg(currentLevel));
+        QString goMsg = isMultiplayer
+            ? QString("GAME OVER! Both Players Defeated (Level %1)").arg(currentLevel)
+            : QString("GAME OVER! (Level %1)").arg(currentLevel);
+        painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter, goMsg);
 
         painter.setPen(QColor(255, 220, 100));
         painter.setFont(QFont("Arial", std::max(12, width() / 70)));
@@ -1566,7 +1935,9 @@ void MainWindow::paintEvent(QPaintEvent *)
         painter.fillRect(0, height() / 2 - 50, width(), 100, QColor(0, 0, 0, 235));
         painter.setPen(QColor(60, 255, 120));
         painter.setFont(QFont("Arial", std::max(16, width() / 55), QFont::Bold));
-        QString levelMsg = QString("LEVEL %1 COMPLETE! Labyrinth Escaped!").arg(currentLevel);
+        QString levelMsg = isMultiplayer
+            ? QString("LEVEL %1 COMPLETE! Team Escaped the Labyrinth!").arg(currentLevel)
+            : QString("LEVEL %1 COMPLETE! Labyrinth Escaped!").arg(currentLevel);
         painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter, levelMsg);
 
         painter.setPen(QColor(255, 220, 100));
@@ -1597,11 +1968,34 @@ QString MainWindow::getLevelTitle(int lvl) const
 
 QRect MainWindow::getPlayButtonRect() const
 {
-    int btnW = std::min(300, int(width() * 0.45));
-    int btnH = 52;
+    int btnW = std::min(320, int(width() * 0.45));
+    int btnH = std::max(42, int(height() * 0.054));
+    if (btnH > 52) btnH = 52;
     int btnX = (width() - btnW) / 2;
-    int btnY = height() - btnH - 18;
+    int btnY = height() - btnH - 12;
     return QRect(btnX, btnY, btnW, btnH);
+}
+
+QRect MainWindow::getModeSelectorRect() const
+{
+    int selW = std::min(350, int(width() * 0.52));
+    int selH = std::max(36, int(height() * 0.046));
+    if (selH > 42) selH = 42;
+    int selX = (width() - selW) / 2;
+    int selY = getPlayButtonRect().top() - selH - 8;
+    return QRect(selX, selY, selW, selH);
+}
+
+QRect MainWindow::getMode1PlayerRect() const
+{
+    QRect total = getModeSelectorRect();
+    return QRect(total.left(), total.top(), total.width() / 2, total.height());
+}
+
+QRect MainWindow::getMode2PlayerRect() const
+{
+    QRect total = getModeSelectorRect();
+    return QRect(total.left() + total.width() / 2, total.top(), total.width() - total.width() / 2, total.height());
 }
 
 QRect MainWindow::getMapButtonRect() const
@@ -1630,13 +2024,25 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
     if (currentScreen == SCREEN_HOME_MAP) {
         QPoint pos = event->pos();
 
-        // 1. Clicked Play button
+        // 1. Clicked Mode Selector buttons
+        if (getMode1PlayerRect().contains(pos)) {
+            isMultiplayer = false;
+            update();
+            return;
+        }
+        if (getMode2PlayerRect().contains(pos)) {
+            isMultiplayer = true;
+            update();
+            return;
+        }
+
+        // 2. Clicked Play button
         if (getPlayButtonRect().contains(pos)) {
             startLevel(selectedMapLevel);
             return;
         }
 
-        // 2. Clicked Level Node
+        // 3. Clicked Level Node
         int radius = std::min(width(), height()) / 22;
         if (radius < 24) radius = 24;
         if (radius > 36) radius = 36;
@@ -1692,7 +2098,6 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
 {
     if (currentScreen == SCREEN_HOME_MAP) {
         QPoint pos = event->pos();
-        int oldHover = hoveredMapLevel;
         hoveredMapLevel = 0;
 
         int radius = std::min(width(), height()) / 22;
@@ -1709,15 +2114,15 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
             }
         }
 
-        if ((hoveredMapLevel != 0 && hoveredMapLevel <= highestUnlockedLevel) || getPlayButtonRect().contains(pos)) {
+        bool onMode = getModeSelectorRect().contains(pos);
+        if ((hoveredMapLevel != 0 && hoveredMapLevel <= highestUnlockedLevel) ||
+            getPlayButtonRect().contains(pos) || onMode) {
             setCursor(Qt::PointingHandCursor);
         } else {
             setCursor(Qt::ArrowCursor);
         }
 
-        if (oldHover != hoveredMapLevel) {
-            update();
-        }
+        update();
     } else {
         if (getMapButtonRect().contains(event->pos())) {
             setCursor(Qt::PointingHandCursor);
@@ -1757,7 +2162,7 @@ void MainWindow::drawPacmanAvatar(QPainter &painter, int cx, int cy, int size)
     painter.setBrush(QColor(255, 255, 255, 180));
     painter.drawEllipse(cx - r / 3, cy - r / 2, std::max(3, r / 3), std::max(2, r / 4));
 
-    // Little "YOU" banner badge above Pacman
+    // Little banner badge above Pacman ("P1" in multiplayer, "YOU" in solo)
     painter.setFont(QFont("Arial", std::max(7, size / 4), QFont::Bold));
     painter.setBrush(QColor(255, 50, 90));
     painter.setPen(QPen(QColor(255, 220, 220), 1));
@@ -1766,7 +2171,62 @@ void MainWindow::drawPacmanAvatar(QPainter &painter, int cx, int cy, int size)
     painter.drawRoundedRect(cx - bW / 2, cy - r - bH - 3, bW, bH, 4, 4);
 
     painter.setPen(Qt::white);
-    painter.drawText(cx - bW / 2, cy - r - bH - 3, bW, bH, Qt::AlignCenter, "YOU");
+    painter.drawText(cx - bW / 2, cy - r - bH - 3, bW, bH, Qt::AlignCenter, isMultiplayer ? "P1" : "YOU");
+
+    painter.restore();
+}
+
+void MainWindow::drawMsPacmanAvatar(QPainter &painter, int cx, int cy, int size)
+{
+    painter.save();
+    int r = size / 2;
+
+    // Pink glow behind Ms. Pacman
+    float pulse = (std::sin(elapsedTimer.elapsed() * 0.009f + 1.6f) + 1.0f) * 0.5f;
+    QRadialGradient glow(cx, cy, r * 1.8);
+    glow.setColorAt(0.0, QColor(255, 100, 180, 130 + int(70 * pulse)));
+    glow.setColorAt(0.6, QColor(255, 50, 140, 50));
+    glow.setColorAt(1.0, QColor(0, 0, 0, 0));
+    painter.fillRect(cx - r * 2, cy - r * 2, r * 4, r * 4, glow);
+
+    // Coral Pink body with animated mouth
+    int startAngle = int(35 * std::abs(std::sin(elapsedTimer.elapsed() * 0.008f + 1.2f)));
+    int spanAngle = 360 - 2 * startAngle;
+
+    painter.setBrush(QColor(255, 105, 180));
+    painter.setPen(QPen(QColor(220, 50, 120), 2));
+    painter.drawPie(cx - r, cy - r, size, size, (180 + startAngle) * 16, spanAngle * 16);
+
+    // Eye
+    painter.setBrush(QColor(20, 20, 50));
+    painter.setPen(Qt::NoPen);
+    painter.drawEllipse(cx - r / 5, cy - r / 2, std::max(3, r / 4), std::max(4, r / 3));
+
+    // Specular shine
+    painter.setBrush(QColor(255, 255, 255, 180));
+    painter.drawEllipse(cx - r / 3, cy - r / 2, std::max(2, r / 4), std::max(2, r / 4));
+
+    // Iconic Red Ribbon Bow on head
+    int bowSize = std::max(6, r * 3 / 5);
+    int bx = cx + r / 4;
+    int by = cy - r;
+    painter.setBrush(QColor(235, 25, 60));
+    painter.setPen(QPen(QColor(180, 10, 40), 1));
+    painter.drawEllipse(bx - bowSize, by, bowSize * 3 / 4, bowSize / 2);
+    painter.drawEllipse(bx, by, bowSize * 3 / 4, bowSize / 2);
+    painter.setBrush(QColor(255, 210, 220));
+    painter.drawEllipse(bx - bowSize / 5, by + bowSize / 8, bowSize * 2 / 5, bowSize * 2 / 5);
+
+    // Little "P2" banner badge above Ms. Pacman
+    painter.setFont(QFont("Arial", std::max(7, size / 4), QFont::Bold));
+    painter.setBrush(QColor(230, 40, 120));
+    painter.setPen(QPen(QColor(255, 220, 240), 1));
+    int bW = std::max(32, size);
+    int bH = 16;
+    painter.drawRoundedRect(cx - bW / 2, cy - r - bH - 3, bW, bH, 4, 4);
+
+    painter.setPen(Qt::white);
+    painter.drawText(cx - bW / 2, cy - r - bH - 3, bW, bH, Qt::AlignCenter, "P2");
 
     painter.restore();
 }
@@ -1889,7 +2349,12 @@ void MainWindow::drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int r
     // 7. Pacman Avatar on the Current Level
     if (lvl == highestUnlockedLevel) {
         int bob = int(4 * std::sin(elapsedTimer.elapsed() * 0.007f));
-        drawPacmanAvatar(painter, cx, cy - r - 22 + bob, std::max(22, r));
+        if (isMultiplayer) {
+            drawPacmanAvatar(painter, cx - 18, cy - r - 22 + bob, std::max(20, r - 3));
+            drawMsPacmanAvatar(painter, cx + 18, cy - r - 22 - bob, std::max(20, r - 3));
+        } else {
+            drawPacmanAvatar(painter, cx, cy - r - 22 + bob, std::max(22, r));
+        }
     }
 
     painter.restore();
@@ -2034,9 +2499,74 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.drawText(pbx, pby, pbW, pbH, Qt::AlignCenter,
                      QString("⭐ LEVEL %1 / %2").arg(highestUnlockedLevel).arg(TOTAL_LEVELS));
 
-    // 5. Big PLAY Button at the Bottom
+    // 5. Mode Selector: [ 1 PLAYER (SOLO) ] vs [ 2 PLAYERS (CO-OP) ]
+    QRect selRect = getModeSelectorRect();
+    QRect p1Rect = getMode1PlayerRect().adjusted(2, 2, -2, -2);
+    QRect p2Rect = getMode2PlayerRect().adjusted(2, 2, -2, -2);
+    QPoint mousePos = mapFromGlobal(QCursor::pos());
+    bool p1Hover = p1Rect.contains(mousePos);
+    bool p2Hover = p2Rect.contains(mousePos);
+
+    // Pill container shadow & background
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 140));
+    painter.drawRoundedRect(selRect.adjusted(2, 3, 2, 3), selRect.height() / 2, selRect.height() / 2);
+
+    painter.setBrush(QColor(24, 12, 42, 235));
+    painter.setPen(QPen(QColor(130, 80, 180), 2));
+    painter.drawRoundedRect(selRect, selRect.height() / 2, selRect.height() / 2);
+
+    // Option 1: 1 Player (Solo)
+    if (!isMultiplayer) {
+        QLinearGradient g1(p1Rect.left(), p1Rect.top(), p1Rect.left(), p1Rect.bottom());
+        g1.setColorAt(0.0, QColor(255, 220, 50));
+        g1.setColorAt(0.5, QColor(240, 160, 20));
+        g1.setColorAt(1.0, QColor(200, 110, 10));
+        painter.setBrush(g1);
+        painter.setPen(QPen(QColor(255, 250, 200), p1Hover ? 2.5 : 1.5));
+        painter.drawRoundedRect(p1Rect, p1Rect.height() / 2, p1Rect.height() / 2);
+
+        painter.setFont(QFont("Arial", std::max(10, p1Rect.height() * 2 / 5), QFont::Bold));
+        painter.setPen(QColor(40, 20, 5));
+        painter.drawText(p1Rect, Qt::AlignCenter, "🟡 1 PLAYER (SOLO)");
+    } else {
+        if (p1Hover) {
+            painter.setBrush(QColor(70, 40, 100, 180));
+            painter.setPen(QPen(QColor(180, 140, 220), 1));
+            painter.drawRoundedRect(p1Rect, p1Rect.height() / 2, p1Rect.height() / 2);
+        }
+        painter.setFont(QFont("Arial", std::max(10, p1Rect.height() * 2 / 5)));
+        painter.setPen(QColor(220, 200, 140));
+        painter.drawText(p1Rect, Qt::AlignCenter, "1 PLAYER");
+    }
+
+    // Option 2: 2 Players (Co-op)
+    if (isMultiplayer) {
+        QLinearGradient g2(p2Rect.left(), p2Rect.top(), p2Rect.left(), p2Rect.bottom());
+        g2.setColorAt(0.0, QColor(255, 90, 175));
+        g2.setColorAt(0.5, QColor(230, 40, 130));
+        g2.setColorAt(1.0, QColor(175, 15, 90));
+        painter.setBrush(g2);
+        painter.setPen(QPen(QColor(255, 230, 245), p2Hover ? 2.5 : 1.5));
+        painter.drawRoundedRect(p2Rect, p2Rect.height() / 2, p2Rect.height() / 2);
+
+        painter.setFont(QFont("Arial", std::max(10, p2Rect.height() * 2 / 5), QFont::Bold));
+        painter.setPen(Qt::white);
+        painter.drawText(p2Rect, Qt::AlignCenter, "🎀 2 PLAYERS (CO-OP)");
+    } else {
+        if (p2Hover) {
+            painter.setBrush(QColor(90, 30, 80, 180));
+            painter.setPen(QPen(QColor(220, 120, 190), 1));
+            painter.drawRoundedRect(p2Rect, p2Rect.height() / 2, p2Rect.height() / 2);
+        }
+        painter.setFont(QFont("Arial", std::max(10, p2Rect.height() * 2 / 5)));
+        painter.setPen(QColor(230, 160, 200));
+        painter.drawText(p2Rect, Qt::AlignCenter, "2 PLAYERS");
+    }
+
+    // 6. Big PLAY Button at the Bottom
     QRect btnRect = getPlayButtonRect();
-    bool btnHovered = btnRect.contains(mapFromGlobal(QCursor::pos()));
+    bool btnHovered = btnRect.contains(mousePos);
 
     // Drop shadow
     painter.setBrush(QColor(0, 0, 0, 150));
@@ -2059,17 +2589,22 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.drawRoundedRect(btnRect, btnRect.height() / 2, btnRect.height() / 2);
 
     // Button text
-    painter.setFont(QFont("Arial", std::max(13, btnRect.height() * 3 / 8), QFont::Bold));
-    painter.setPen(QColor(40, 20, 5));
-    painter.drawText(btnRect.adjusted(1, 2, 1, 2), Qt::AlignCenter,
-                     QString("▶ PLAY LEVEL %1").arg(selectedMapLevel));
-    painter.setPen(Qt::white);
-    painter.drawText(btnRect, Qt::AlignCenter,
-                     QString("▶ PLAY LEVEL %1").arg(selectedMapLevel));
+    QString playText = isMultiplayer
+        ? QString("▶ PLAY CO-OP (LEVEL %1)").arg(selectedMapLevel)
+        : QString("▶ PLAY SOLO (LEVEL %1)").arg(selectedMapLevel);
 
-    // Hint text below button
+    painter.setFont(QFont("Arial", std::max(12, btnRect.height() * 3 / 8), QFont::Bold));
+    painter.setPen(QColor(40, 20, 5));
+    painter.drawText(btnRect.adjusted(1, 2, 1, 2), Qt::AlignCenter, playText);
+    painter.setPen(Qt::white);
+    painter.drawText(btnRect, Qt::AlignCenter, playText);
+
+    // Subtitle below button
+    QString subText = isMultiplayer
+        ? QString("%1  •  P1: [Arrows] Yellow Pacman  |  P2: [W, A, S, D] Pink Pacman").arg(getLevelTitle(selectedMapLevel))
+        : QString("%1  •  [Arrows] Move Pacman").arg(getLevelTitle(selectedMapLevel));
+
     painter.setFont(QFont("Arial", std::max(8, btnRect.height() / 4)));
-    painter.setPen(QColor(220, 200, 230));
-    painter.drawText(0, btnRect.bottom() + 4, w, 16, Qt::AlignCenter,
-                     getLevelTitle(selectedMapLevel));
+    painter.setPen(QColor(230, 215, 245));
+    painter.drawText(0, btnRect.bottom() + 3, w, 16, Qt::AlignCenter, subText);
 }

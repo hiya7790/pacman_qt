@@ -84,16 +84,33 @@ private:
     void drawCandyCrushMap(QPainter &painter);
     void drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int radius);
     void drawPacmanAvatar(QPainter &painter, int cx, int cy, int size);
+    void drawMsPacmanAvatar(QPainter &painter, int cx, int cy, int size);
     QPoint getLevelNodePos(int lvl, int mapW, int mapH) const;
     QRect getPlayButtonRect() const;
     QRect getMapButtonRect() const;
+    QRect getModeSelectorRect() const;
+    QRect getMode1PlayerRect() const;
+    QRect getMode2PlayerRect() const;
     QString getLevelTitle(int lvl) const;
+
+    // Movement & Level Exit Helpers
+    void movePlayer2();
+    void checkLevelExit();
 
     static constexpr int TOTAL_LEVELS = 8;
     GameScreen currentScreen;
     int highestUnlockedLevel;
     int selectedMapLevel;
     int hoveredMapLevel;
+
+    // Multiplayer Mode
+    bool isMultiplayer;
+    int scoreP1;
+    int scoreP2;
+    bool p1Alive;
+    bool p2Alive;
+    int p1RespawnTicks;
+    int p2RespawnTicks;
 
     static constexpr int ROWS = 21;
     static constexpr int COLS = 21;
@@ -119,13 +136,21 @@ private:
     int transitionDirX, transitionDirY;
     QElapsedTimer transitionTimer;
 
-    // Pacman position (local to currentSector)
+    // Pacman position (local to currentSector) - Player 1
     int pacmanX;
     int pacmanY;
     Direction pacmanDir;
     Direction pacmanNextDir;
     int pacmanMouthAngle;
     bool pacmanMouthOpening;
+
+    // Player 2 (Ms. Pacman) position & animation (Multiplayer)
+    int p2X;
+    int p2Y;
+    Direction p2Dir;
+    Direction p2NextDir;
+    int p2MouthAngle;
+    bool p2MouthOpening;
 
     int score;
     int moveCount;
