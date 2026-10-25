@@ -89,19 +89,19 @@ private:
     QRect getMapButtonRect() const;
     QString getLevelTitle(int lvl) const;
 
-    static const int TOTAL_LEVELS = 8;
+    static constexpr int TOTAL_LEVELS = 8;
     GameScreen currentScreen;
     int highestUnlockedLevel;
     int selectedMapLevel;
     int hoveredMapLevel;
 
-    static const int ROWS = 21;
-    static const int COLS = 21;
-    static const int MAX_SECTORS_X = 3;
-    static const int MAX_SECTORS_Y = 3;
+    static constexpr int ROWS = 21;
+    static constexpr int COLS = 21;
+    static constexpr int MAX_SECTORS_X = 3;
+    static constexpr int MAX_SECTORS_Y = 3;
     static constexpr double VISION_RADIUS = 3.6;
-    static const int FOG_PEEK_DURATION_MS = 1500; // 1.5 seconds temporary peek
-    static const int TRANSITION_DURATION_MS = 240; // 240ms smooth camera slide
+    static constexpr int FOG_PEEK_DURATION_MS = 1500; // 1.5 seconds temporary peek
+    static constexpr int TRANSITION_DURATION_MS = 240; // 240ms smooth camera slide
 
     // Multi-Window Sector Grid
     int sectorCols;
@@ -152,7 +152,7 @@ private:
     // Frightened mode (power-up from eating fruit)
     bool ghostsFrightened;
     int frightenedTicksLeft;
-    static const int FRIGHTEN_DURATION = 25; // ~3.2 seconds at 130ms tick
+    static constexpr int FRIGHTEN_DURATION = 25; // ~3.2 seconds at 130ms tick
 
     // Timer display
     QElapsedTimer elapsedTimer;
@@ -163,7 +163,7 @@ private:
     // Bonus fruit system
     QVector<BonusFruit> activeFruits;
     int fruitSpawnCounter;
-    static const int MAX_FRUITS = 4;
+    static constexpr int MAX_FRUITS = 4;
 
     // Ghost speed control
     int ghostTickCounter;

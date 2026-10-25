@@ -5,6 +5,20 @@
 #include <QRandomGenerator>
 #include <QPoint>
 #include <cmath>
+#include <algorithm>
+#include <utility>
+
+// Definitions for static constexpr members ensuring ODR linkage across all compiler versions
+constexpr int MainWindow::TOTAL_LEVELS;
+constexpr int MainWindow::ROWS;
+constexpr int MainWindow::COLS;
+constexpr int MainWindow::MAX_SECTORS_X;
+constexpr int MainWindow::MAX_SECTORS_Y;
+constexpr double MainWindow::VISION_RADIUS;
+constexpr int MainWindow::FOG_PEEK_DURATION_MS;
+constexpr int MainWindow::TRANSITION_DURATION_MS;
+constexpr int MainWindow::FRIGHTEN_DURATION;
+constexpr int MainWindow::MAX_FRUITS;
 
 MainWindow::MainWindow(QWidget *parent)
     : QWidget(parent)
@@ -165,6 +179,8 @@ void MainWindow::initLevel()
     } else {
         sectorCols = 3; sectorRows = 3; // 3x3 = 9 windows (mega labyrinth!)
     }
+    sectorCols = std::clamp(sectorCols, 1, MAX_SECTORS_X);
+    sectorRows = std::clamp(sectorRows, 1, MAX_SECTORS_Y);
 
     // 1. Generate every sector
     for (int sy = 0; sy < sectorRows; ++sy) {
@@ -225,11 +241,11 @@ void MainWindow::initLevel()
     // 3. Set Start Sector and Exit Sector
     // Start at bottom-left sector
     currentSectorX = 0;
-    currentSectorY = sectorRows - 1;
+    currentSectorY = std::clamp(sectorRows - 1, 0, MAX_SECTORS_Y - 1);
     sectorDiscovered[currentSectorY][currentSectorX] = true;
 
     // Exit at top-right sector (furthest from start!)
-    exitSectorX = sectorCols - 1;
+    exitSectorX = std::clamp(sectorCols - 1, 0, MAX_SECTORS_X - 1);
     exitSectorY = 0;
     exitX = 1;
     exitY = 1;
@@ -907,7 +923,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
     }
 
     // 2. Draw Bonus Fruits in this sector
-    for (const BonusFruit &fruit : activeFruits) {
+    for (const BonusFruit &fruit : std::as_const(activeFruits)) {
         if (fruit.sectorX != sx || fruit.sectorY != sy) continue;
         if (!isCellVisible(sx, sy, fruit.x, fruit.y)) continue;
 
@@ -951,7 +967,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         QColor(255, 160, 50)   // Clyde (Orange)
     };
 
-    for (const Ghost &g : ghosts) {
+    for (const Ghost &g : std::as_const(ghosts)) {
         if (g.sectorX != sx || g.sectorY != sy) continue;
         if (!isCellVisible(sx, sy, g.x, g.y)) continue;
 
