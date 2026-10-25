@@ -155,22 +155,50 @@ void MainWindow::initLevel()
         }
     }
 
-    // 2. Carve seamless inter-window connecting doorways
+    // 2. Carve seamless inter-window connecting doorways with guaranteed clear corridors
     for (int sy = 0; sy < sectorRows; ++sy) {
         for (int sx = 0; sx < sectorCols; ++sx) {
-            // East-West connections at rows 9 and 10
+            // East-West doorway connection at rows 9 and 10
             if (sx < sectorCols - 1) {
-                board[sy][sx][9][COLS - 1] = 0;   board[sy][sx][10][COLS - 1] = 0;
-                board[sy][sx][9][COLS - 2] = 0;   board[sy][sx][10][COLS - 2] = 0;
-                board[sy][sx+1][9][0] = 0;        board[sy][sx+1][10][0] = 0;
-                board[sy][sx+1][9][1] = 0;        board[sy][sx+1][10][1] = 0;
+                // Carve a clear 2-tile wide highway from center room (col 9) to East border in sx
+                for (int c = 9; c < COLS; ++c) {
+                    board[sy][sx][9][c] = 0;
+                    board[sy][sx][10][c] = 0;
+                    if (c > 11 && c < COLS - 1) {
+                        board[sy][sx][9][c] = 2; // Breadcrumb dots
+                        board[sy][sx][10][c] = 2;
+                    }
+                }
+                // Carve a clear 2-tile wide highway from West border to center room (col 11) in sx+1
+                for (int c = 0; c <= 11; ++c) {
+                    board[sy][sx+1][9][c] = 0;
+                    board[sy][sx+1][10][c] = 0;
+                    if (c > 0 && c < 9) {
+                        board[sy][sx+1][9][c] = 2; // Breadcrumb dots
+                        board[sy][sx+1][10][c] = 2;
+                    }
+                }
             }
-            // North-South connections at cols 9 and 10
+            // North-South doorway connection at cols 9 and 10
             if (sy < sectorRows - 1) {
-                board[sy][sx][ROWS - 1][9] = 0;   board[sy][sx][ROWS - 1][10] = 0;
-                board[sy][sx][ROWS - 2][9] = 0;   board[sy][sx][ROWS - 2][10] = 0;
-                board[sy+1][sx][0][9] = 0;        board[sy+1][sx][0][10] = 0;
-                board[sy+1][sx][1][9] = 0;        board[sy+1][sx][1][10] = 0;
+                // Carve from center room (row 9) to South border in sy
+                for (int r = 9; r < ROWS; ++r) {
+                    board[sy][sx][r][9] = 0;
+                    board[sy][sx][r][10] = 0;
+                    if (r > 11 && r < ROWS - 1) {
+                        board[sy][sx][r][9] = 2;
+                        board[sy][sx][r][10] = 2;
+                    }
+                }
+                // Carve from North border to center room (row 11) in sy+1
+                for (int r = 0; r <= 11; ++r) {
+                    board[sy+1][sx][r][9] = 0;
+                    board[sy+1][sx][r][10] = 0;
+                    if (r > 0 && r < 9) {
+                        board[sy+1][sx][r][9] = 2;
+                        board[sy+1][sx][r][10] = 2;
+                    }
+                }
             }
         }
     }
@@ -188,10 +216,20 @@ void MainWindow::initLevel()
     exitY = 1;
     board[exitSectorY][exitSectorX][exitY][exitX] = 0;
 
-    // 4. Place Pacman in the bottom corridor of start sector
+    // 4. Place Pacman in the start sector with guaranteed clear avenue up to center room
     pacmanX = 10;
     pacmanY = ROWS - 2;
+    for (int r = 11; r <= ROWS - 2; ++r) {
+        board[currentSectorY][currentSectorX][r][9] = 0;
+        board[currentSectorY][currentSectorX][r][10] = 0;
+        if (r > 11 && r < ROWS - 2) {
+            board[currentSectorY][currentSectorX][r][9] = 2;
+            board[currentSectorY][currentSectorX][r][10] = 2;
+        }
+    }
     board[currentSectorY][currentSectorX][pacmanY][pacmanX] = 0;
+    board[currentSectorY][currentSectorX][pacmanY][pacmanX - 1] = 0;
+    board[currentSectorY][currentSectorX][pacmanY][pacmanX + 1] = 0;
 
     pacmanDir = LEFT;
     pacmanNextDir = LEFT;
@@ -774,74 +812,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         }
     }
 
-    // 2. Doorway indicators to adjacent windows
-    // East doorway
-    if (sx < sectorCols - 1 && board[sy][sx][10][COLS - 1] == 0) {
-        int ex = originX + (COLS - 1) * cellSize;
-        int ey = originY + 10 * cellSize;
-        painter.setPen(QColor(0, 255, 220, 180));
-        painter.setFont(QFont("Arial", std::max(8, cellSize / 3), QFont::Bold));
-        painter.drawText(ex + 2, ey + cellSize * 2 / 3, "▶");
-    }
-    // West doorway
-    if (sx > 0 && board[sy][sx][10][0] == 0) {
-        int ex = originX;
-        int ey = originY + 10 * cellSize;
-        painter.setPen(QColor(0, 255, 220, 180));
-        painter.setFont(QFont("Arial", std::max(8, cellSize / 3), QFont::Bold));
-        painter.drawText(ex + 2, ey + cellSize * 2 / 3, "◀");
-    }
-    // South doorway
-    if (sy < sectorRows - 1 && board[sy][sx][ROWS - 1][10] == 0) {
-        int ex = originX + 10 * cellSize;
-        int ey = originY + (ROWS - 1) * cellSize;
-        painter.setPen(QColor(0, 255, 220, 180));
-        painter.setFont(QFont("Arial", std::max(8, cellSize / 3), QFont::Bold));
-        painter.drawText(ex + 4, ey + cellSize * 2 / 3, "▼");
-    }
-    // North doorway
-    if (sy > 0 && board[sy][sx][0][10] == 0) {
-        int ex = originX + 10 * cellSize;
-        int ey = originY;
-        painter.setPen(QColor(0, 255, 220, 180));
-        painter.setFont(QFont("Arial", std::max(8, cellSize / 3), QFont::Bold));
-        painter.drawText(ex + 4, ey + cellSize * 2 / 3, "▲");
-    }
-
-    // 3. Draw EXIT Portal (if in this sector)
-    if (sx == exitSectorX && sy == exitSectorY) {
-        bool exitVisible = isCellVisible(sx, sy, exitX, exitY);
-        bool exitExplored = explored[sy][sx][exitY][exitX];
-
-        if (!fogOfWarEnabled || exitVisible || exitExplored) {
-            int ex = originX + exitX * cellSize;
-            int ey = originY + exitY * cellSize;
-
-            if (exitVisible) {
-                painter.setBrush(QColor(0, 255, 100, 50));
-                painter.setPen(QPen(QColor(0, 255, 120, 180), std::max(2, cellSize / 15)));
-                painter.drawRoundedRect(ex + 2, ey + 2, cellSize - 4, cellSize - 4, 6, 6);
-
-                painter.setBrush(QColor(0, 255, 100, 120));
-                painter.setPen(Qt::NoPen);
-                painter.drawEllipse(ex + 5, ey + 5, cellSize - 10, cellSize - 10);
-
-                painter.setPen(QColor(255, 255, 255));
-                painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
-                painter.drawText(ex + 2, ey + cellSize/2 + cellSize/8, "EXIT");
-            } else {
-                painter.setBrush(QColor(0, 120, 50, 30));
-                painter.setPen(QPen(QColor(0, 140, 60, 90), 1));
-                painter.drawRoundedRect(ex + 2, ey + 2, cellSize - 4, cellSize - 4, 6, 6);
-
-                painter.setPen(QColor(140, 200, 140, 140));
-                painter.setFont(QFont("Arial", std::max(6, cellSize / 5), QFont::Bold));
-                painter.drawText(ex + 3, ey + cellSize/2 + cellSize/8, "EXIT");
-            }
-        }
-    }
-
-    // 4. Draw Bonus Fruits in this sector
+    // 2. Draw Bonus Fruits in this sector
     for (const BonusFruit &fruit : activeFruits) {
         if (fruit.sectorX != sx || fruit.sectorY != sy) continue;
         if (!isCellVisible(sx, sy, fruit.x, fruit.y)) continue;
@@ -942,7 +913,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         }
     }
 
-    // 7. Lantern Light Spotlight (only for current sector)
+    // 5. Lantern Light Spotlight (only for current sector)
     if (isCurrent && fogOfWarEnabled) {
         int pxCenter = originX + pacmanX * cellSize + cellSize / 2;
         int pyCenter = originY + pacmanY * cellSize + cellSize / 2;
@@ -954,6 +925,159 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         lantern.setColorAt(1.0, QColor(0, 0, 0, 220));
 
         painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern);
+    }
+
+    // 6. Glowing Sci-Fi Gateway Portals (Cuts through darkness & visible across fog!)
+    float pulseTime = elapsedTimer.elapsed() * 0.007f;
+    float pulseVal = (std::sin(pulseTime) + 1.0f) * 0.5f;
+    int gateAlpha = 190 + int(65 * pulseVal);
+
+    // East Gateway (Connects to sector sx + 1)
+    if (sx < sectorCols - 1 && board[sy][sx][9][COLS - 1] == 0) {
+        int gx = originX + (COLS - 1) * cellSize;
+        int gy = originY + 9 * cellSize;
+        int gw = cellSize;
+        int gh = 2 * cellSize;
+
+        // Ambient cyan aura radiating into corridor
+        QRadialGradient aura(gx + gw, gy + gh / 2, cellSize * 2.8);
+        aura.setColorAt(0.0, QColor(0, 240, 255, 110));
+        aura.setColorAt(0.4, QColor(0, 180, 255, 40));
+        aura.setColorAt(1.0, QColor(0, 0, 0, 0));
+        painter.fillRect(gx - cellSize * 2, gy - cellSize / 2, cellSize * 3, gh + cellSize, aura);
+
+        // Pulsing neon portal border
+        painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
+        painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
+        painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
+
+        // Animated Chevrons
+        painter.setPen(QColor(255, 255, 255, gateAlpha));
+        painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
+        painter.drawText(gx + cellSize * 0.12, gy + cellSize * 0.72, "▶");
+        painter.drawText(gx + cellSize * 0.12, gy + cellSize * 1.62, "▶");
+
+        // Glowing badge label
+        painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+        painter.setPen(QColor(0, 255, 240));
+        painter.drawText(gx - cellSize * 3 - 6, gy + cellSize * 1.1, QString("WINDOW %1 ▶").arg(sx + 2));
+    }
+
+    // West Gateway (Connects to sector sx - 1)
+    if (sx > 0 && board[sy][sx][9][0] == 0) {
+        int gx = originX;
+        int gy = originY + 9 * cellSize;
+        int gw = cellSize;
+        int gh = 2 * cellSize;
+
+        QRadialGradient aura(gx, gy + gh / 2, cellSize * 2.8);
+        aura.setColorAt(0.0, QColor(0, 240, 255, 110));
+        aura.setColorAt(0.4, QColor(0, 180, 255, 40));
+        aura.setColorAt(1.0, QColor(0, 0, 0, 0));
+        painter.fillRect(gx, gy - cellSize / 2, cellSize * 3, gh + cellSize, aura);
+
+        painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
+        painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
+        painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
+
+        painter.setPen(QColor(255, 255, 255, gateAlpha));
+        painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
+        painter.drawText(gx + cellSize * 0.12, gy + cellSize * 0.72, "◀");
+        painter.drawText(gx + cellSize * 0.12, gy + cellSize * 1.62, "◀");
+
+        painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+        painter.setPen(QColor(0, 255, 240));
+        painter.drawText(gx + gw + 4, gy + cellSize * 1.1, QString("◀ WINDOW %1").arg(sx));
+    }
+
+    // South Gateway (Connects to sector sy + 1)
+    if (sy < sectorRows - 1 && board[sy][sx][ROWS - 1][9] == 0) {
+        int gx = originX + 9 * cellSize;
+        int gy = originY + (ROWS - 1) * cellSize;
+        int gw = 2 * cellSize;
+        int gh = cellSize;
+
+        QRadialGradient aura(gx + gw / 2, gy + gh, cellSize * 2.8);
+        aura.setColorAt(0.0, QColor(0, 240, 255, 110));
+        aura.setColorAt(0.4, QColor(0, 180, 255, 40));
+        aura.setColorAt(1.0, QColor(0, 0, 0, 0));
+        painter.fillRect(gx - cellSize / 2, gy - cellSize * 2, gw + cellSize, cellSize * 3, aura);
+
+        painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
+        painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
+        painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
+
+        painter.setPen(QColor(255, 255, 255, gateAlpha));
+        painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
+        painter.drawText(gx + cellSize * 0.35, gy + cellSize * 0.75, "▼");
+        painter.drawText(gx + cellSize * 1.35, gy + cellSize * 0.75, "▼");
+
+        painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+        painter.setPen(QColor(0, 255, 240));
+        painter.drawText(gx - 4, gy - 6, QString("▼ WINDOW (ROW %1) ▼").arg(sy + 2));
+    }
+
+    // North Gateway (Connects to sector sy - 1)
+    if (sy > 0 && board[sy][sx][0][9] == 0) {
+        int gx = originX + 9 * cellSize;
+        int gy = originY;
+        int gw = 2 * cellSize;
+        int gh = cellSize;
+
+        QRadialGradient aura(gx + gw / 2, gy, cellSize * 2.8);
+        aura.setColorAt(0.0, QColor(0, 240, 255, 110));
+        aura.setColorAt(0.4, QColor(0, 180, 255, 40));
+        aura.setColorAt(1.0, QColor(0, 0, 0, 0));
+        painter.fillRect(gx - cellSize / 2, gy, gw + cellSize, cellSize * 3, aura);
+
+        painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
+        painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
+        painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
+
+        painter.setPen(QColor(255, 255, 255, gateAlpha));
+        painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
+        painter.drawText(gx + cellSize * 0.35, gy + cellSize * 0.75, "▲");
+        painter.drawText(gx + cellSize * 1.35, gy + cellSize * 0.75, "▲");
+
+        painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+        painter.setPen(QColor(0, 255, 240));
+        painter.drawText(gx - 4, gy + gh + 14, QString("▲ WINDOW (ROW %1) ▲").arg(sy));
+    }
+
+    // 7. Glowing EXIT Portal (Visible beacon shining through fog)
+    if (sx == exitSectorX && sy == exitSectorY) {
+        bool exitVisible = isCellVisible(sx, sy, exitX, exitY);
+        bool exitExplored = explored[sy][sx][exitY][exitX];
+
+        if (!fogOfWarEnabled || exitVisible || exitExplored) {
+            int ex = originX + exitX * cellSize;
+            int ey = originY + exitY * cellSize;
+
+            float exitPulse = (std::sin(pulseTime * 1.2f) + 1.0f) * 0.5f;
+
+            // Emerald aura
+            QRadialGradient exitAura(ex + cellSize / 2, ey + cellSize / 2, cellSize * 2.2);
+            exitAura.setColorAt(0.0, QColor(0, 255, 120, 130));
+            exitAura.setColorAt(0.5, QColor(0, 200, 80, 40));
+            exitAura.setColorAt(1.0, QColor(0, 0, 0, 0));
+            painter.fillRect(ex - cellSize, ey - cellSize, cellSize * 3, cellSize * 3, exitAura);
+
+            // Glowing portal box
+            painter.setBrush(QColor(0, 255, 120, 70 + int(50 * exitPulse)));
+            painter.setPen(QPen(QColor(0, 255, 140, 220), std::max(2, cellSize / 10)));
+            painter.drawRoundedRect(ex + 2, ey + 2, cellSize - 4, cellSize - 4, 6, 6);
+
+            // Inner core
+            painter.setBrush(QColor(200, 255, 220, 180 + int(60 * exitPulse)));
+            painter.setPen(Qt::NoPen);
+            int coreSize = std::max(6, cellSize / 2);
+            painter.drawEllipse(ex + cellSize/2 - coreSize/2, ey + cellSize/2 - coreSize/2, coreSize, coreSize);
+
+            // Bold white text
+            painter.setPen(QColor(255, 255, 255));
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+            painter.drawText(ex, ey + cellSize * 0.72, cellSize, cellSize * 0.28, Qt::AlignCenter, "EXIT");
+        }
     }
 }
 
@@ -1015,7 +1139,7 @@ void MainWindow::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
-    int hudHeight = 58;
+    int hudHeight = 72;
     int availW = width();
     int availH = height() - hudHeight;
 
@@ -1119,12 +1243,24 @@ void MainWindow::paintEvent(QPaintEvent *)
                     painter.setPen(Qt::NoPen);
                     painter.drawEllipse(rx + mapBoxSize/2 - 2, ry + mapBoxSize/2 - 2, 4, 4);
                 }
+
+                // Inter-window doorway connectors
+                if (sx < sectorCols - 1) {
+                    painter.setPen(QPen(QColor(0, 220, 255, 180), 2));
+                    int cy = ry + mapBoxSize / 2;
+                    painter.drawLine(rx + mapBoxSize, cy, rx + mapBoxSize + mapGap, cy);
+                }
+                if (sy < sectorRows - 1) {
+                    painter.setPen(QPen(QColor(0, 220, 255, 180), 2));
+                    int cx = rx + mapBoxSize / 2;
+                    painter.drawLine(cx, ry + mapBoxSize, cx, ry + mapBoxSize + mapGap);
+                }
             }
         }
     }
 
     // ========================================================
-    // Bottom Fullscreen HUD Bar
+    // Bottom Fullscreen HUD Bar (3-Line Command Center)
     // ========================================================
     int hudY = height() - hudHeight;
     painter.fillRect(0, hudY, width(), hudHeight, QColor(14, 16, 26));
@@ -1134,28 +1270,28 @@ void MainWindow::paintEvent(QPaintEvent *)
     int baseFont1 = std::max(11, width() / 110);
     int baseFont2 = std::max(9, width() / 135);
 
-    // Line 1: Stats & Window location
+    // Line 1: Stats & Window location (hudY + 20)
     painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
     painter.setPen(Qt::white);
-    painter.drawText(20, hudY + 22, QString("SCORE: %1").arg(score));
+    painter.drawText(20, hudY + 20, QString("SCORE: %1").arg(score));
 
     painter.setPen(QColor(0, 230, 160));
-    painter.drawText(width() * 0.16, hudY + 22, QString("LEVEL: %1").arg(currentLevel));
+    painter.drawText(width() * 0.16, hudY + 20, QString("LEVEL: %1").arg(currentLevel));
 
     painter.setPen(QColor(0, 210, 255));
-    painter.drawText(width() * 0.28, hudY + 22,
+    painter.drawText(width() * 0.28, hudY + 20,
                      QString("WINDOW: [%1, %2] of [%3x%4]")
                      .arg(currentSectorX + 1).arg(currentSectorY + 1)
                      .arg(sectorCols).arg(sectorRows));
 
     painter.setPen(QColor(180, 200, 255));
-    painter.drawText(width() * 0.48, hudY + 22, QString("MOVES: %1").arg(moveCount));
+    painter.drawText(width() * 0.48, hudY + 20, QString("MOVES: %1").arg(moveCount));
 
     qint64 elapsedSec = elapsedTimer.elapsed() / 1000;
     int mins = elapsedSec / 60;
     int secs = elapsedSec % 60;
     painter.setPen(QColor(255, 200, 100));
-    painter.drawText(width() * 0.60, hudY + 22, QString("TIME: %1:%2")
+    painter.drawText(width() * 0.60, hudY + 20, QString("TIME: %1:%2")
                      .arg(mins, 2, 10, QChar('0'))
                      .arg(secs, 2, 10, QChar('0')));
 
@@ -1163,25 +1299,51 @@ void MainWindow::paintEvent(QPaintEvent *)
         int msLeft = std::max(0, FOG_PEEK_DURATION_MS - (int)fogPeekTimer.elapsed());
         double secLeft = msLeft / 1000.0;
         painter.setPen(QColor(255, 215, 0));
-        painter.drawText(width() * 0.74, hudY + 22, QString("[PEEK: %1s ☀️]").arg(secLeft, 0, 'f', 1));
+        painter.drawText(width() * 0.74, hudY + 20, QString("[PEEK: %1s ☀️]").arg(secLeft, 0, 'f', 1));
     } else if (fogOfWarEnabled) {
         painter.setPen(QColor(120, 220, 255));
-        painter.drawText(width() * 0.74, hudY + 22, "[FOG: ON 🌑 (F)]");
+        painter.drawText(width() * 0.74, hudY + 20, "[FOG: ON 🌑 (F)]");
     } else {
         painter.setPen(QColor(150, 150, 160));
-        painter.drawText(width() * 0.74, hudY + 22, "[FOG: OFF ☀️]");
+        painter.drawText(width() * 0.74, hudY + 20, "[FOG: OFF ☀️]");
     }
 
     if (ghostsFrightened) {
         painter.setPen(QColor(255, 100, 140));
-        painter.drawText(width() * 0.88, hudY + 22, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
+        painter.drawText(width() * 0.88, hudY + 20, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
     }
 
-    // Line 2: Controls
+    // Line 2: Prominent Mission Objective Guidance (hudY + 42)
+    int discCount = 0;
+    for (int sy = 0; sy < sectorRows; ++sy) {
+        for (int sx = 0; sx < sectorCols; ++sx) {
+            if (sectorDiscovered[sy][sx]) discCount++;
+        }
+    }
+
+    QString objectiveText;
+    if (currentSectorX == exitSectorX && currentSectorY == exitSectorY) {
+        objectiveText = QString("🏁 OBJECTIVE: Find and enter the green [EXIT] portal in this window to complete Level %1!").arg(currentLevel);
+        painter.setPen(QColor(60, 255, 140));
+    } else {
+        QString dirStr;
+        if (currentSectorX < exitSectorX) dirStr = "RIGHT wall [▶ GATEWAY]";
+        else if (currentSectorX > exitSectorX) dirStr = "LEFT wall [◀ GATEWAY]";
+        else if (currentSectorY < exitSectorY) dirStr = "BOTTOM wall [▼ GATEWAY]";
+        else if (currentSectorY > exitSectorY) dirStr = "TOP wall [▲ GATEWAY]";
+
+        objectiveText = QString("🚪 OBJECTIVE: Walk into the glowing cyan %1 to transition into the next window! (%2/%3 windows discovered)")
+            .arg(dirStr).arg(discCount).arg(sectorCols * sectorRows);
+        painter.setPen(QColor(255, 220, 80));
+    }
+    painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
+    painter.drawText(20, hudY + 42, objectiveText);
+
+    // Line 3: Controls (hudY + 62)
     painter.setFont(QFont("Arial", baseFont2));
-    painter.setPen(QColor(130, 150, 180));
-    painter.drawText(20, hudY + 45,
-        "[Arrows] Move beyond edge to reveal next window!  |  [F] 1.5s Peek  |  [F11] Fullscreen  |  [R] Reset  |  Reach EXIT to Win!");
+    painter.setPen(QColor(140, 160, 190));
+    painter.drawText(20, hudY + 62,
+        "[Arrows] Move Pacman  |  [F] 1.5s Fog Peek  |  [F11] Fullscreen  |  [R] Reset  |  Follow glowing Gateways to next windows!");
 
     // Game Over / Level Complete Banner
     if (gameOver) {
