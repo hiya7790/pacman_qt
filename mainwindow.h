@@ -3,9 +3,15 @@
 
 #include <QWidget>
 #include <QKeyEvent>
+#include <QMouseEvent>
 #include <QTimer>
 #include <QVector>
 #include <QElapsedTimer>
+
+enum GameScreen {
+    SCREEN_HOME_MAP,
+    SCREEN_PLAYING
+};
 
 enum Direction {
     UP,
@@ -48,6 +54,8 @@ public:
 protected:
     void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
+    void mousePressEvent(QMouseEvent *event) override;
+    void mouseMoveEvent(QMouseEvent *event) override;
 
 private slots:
     void gameLoop();
@@ -55,6 +63,7 @@ private slots:
 private:
     void initGame();
     void initLevel();
+    void startLevel(int lvl);
     void generateSectorMaze(int sx, int sy);
     void movePacman();
     void moveGhosts();
@@ -70,6 +79,21 @@ private:
     void drawApple(QPainter &painter, int cx, int cy, int s);
     void drawStrawberry(QPainter &painter, int cx, int cy, int s);
     void drawOrangeFruit(QPainter &painter, int cx, int cy, int s);
+
+    // Candy Crush Saga Map Home Page
+    void drawCandyCrushMap(QPainter &painter);
+    void drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int radius);
+    void drawPacmanAvatar(QPainter &painter, int cx, int cy, int size);
+    QPoint getLevelNodePos(int lvl, int mapW, int mapH) const;
+    QRect getPlayButtonRect() const;
+    QRect getMapButtonRect() const;
+    QString getLevelTitle(int lvl) const;
+
+    static const int TOTAL_LEVELS = 8;
+    GameScreen currentScreen;
+    int highestUnlockedLevel;
+    int selectedMapLevel;
+    int hoveredMapLevel;
 
     static const int ROWS = 21;
     static const int COLS = 21;

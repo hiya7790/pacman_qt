@@ -11,11 +11,19 @@ MainWindow::MainWindow(QWidget *parent)
 {
     setMinimumSize(700, 750);
     setStyleSheet("background-color: black;");
-    setWindowTitle("Pacman: Multi-Window Maze Escape (Fullscreen)");
+    setWindowTitle("Pacman: Labyrinth Saga");
+    setMouseTracking(true);
+
+    currentScreen = SCREEN_HOME_MAP;
+    highestUnlockedLevel = 1;
+    selectedMapLevel = 1;
+    hoveredMapLevel = 0;
+    currentLevel = 1;
 
     fogOfWarEnabled = true;
     fogPeekActive = false;
     isTransitioning = false;
+    newSectorJustDiscovered = false;
 
     initGame();
 
@@ -33,12 +41,21 @@ MainWindow::~MainWindow()
 void MainWindow::initGame()
 {
     score = 0;
-    currentLevel = 1;
     moveCount = 0;
     gameOver = false;
     levelComplete = false;
+    currentScreen = SCREEN_HOME_MAP;
+}
 
+void MainWindow::startLevel(int lvl)
+{
+    currentLevel = std::max(1, std::min(TOTAL_LEVELS, lvl));
+    selectedMapLevel = currentLevel;
+    currentScreen = SCREEN_PLAYING;
+    gameOver = false;
+    levelComplete = false;
     initLevel();
+    update();
 }
 
 void MainWindow::generateSectorMaze(int sx, int sy)
@@ -143,6 +160,8 @@ void MainWindow::initLevel()
         sectorCols = 2; sectorRows = 2; // 2x2 = 4 windows
     } else if (currentLevel == 3) {
         sectorCols = 3; sectorRows = 2; // 3x2 = 6 windows
+    } else if (currentLevel == 4) {
+        sectorCols = 2; sectorRows = 3; // 2x3 = 6 vertical windows
     } else {
         sectorCols = 3; sectorRows = 3; // 3x3 = 9 windows (mega labyrinth!)
     }
@@ -259,10 +278,18 @@ void MainWindow::initLevel()
         ghosts.push_back({midSx, midSy, 10, 10, DOWN, 3}); // Clyde (Orange)
     }
 
+    // Extra ghosts for higher levels (Level 6+)
+    if (currentLevel >= 6) {
+        ghosts.push_back({0, 0, 10, 10, UP, 0});
+    }
+    if (currentLevel >= 7) {
+        ghosts.push_back({exitSectorX, exitSectorY, 9, 9, DOWN, 1});
+    }
+
     ghostsFrightened = false;
     frightenedTicksLeft = 0;
 
-    ghostMoveEveryN = std::max(1, 4 - currentLevel);
+    ghostMoveEveryN = std::max(1, 4 - currentLevel / 2);
     ghostTickCounter = 0;
 
     activeFruits.clear();
@@ -314,20 +341,66 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
+    // Home Map Key Handling
+    if (currentScreen == SCREEN_HOME_MAP) {
+        if (event->key() == Qt::Key_Space || event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+            startLevel(selectedMapLevel);
+            return;
+        }
+        if (event->key() == Qt::Key_Up || event->key() == Qt::Key_Right) {
+            if (selectedMapLevel < highestUnlockedLevel) {
+                selectedMapLevel++;
+                update();
+            }
+            return;
+        }
+        if (event->key() == Qt::Key_Down || event->key() == Qt::Key_Left) {
+            if (selectedMapLevel > 1) {
+                selectedMapLevel--;
+                update();
+            }
+            return;
+        }
+        return;
+    }
+
+    // In-Game Game Over (Retry from that particular level!)
     if (gameOver) {
         if (event->key() == Qt::Key_Space || event->key() == Qt::Key_R) {
-            initGame();
+            initLevel();
+            gameOver = false;
+            update();
+        } else if (event->key() == Qt::Key_M) {
+            currentScreen = SCREEN_HOME_MAP;
+            selectedMapLevel = currentLevel;
             update();
         }
         return;
     }
 
+    // In-Game Level Complete
     if (levelComplete) {
         if (event->key() == Qt::Key_Space) {
             currentLevel++;
+            if (currentLevel > TOTAL_LEVELS) currentLevel = TOTAL_LEVELS;
+            if (currentLevel > highestUnlockedLevel) highestUnlockedLevel = currentLevel;
+            selectedMapLevel = currentLevel;
             initLevel();
+            levelComplete = false;
+            update();
+        } else if (event->key() == Qt::Key_M) {
+            currentScreen = SCREEN_HOME_MAP;
+            selectedMapLevel = std::min(TOTAL_LEVELS, currentLevel + 1);
             update();
         }
+        return;
+    }
+
+    // Return to Saga Map with [M]
+    if (event->key() == Qt::Key_M) {
+        currentScreen = SCREEN_HOME_MAP;
+        selectedMapLevel = currentLevel;
+        update();
         return;
     }
 
@@ -354,7 +427,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         case Qt::Key_Down:  attemptDir = DOWN; break;
         case Qt::Key_Left:  attemptDir = LEFT; break;
         case Qt::Key_Right: attemptDir = RIGHT; break;
-        case Qt::Key_R:     initGame(); update(); return;
+        case Qt::Key_R:     initLevel(); update(); return; // Restart current level!
         default: QWidget::keyPressEvent(event); return;
     }
 
@@ -370,6 +443,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             pacmanX == exitX && pacmanY == exitY) {
             levelComplete = true;
             score += 500 * (sectorCols * sectorRows);
+            if (currentLevel >= highestUnlockedLevel) {
+                highestUnlockedLevel = std::min(TOTAL_LEVELS, currentLevel + 1);
+            }
+            selectedMapLevel = std::min(TOTAL_LEVELS, currentLevel + 1);
         }
 
         update();
@@ -1112,7 +1189,15 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
 void MainWindow::gameLoop()
 {
-    if (gameOver || levelComplete) return;
+    if (currentScreen == SCREEN_HOME_MAP) {
+        update();
+        return;
+    }
+
+    if (gameOver || levelComplete) {
+        update();
+        return;
+    }
 
     // Check 1.5-second fog peek timer
     if (fogPeekActive) {
@@ -1164,6 +1249,11 @@ void MainWindow::paintEvent(QPaintEvent *)
     QPainter painter(this);
     painter.setRenderHint(QPainter::Antialiasing);
 
+    if (currentScreen == SCREEN_HOME_MAP) {
+        drawCandyCrushMap(painter);
+        return;
+    }
+
     int hudHeight = 72;
     int availW = width();
     int availH = height() - hudHeight;
@@ -1178,6 +1268,17 @@ void MainWindow::paintEvent(QPaintEvent *)
 
     // Fill background letterbox
     painter.fillRect(rect(), QColor(5, 5, 8));
+
+    // Top-Left Saga Map Button
+    QRect mapBtn = getMapButtonRect();
+    bool mapBtnHovered = mapBtn.contains(mapFromGlobal(QCursor::pos()));
+    painter.setBrush(mapBtnHovered ? QColor(25, 45, 90, 230) : QColor(14, 25, 55, 200));
+    painter.setPen(QPen(mapBtnHovered ? QColor(0, 255, 240) : QColor(0, 180, 255), 1.5));
+    painter.drawRoundedRect(mapBtn, 6, 6);
+
+    painter.setFont(QFont("Arial", 10, QFont::Bold));
+    painter.setPen(mapBtnHovered ? Qt::white : QColor(220, 240, 255));
+    painter.drawText(mapBtn, Qt::AlignCenter, "🗺️ SAGA MAP [M]");
 
     // Render Sector(s)
     if (!isTransitioning) {
@@ -1431,23 +1532,528 @@ void MainWindow::paintEvent(QPaintEvent *)
     painter.setFont(QFont("Arial", baseFont2));
     painter.setPen(QColor(140, 160, 190));
     painter.drawText(20, hudY + 62,
-        "[Arrows] Move Pacman  |  [F] 1.5s Fog Peek  |  [F11] Fullscreen  |  [R] Reset  |  Explore the unfolding labyrinth to find the EXIT!");
+        "[Arrows] Move Pacman  |  [F] 1.5s Fog Peek  |  [M] Saga Map  |  [R] Retry Level  |  [F11] Fullscreen");
 
     // Game Over / Level Complete Banner
     if (gameOver) {
-        painter.fillRect(0, height() / 2 - 40, width(), 80, QColor(0, 0, 0, 225));
+        painter.fillRect(0, height() / 2 - 45, width(), 95, QColor(0, 0, 0, 235));
         painter.setPen(QColor(255, 60, 60));
-        painter.setFont(QFont("Arial", std::max(18, width() / 55), QFont::Bold));
-        painter.drawText(rect(), Qt::AlignCenter, "GAME OVER! Press [R] to Restart");
-    } else if (levelComplete) {
-        painter.fillRect(0, height() / 2 - 45, width(), 90, QColor(0, 0, 0, 225));
-        painter.setPen(QColor(60, 255, 120));
-        painter.setFont(QFont("Arial", std::max(16, width() / 60), QFont::Bold));
-        QString levelMsg = QString("LEVEL %1 COMPLETE! Labyrinth Escaped!").arg(currentLevel);
-        painter.drawText(0, height() / 2 - 12, width(), 25, Qt::AlignCenter, levelMsg);
+        painter.setFont(QFont("Arial", std::max(18, width() / 50), QFont::Bold));
+        painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter,
+                         QString("GAME OVER! (Level %1)").arg(currentLevel));
+
         painter.setPen(QColor(255, 220, 100));
-        painter.setFont(QFont("Arial", std::max(12, width() / 75)));
+        painter.setFont(QFont("Arial", std::max(12, width() / 70)));
         painter.drawText(0, height() / 2 + 16, width(), 25, Qt::AlignCenter,
-                         "Press [Space] for Next Level (Uncharted Depths Await...)");
+                         QString("Press [R] or [Space] to Retry Level %1  |  Press [M] for Saga Map").arg(currentLevel));
+    } else if (levelComplete) {
+        painter.fillRect(0, height() / 2 - 50, width(), 100, QColor(0, 0, 0, 235));
+        painter.setPen(QColor(60, 255, 120));
+        painter.setFont(QFont("Arial", std::max(16, width() / 55), QFont::Bold));
+        QString levelMsg = QString("LEVEL %1 COMPLETE! Labyrinth Escaped!").arg(currentLevel);
+        painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter, levelMsg);
+
+        painter.setPen(QColor(255, 220, 100));
+        painter.setFont(QFont("Arial", std::max(12, width() / 70)));
+        painter.drawText(0, height() / 2 + 16, width(), 25, Qt::AlignCenter,
+                         "Press [Space] for Next Level  |  Press [M] for Saga Map");
     }
+}
+
+// ========================================================
+// Mouse Interaction & Candy Crush Saga Level Map
+// ========================================================
+
+QString MainWindow::getLevelTitle(int lvl) const
+{
+    switch (lvl) {
+        case 1: return "Level 1: Dual Chamber (2 Windows)";
+        case 2: return "Level 2: Quad Labyrinth (4 Windows)";
+        case 3: return "Level 3: Twin Hallways (6 Windows)";
+        case 4: return "Level 4: Vertical Depths (6 Windows)";
+        case 5: return "Level 5: Nine Realms (9 Windows)";
+        case 6: return "Level 6: Ghost Citadel (9 Windows)";
+        case 7: return "Level 7: Nightmare Labyrinth (9 Windows)";
+        case 8: return "Level 8: The Grand Master Vault (9 Windows)";
+        default: return QString("Level %1").arg(lvl);
+    }
+}
+
+QRect MainWindow::getPlayButtonRect() const
+{
+    int btnW = std::min(300, int(width() * 0.45));
+    int btnH = 52;
+    int btnX = (width() - btnW) / 2;
+    int btnY = height() - btnH - 18;
+    return QRect(btnX, btnY, btnW, btnH);
+}
+
+QRect MainWindow::getMapButtonRect() const
+{
+    return QRect(16, 14, 115, 32);
+}
+
+QPoint MainWindow::getLevelNodePos(int lvl, int mapW, int mapH) const
+{
+    static const double coords[8][2] = {
+        {0.48, 0.81}, // Level 1 (bottom center)
+        {0.68, 0.72}, // Level 2 (lower right)
+        {0.72, 0.58}, // Level 3 (mid right)
+        {0.50, 0.50}, // Level 4 (center)
+        {0.28, 0.42}, // Level 5 (mid left)
+        {0.32, 0.28}, // Level 6 (upper left)
+        {0.52, 0.20}, // Level 7 (upper center)
+        {0.65, 0.12}  // Level 8 (top crown peak)
+    };
+    int idx = std::max(1, std::min(8, lvl)) - 1;
+    return QPoint(int(coords[idx][0] * mapW), int(coords[idx][1] * mapH));
+}
+
+void MainWindow::mousePressEvent(QMouseEvent *event)
+{
+    if (currentScreen == SCREEN_HOME_MAP) {
+        QPoint pos = event->pos();
+
+        // 1. Clicked Play button
+        if (getPlayButtonRect().contains(pos)) {
+            startLevel(selectedMapLevel);
+            return;
+        }
+
+        // 2. Clicked Level Node
+        int radius = std::min(width(), height()) / 22;
+        if (radius < 24) radius = 24;
+        if (radius > 36) radius = 36;
+
+        for (int lvl = 1; lvl <= TOTAL_LEVELS; ++lvl) {
+            QPoint np = getLevelNodePos(lvl, width(), height());
+            int dx = pos.x() - np.x();
+            int dy = pos.y() - np.y();
+            if (dx * dx + dy * dy <= (radius + 8) * (radius + 8)) {
+                if (lvl <= highestUnlockedLevel) {
+                    selectedMapLevel = lvl;
+                    startLevel(lvl);
+                    return;
+                }
+            }
+        }
+        update();
+        return;
+    }
+
+    if (currentScreen == SCREEN_PLAYING) {
+        QPoint pos = event->pos();
+
+        // Clicked Saga Map button in HUD
+        if (getMapButtonRect().contains(pos)) {
+            currentScreen = SCREEN_HOME_MAP;
+            selectedMapLevel = currentLevel;
+            update();
+            return;
+        }
+
+        if (gameOver) {
+            initLevel();
+            gameOver = false;
+            update();
+            return;
+        }
+
+        if (levelComplete) {
+            currentLevel++;
+            if (currentLevel > TOTAL_LEVELS) currentLevel = TOTAL_LEVELS;
+            if (currentLevel > highestUnlockedLevel) highestUnlockedLevel = currentLevel;
+            selectedMapLevel = currentLevel;
+            initLevel();
+            levelComplete = false;
+            update();
+            return;
+        }
+    }
+}
+
+void MainWindow::mouseMoveEvent(QMouseEvent *event)
+{
+    if (currentScreen == SCREEN_HOME_MAP) {
+        QPoint pos = event->pos();
+        int oldHover = hoveredMapLevel;
+        hoveredMapLevel = 0;
+
+        int radius = std::min(width(), height()) / 22;
+        if (radius < 24) radius = 24;
+        if (radius > 36) radius = 36;
+
+        for (int lvl = 1; lvl <= TOTAL_LEVELS; ++lvl) {
+            QPoint np = getLevelNodePos(lvl, width(), height());
+            int dx = pos.x() - np.x();
+            int dy = pos.y() - np.y();
+            if (dx * dx + dy * dy <= (radius + 8) * (radius + 8)) {
+                hoveredMapLevel = lvl;
+                break;
+            }
+        }
+
+        if ((hoveredMapLevel != 0 && hoveredMapLevel <= highestUnlockedLevel) || getPlayButtonRect().contains(pos)) {
+            setCursor(Qt::PointingHandCursor);
+        } else {
+            setCursor(Qt::ArrowCursor);
+        }
+
+        if (oldHover != hoveredMapLevel) {
+            update();
+        }
+    } else {
+        if (getMapButtonRect().contains(event->pos())) {
+            setCursor(Qt::PointingHandCursor);
+        } else {
+            setCursor(Qt::ArrowCursor);
+        }
+    }
+}
+
+void MainWindow::drawPacmanAvatar(QPainter &painter, int cx, int cy, int size)
+{
+    painter.save();
+    int r = size / 2;
+
+    // Golden glow behind Pacman
+    float pulse = (std::sin(elapsedTimer.elapsed() * 0.009f) + 1.0f) * 0.5f;
+    QRadialGradient glow(cx, cy, r * 1.8);
+    glow.setColorAt(0.0, QColor(255, 230, 80, 130 + int(70 * pulse)));
+    glow.setColorAt(0.6, QColor(255, 200, 30, 50));
+    glow.setColorAt(1.0, QColor(0, 0, 0, 0));
+    painter.fillRect(cx - r * 2, cy - r * 2, r * 4, r * 4, glow);
+
+    // Pacman body with animated mouth
+    int startAngle = int(35 * std::abs(std::sin(elapsedTimer.elapsed() * 0.008f)));
+    int spanAngle = 360 - 2 * startAngle;
+
+    painter.setBrush(QColor(255, 225, 20));
+    painter.setPen(QPen(QColor(220, 160, 0), 2));
+    painter.drawPie(cx - r, cy - r, size, size, startAngle * 16, spanAngle * 16);
+
+    // Eye
+    painter.setBrush(QColor(30, 30, 30));
+    painter.setPen(Qt::NoPen);
+    painter.drawEllipse(cx + r / 5, cy - r / 2, std::max(3, r / 4), std::max(4, r / 3));
+
+    // Specular shine
+    painter.setBrush(QColor(255, 255, 255, 180));
+    painter.drawEllipse(cx - r / 3, cy - r / 2, std::max(3, r / 3), std::max(2, r / 4));
+
+    // Little "YOU" banner badge above Pacman
+    painter.setFont(QFont("Arial", std::max(7, size / 4), QFont::Bold));
+    painter.setBrush(QColor(255, 50, 90));
+    painter.setPen(QPen(QColor(255, 220, 220), 1));
+    int bW = std::max(36, size + 12);
+    int bH = 16;
+    painter.drawRoundedRect(cx - bW / 2, cy - r - bH - 3, bW, bH, 4, 4);
+
+    painter.setPen(Qt::white);
+    painter.drawText(cx - bW / 2, cy - r - bH - 3, bW, bH, Qt::AlignCenter, "YOU");
+
+    painter.restore();
+}
+
+void MainWindow::drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int radius)
+{
+    painter.save();
+    bool isCompleted = (lvl < highestUnlockedLevel);
+    bool isCurrent = (lvl == highestUnlockedLevel);
+    bool isSelected = (lvl == selectedMapLevel);
+    bool isLocked = (lvl > highestUnlockedLevel);
+    bool isHovered = (lvl == hoveredMapLevel);
+
+    int r = radius;
+    if (isHovered && !isLocked) r += 3;
+
+    // 1. Aura / Pulsing ring for current/selected node
+    if (isCurrent || isSelected) {
+        float pulse = (std::sin(elapsedTimer.elapsed() * 0.007f) + 1.0f) * 0.5f;
+        int ringR = r + 8 + int(8 * pulse);
+        QRadialGradient ringGrad(cx, cy, ringR);
+        ringGrad.setColorAt(0.0, QColor(0, 230, 255, 120));
+        ringGrad.setColorAt(0.7, QColor(0, 180, 255, 60));
+        ringGrad.setColorAt(1.0, QColor(0, 0, 0, 0));
+        painter.fillRect(cx - ringR, cy - ringR, ringR * 2, ringR * 2, ringGrad);
+
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(QColor(0, 240, 255, 160 + int(95 * pulse)), 3, Qt::DashLine));
+        painter.drawEllipse(cx - ringR + 3, cy - ringR + 3, (ringR - 3) * 2, (ringR - 3) * 2);
+    }
+
+    // 2. Drop shadow
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 120));
+    painter.drawEllipse(cx - r + 3, cy - r + 5, r * 2, r * 2);
+
+    // 3. 3D Spherical Candy Button
+    QRadialGradient grad(cx - r / 3, cy - r / 3, r * 1.3);
+    if (isCompleted) {
+        // Candy Emerald
+        grad.setColorAt(0.0, QColor(110, 255, 150));
+        grad.setColorAt(0.4, QColor(35, 200, 75));
+        grad.setColorAt(0.85, QColor(15, 130, 45));
+        grad.setColorAt(1.0, QColor(8, 70, 25));
+        painter.setBrush(grad);
+        painter.setPen(QPen(QColor(180, 255, 200), 2));
+    } else if (isCurrent || isSelected) {
+        // Candy Cyan / Royal Blue
+        grad.setColorAt(0.0, QColor(140, 240, 255));
+        grad.setColorAt(0.4, QColor(0, 160, 245));
+        grad.setColorAt(0.85, QColor(0, 90, 190));
+        grad.setColorAt(1.0, QColor(0, 40, 110));
+        painter.setBrush(grad);
+        painter.setPen(QPen(QColor(200, 245, 255), 2.5));
+    } else {
+        // Frosted Slate / Locked
+        grad.setColorAt(0.0, QColor(85, 75, 105));
+        grad.setColorAt(0.6, QColor(48, 40, 65));
+        grad.setColorAt(1.0, QColor(25, 20, 36));
+        painter.setBrush(grad);
+        painter.setPen(QPen(QColor(70, 60, 85), 1.5));
+    }
+    painter.drawEllipse(cx - r, cy - r, r * 2, r * 2);
+
+    // 4. Glossy Specular Highlight on top
+    painter.setBrush(QColor(255, 255, 255, 75));
+    painter.setPen(Qt::NoPen);
+    painter.drawEllipse(cx - r * 0.5, cy - r * 0.75, int(r * 1.0), int(r * 0.55));
+
+    // 5. Node Contents: Number or Padlock
+    if (isLocked) {
+        int lW = r * 0.6;
+        int lH = r * 0.5;
+        int lx = cx - lW / 2;
+        int ly = cy - lH / 4;
+
+        // Shackle
+        painter.setBrush(Qt::NoBrush);
+        painter.setPen(QPen(QColor(200, 190, 160), 2.5));
+        painter.drawArc(lx + lW / 4, ly - lH / 2, lW / 2, lH, 0, 180 * 16);
+
+        // Body
+        painter.setBrush(QColor(180, 150, 60));
+        painter.setPen(QPen(QColor(230, 200, 100), 1));
+        painter.drawRoundedRect(lx, ly, lW, lH, 3, 3);
+    } else {
+        // Bold Level Number
+        painter.setFont(QFont("Arial", std::max(12, r * 3 / 4), QFont::Bold));
+        painter.setPen(QColor(0, 0, 0, 120));
+        painter.drawText(cx - r + 1, cy - r + 2, r * 2, r * 2, Qt::AlignCenter, QString::number(lvl));
+        painter.setPen(Qt::white);
+        painter.drawText(cx - r, cy - r, r * 2, r * 2, Qt::AlignCenter, QString::number(lvl));
+
+        // Golden Stars for completed levels
+        if (isCompleted) {
+            painter.setFont(QFont("Arial", std::max(8, r / 3)));
+            painter.setPen(QColor(255, 215, 0));
+            painter.drawText(cx - r, cy + r - 3, r * 2, 16, Qt::AlignCenter, "⭐⭐⭐");
+        }
+    }
+
+    // 6. Level 8 Crown Trophy
+    if (lvl == TOTAL_LEVELS) {
+        int cw = 28, ch = 18;
+        int cx0 = cx - cw / 2;
+        int cy0 = cy - r - ch - 4;
+        painter.setBrush(QColor(255, 210, 30));
+        painter.setPen(QPen(QColor(255, 240, 120), 1));
+        QPolygon crown;
+        crown << QPoint(cx0, cy0 + ch)
+              << QPoint(cx0 + cw, cy0 + ch)
+              << QPoint(cx0 + cw, cy0 + ch / 3)
+              << QPoint(cx0 + cw * 3 / 4, cy0 + ch * 2 / 3)
+              << QPoint(cx0 + cw / 2, cy0)
+              << QPoint(cx0 + cw / 4, cy0 + ch * 2 / 3)
+              << QPoint(cx0, cy0 + ch / 3);
+        painter.drawPolygon(crown);
+    }
+
+    // 7. Pacman Avatar on the Current Level
+    if (lvl == highestUnlockedLevel) {
+        int bob = int(4 * std::sin(elapsedTimer.elapsed() * 0.007f));
+        drawPacmanAvatar(painter, cx, cy - r - 22 + bob, std::max(22, r));
+    }
+
+    painter.restore();
+}
+
+void MainWindow::drawCandyCrushMap(QPainter &painter)
+{
+    int w = width();
+    int h = height();
+
+    // 1. Rich Candy Twilight Fantasy Gradient Background
+    QLinearGradient bg(0, 0, 0, h);
+    bg.setColorAt(0.0, QColor(20, 10, 42));   // Cosmic night
+    bg.setColorAt(0.35, QColor(48, 16, 70));  // Deep plum
+    bg.setColorAt(0.70, QColor(90, 24, 85));  // Warm raspberry
+    bg.setColorAt(1.0, QColor(36, 12, 50));   // Dark violet
+    painter.fillRect(rect(), bg);
+
+    // Gentle candy hills rolling in bottom background
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(60, 16, 68, 140));
+    QPainterPath hill1;
+    hill1.moveTo(0, h * 0.85);
+    hill1.quadTo(w * 0.35, h * 0.72, w * 0.7, h * 0.88);
+    hill1.quadTo(w * 0.88, h * 0.94, w, h * 0.86);
+    hill1.lineTo(w, h);
+    hill1.lineTo(0, h);
+    painter.drawPath(hill1);
+
+    painter.setBrush(QColor(42, 12, 54, 180));
+    QPainterPath hill2;
+    hill2.moveTo(0, h * 0.90);
+    hill2.quadTo(w * 0.45, h * 0.82, w, h * 0.92);
+    hill2.lineTo(w, h);
+    hill2.lineTo(0, h);
+    painter.drawPath(hill2);
+
+    // Twinkling stars / sugar sprinkles
+    painter.setPen(Qt::NoPen);
+    static const int starCoords[14][2] = {
+        {12, 18}, {28, 10}, {84, 14}, {92, 26}, {15, 45}, {88, 52},
+        {8, 70}, {94, 68}, {45, 12}, {62, 38}, {22, 60}, {76, 80},
+        {50, 70}, {38, 90}
+    };
+    for (int i = 0; i < 14; ++i) {
+        int sx = int(starCoords[i][0] * 0.01 * w);
+        int sy = int(starCoords[i][1] * 0.01 * h);
+        float pulse = (std::sin(elapsedTimer.elapsed() * 0.005f + i * 1.3f) + 1.0f) * 0.5f;
+        int starA = 80 + int(140 * pulse);
+        painter.setBrush(QColor(255, 240, 160, starA));
+        int starD = 3 + (i % 3);
+        painter.drawEllipse(sx, sy, starD, starD);
+    }
+
+    // 2. The Winding Serpentine Candy Road
+    QPainterPath roadPath;
+    roadPath.moveTo(getLevelNodePos(1, w, h));
+    for (int lvl = 2; lvl <= TOTAL_LEVELS; ++lvl) {
+        QPoint p0 = getLevelNodePos(lvl - 1, w, h);
+        QPoint p1 = getLevelNodePos(lvl, w, h);
+        QPoint cp1(p0.x(), (p0.y() + p1.y()) / 2);
+        QPoint cp2(p1.x(), (p0.y() + p1.y()) / 2);
+        roadPath.cubicTo(cp1, cp2, p1);
+    }
+
+    // Layer 1: Road Glow Aura
+    painter.strokePath(roadPath, QPen(QColor(255, 110, 190, 45), 32, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    // Layer 2: Road Bed (Chocolate / Caramel)
+    painter.strokePath(roadPath, QPen(QColor(135, 60, 25, 230), 20, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin));
+    // Layer 3: Dashed Yellow Sugar Road Line
+    painter.strokePath(roadPath, QPen(QColor(255, 230, 110, 240), 5, Qt::DashLine, Qt::RoundCap, Qt::RoundJoin));
+
+    // Decorative Power Dots along the road
+    for (int lvl = 1; lvl < TOTAL_LEVELS; ++lvl) {
+        QPoint p0 = getLevelNodePos(lvl, w, h);
+        QPoint p1 = getLevelNodePos(lvl + 1, w, h);
+        for (int step = 1; step <= 3; ++step) {
+            double t = step / 4.0;
+            double it = 1.0 - t;
+            double cy0 = (p0.y() + p1.y()) / 2.0;
+            double bx = it * it * it * p0.x() + 3 * it * it * t * p0.x() + 3 * it * t * t * p1.x() + t * t * t * p1.x();
+            double by = it * it * it * p0.y() + 3 * it * it * t * cy0 + 3 * it * t * t * cy0 + t * t * t * p1.y();
+
+            painter.setBrush(QColor(255, 230, 160));
+            painter.setPen(Qt::NoPen);
+            painter.drawEllipse(int(bx) - 3, int(by) - 3, 6, 6);
+        }
+    }
+
+    // 3. The Level Nodes
+    int radius = std::min(w, h) / 22;
+    if (radius < 24) radius = 24;
+    if (radius > 36) radius = 36;
+
+    for (int lvl = 1; lvl <= TOTAL_LEVELS; ++lvl) {
+        QPoint np = getLevelNodePos(lvl, w, h);
+        drawLevelNode(painter, lvl, np.x(), np.y(), radius);
+    }
+
+    // 4. Header Ribbon Banner
+    int headerW = std::min(580, int(w * 0.8));
+    int headerH = 64;
+    int hx = (w - headerW) / 2;
+    int hy = 16;
+
+    // Drop shadow
+    painter.setBrush(QColor(0, 0, 0, 140));
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(hx + 3, hy + 5, headerW, headerH, 14, 14);
+
+    // Banner gradient
+    QLinearGradient bGrad(hx, hy, hx, hy + headerH);
+    bGrad.setColorAt(0.0, QColor(255, 75, 120));
+    bGrad.setColorAt(0.5, QColor(220, 30, 80));
+    bGrad.setColorAt(1.0, QColor(160, 15, 55));
+    painter.setBrush(bGrad);
+    painter.setPen(QPen(QColor(255, 215, 100), 3));
+    painter.drawRoundedRect(hx, hy, headerW, headerH, 14, 14);
+
+    // Title text
+    painter.setFont(QFont("Arial", std::max(15, headerH * 3 / 8), QFont::Bold));
+    painter.setPen(QColor(60, 10, 20));
+    painter.drawText(hx + 1, hy + 2, headerW, headerH * 5 / 8, Qt::AlignCenter, "PAC-MAN LABYRINTH SAGA");
+    painter.setPen(QColor(255, 235, 120));
+    painter.drawText(hx, hy, headerW, headerH * 5 / 8, Qt::AlignCenter, "PAC-MAN LABYRINTH SAGA");
+
+    painter.setFont(QFont("Arial", std::max(9, headerH / 6)));
+    painter.setPen(QColor(255, 220, 230));
+    painter.drawText(hx, hy + headerH * 4 / 8, headerW, headerH * 3 / 8, Qt::AlignCenter,
+                     "Explore the Unfolding Multi-Window Labyrinths!");
+
+    // Progress Badge on top-right
+    int pbW = 160, pbH = 34;
+    int pbx = w - pbW - 20;
+    int pby = 22;
+    painter.setBrush(QColor(15, 20, 45, 200));
+    painter.setPen(QPen(QColor(0, 220, 255), 1.5));
+    painter.drawRoundedRect(pbx, pby, pbW, pbH, 8, 8);
+
+    painter.setFont(QFont("Arial", 9, QFont::Bold));
+    painter.setPen(QColor(255, 215, 0));
+    painter.drawText(pbx, pby, pbW, pbH, Qt::AlignCenter,
+                     QString("⭐ LEVEL %1 / %2").arg(highestUnlockedLevel).arg(TOTAL_LEVELS));
+
+    // 5. Big PLAY Button at the Bottom
+    QRect btnRect = getPlayButtonRect();
+    bool btnHovered = btnRect.contains(mapFromGlobal(QCursor::pos()));
+
+    // Drop shadow
+    painter.setBrush(QColor(0, 0, 0, 150));
+    painter.setPen(Qt::NoPen);
+    painter.drawRoundedRect(btnRect.adjusted(3, 4, 3, 4), btnRect.height() / 2, btnRect.height() / 2);
+
+    // Button body
+    QLinearGradient pGrad(btnRect.left(), btnRect.top(), btnRect.left(), btnRect.bottom());
+    if (btnHovered) {
+        pGrad.setColorAt(0.0, QColor(70, 240, 120));
+        pGrad.setColorAt(0.5, QColor(30, 200, 80));
+        pGrad.setColorAt(1.0, QColor(10, 150, 50));
+    } else {
+        pGrad.setColorAt(0.0, QColor(255, 175, 40));
+        pGrad.setColorAt(0.5, QColor(235, 120, 20));
+        pGrad.setColorAt(1.0, QColor(190, 70, 10));
+    }
+    painter.setBrush(pGrad);
+    painter.setPen(QPen(QColor(255, 245, 180), btnHovered ? 3.5 : 2.5));
+    painter.drawRoundedRect(btnRect, btnRect.height() / 2, btnRect.height() / 2);
+
+    // Button text
+    painter.setFont(QFont("Arial", std::max(13, btnRect.height() * 3 / 8), QFont::Bold));
+    painter.setPen(QColor(40, 20, 5));
+    painter.drawText(btnRect.adjusted(1, 2, 1, 2), Qt::AlignCenter,
+                     QString("▶ PLAY LEVEL %1").arg(selectedMapLevel));
+    painter.setPen(Qt::white);
+    painter.drawText(btnRect, Qt::AlignCenter,
+                     QString("▶ PLAY LEVEL %1").arg(selectedMapLevel));
+
+    // Hint text below button
+    painter.setFont(QFont("Arial", std::max(8, btnRect.height() / 4)));
+    painter.setPen(QColor(220, 200, 230));
+    painter.drawText(0, btnRect.bottom() + 4, w, 16, Qt::AlignCenter,
+                     getLevelTitle(selectedMapLevel));
 }
