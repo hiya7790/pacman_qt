@@ -514,26 +514,46 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
-    // Player 2 controls (WASD keys in multiplayer)
-    if (isMultiplayer) {
-        Direction p2Attempt = STOP;
-        if (event->key() == Qt::Key_W) p2Attempt = UP;
-        else if (event->key() == Qt::Key_S) p2Attempt = DOWN;
-        else if (event->key() == Qt::Key_A) p2Attempt = LEFT;
-        else if (event->key() == Qt::Key_D) p2Attempt = RIGHT;
+    // Player 2 controls (W, A, S, D keys) - Instant Drop-In Co-op!
+    Direction p2Attempt = STOP;
+    int k = event->key();
+    QString txt = event->text().toLower();
+    if (k == Qt::Key_W || txt == "w") p2Attempt = UP;
+    else if (k == Qt::Key_S || txt == "s") p2Attempt = DOWN;
+    else if (k == Qt::Key_A || txt == "a") p2Attempt = LEFT;
+    else if (k == Qt::Key_D || txt == "d") p2Attempt = RIGHT;
 
-        if (p2Attempt != STOP) {
-            if (p2Alive) {
-                p2NextDir = p2Attempt;
-                movePlayer2();
-                moveCount++;
-                checkFruitPickup();
-                checkGhostCollisions();
-                checkLevelExit();
-                update();
+    if (p2Attempt != STOP) {
+        // If not already in multiplayer, drop-in Player 2 right now!
+        if (!isMultiplayer) {
+            isMultiplayer = true;
+            p2Alive = true;
+            p2RespawnTicks = 0;
+            // Spawn safely beside Player 1
+            if (pacmanX > 1 && board[currentSectorY][currentSectorX][pacmanY][pacmanX - 1] != 1) {
+                p2X = pacmanX - 1;
+                p2Y = pacmanY;
+            } else if (pacmanX < COLS - 2 && board[currentSectorY][currentSectorX][pacmanY][pacmanX + 1] != 1) {
+                p2X = pacmanX + 1;
+                p2Y = pacmanY;
+            } else {
+                p2X = pacmanX;
+                p2Y = pacmanY;
             }
-            return;
+            p2Dir = STOP;
+            p2NextDir = p2Attempt;
         }
+
+        if (p2Alive) {
+            p2NextDir = p2Attempt;
+            movePlayer2();
+            moveCount++;
+            checkFruitPickup();
+            checkGhostCollisions();
+            checkLevelExit();
+            update();
+        }
+        return;
     }
 
     QWidget::keyPressEvent(event);
