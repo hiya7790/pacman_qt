@@ -3,6 +3,7 @@
 #include <QPainter>
 #include <QRandomGenerator>
 #include <QJsonObject>
+#include <QJsonArray>
 #include <QGuiApplication>
 #include <QClipboard>
 #include <cmath>
@@ -351,11 +352,19 @@ void MainWindow::gameLoop()
                 mapScrollY = targetMapScrollY;
             }
         }
+        static int mapBrdCount = 0;
+        if (++mapBrdCount % 10 == 0) {
+            broadcastCurrentGameState();
+        }
         update();
         return;
     }
 
     if (gameOver || levelComplete) {
+        static int endBrdCount = 0;
+        if (++endBrdCount % 10 == 0) {
+            broadcastCurrentGameState();
+        }
         update();
         return;
     }
@@ -450,24 +459,96 @@ void MainWindow::broadcastCurrentGameState()
 {
     if (!gameServer || !gameServer->isRunning()) return;
 
-    static int broadcastCounter = 0;
-    broadcastCounter++;
-    if (broadcastCounter % 3 != 0 && !levelComplete && !gameOver) return;
-
     QJsonObject state;
     state["type"] = "gameState";
+    state["screen"] = (currentScreen == SCREEN_HOME_MAP ? "map" : "playing");
     state["level"] = currentLevel;
     state["world"] = (currentLevel - 1) / LEVELS_PER_WORLD + 1;
     state["stage"] = (currentLevel - 1) % LEVELS_PER_WORLD + 1;
     state["score"] = score;
     state["frightened"] = ghostsFrightened;
+    state["frightenedTicks"] = frightenedTicksLeft;
     state["fogPeeks"] = fogPeeksRemaining;
-    state["p1Alive"] = p1Alive;
-    state["p2Alive"] = p2Alive;
-    state["hero3Alive"] = hero3.alive;
-    state["hero4Alive"] = hero4.alive;
+    state["fog"] = fogOfWarEnabled;
+    state["peek"] = fogPeekActive;
+    state["radius"] = currentVisionRadius;
     state["gameOver"] = gameOver;
     state["levelComplete"] = levelComplete;
+    state["secX"] = currentSectorX;
+    state["secY"] = currentSectorY;
+
+    if (currentScreen == SCREEN_PLAYING) {
+        QString boardStr;
+        boardStr.reserve(ROWS * COLS);
+        QString expStr;
+        expStr.reserve(ROWS * COLS);
+        for (int r = 0; r < ROWS; ++r) {
+            for (int c = 0; c < COLS; ++c) {
+                boardStr.append(QString::number(board[currentSectorY][currentSectorX][r][c]));
+                expStr.append(explored[currentSectorY][currentSectorX][r][c] ? '1' : '0');
+            }
+        }
+        state["board"] = boardStr;
+        state["explored"] = expStr;
+
+        // Heroes
+        QJsonObject h1;
+        h1["x"] = pacmanX; h1["y"] = pacmanY; h1["dir"] = (int)pacmanDir;
+        h1["mouth"] = pacmanMouthAngle; h1["alive"] = p1Alive; h1["score"] = scoreP1;
+        state["p1"] = h1;
+
+        QJsonObject h2;
+        h2["x"] = p2X; h2["y"] = p2Y; h2["dir"] = (int)p2Dir;
+        h2["mouth"] = p2MouthAngle; h2["alive"] = p2Alive; h2["score"] = scoreP2;
+        h2["name"] = p2PlayerName; h2["active"] = isMultiplayer;
+        state["p2"] = h2;
+
+        QJsonObject h3;
+        h3["x"] = hero3.x; h3["y"] = hero3.y; h3["dir"] = (int)hero3.dir;
+        h3["mouth"] = hero3.mouthAngle; h3["alive"] = hero3.alive; h3["score"] = hero3.score;
+        h3["name"] = hero3.playerName; h3["active"] = (hero3.clientId != -1);
+        state["p3"] = h3;
+
+        QJsonObject h4;
+        h4["x"] = hero4.x; h4["y"] = hero4.y; h4["dir"] = (int)hero4.dir;
+        h4["mouth"] = hero4.mouthAngle; h4["alive"] = hero4.alive; h4["score"] = hero4.score;
+        h4["name"] = hero4.playerName; h4["active"] = (hero4.clientId != -1);
+        state["p4"] = h4;
+
+        // Exit portal
+        state["hasExit"] = (currentSectorX == exitSectorX && currentSectorY == exitSectorY);
+        state["exitX"] = exitX;
+        state["exitY"] = exitY;
+
+        // Ghosts in current sector
+        QJsonArray gArr;
+        for (const Ghost &g : ghosts) {
+            if (g.sectorX == currentSectorX && g.sectorY == currentSectorY) {
+                QJsonObject gObj;
+                gObj["x"] = g.x;
+                gObj["y"] = g.y;
+                gObj["dir"] = (int)g.dir;
+                gObj["color"] = g.colorIndex;
+                gObj["name"] = g.playerName;
+                gObj["isHuman"] = (g.clientId >= 0);
+                gArr.append(gObj);
+            }
+        }
+        state["ghosts"] = gArr;
+
+        // Active fruits in current sector
+        QJsonArray fArr;
+        for (const BonusFruit &f : activeFruits) {
+            if (f.sectorX == currentSectorX && f.sectorY == currentSectorY) {
+                QJsonObject fObj;
+                fObj["x"] = f.x;
+                fObj["y"] = f.y;
+                fObj["type"] = (int)f.type;
+                fArr.append(fObj);
+            }
+        }
+        state["fruits"] = fArr;
+    }
 
     gameServer->broadcastGameState(state);
 }
@@ -529,6 +610,7 @@ void MainWindow::onPlayerJoined(int clientId, const QString &role, const QString
         peekToastTimer.start();
     }
     updateFogOfWar();
+    broadcastCurrentGameState();
     update();
 }
 
@@ -562,6 +644,7 @@ void MainWindow::onPlayerLeft(int clientId, const QString &role, const QString &
             }
         }
     }
+    broadcastCurrentGameState();
     update();
 }
 
