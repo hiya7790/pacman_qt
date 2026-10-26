@@ -1007,6 +1007,10 @@ QByteArray GameServer::getControllerHtml() const
         <div class="hud-lbl">SCORE</div>
         <div class="hud-val" id="hudScore">0</div>
       </div>
+      <div class="hud-stat" id="hudLivesBox">
+        <div class="hud-lbl">LIVES</div>
+        <div class="hud-val" id="hudLives" style="color:#ff3366;">❤️❤️❤️ (3)</div>
+      </div>
       <div class="hud-right">
         <div class="status-pill" id="statusPill">LIVE</div>
         <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">⛶</button>
@@ -1185,6 +1189,10 @@ QByteArray GameServer::getControllerHtml() const
       }
       ev.preventDefault();
     }
+    const meta = roleMeta[currentRole];
+    if (meta && meta.isHero && latestState && latestState[currentRole] && latestState[currentRole].lives <= 0) {
+      return; // Eliminated players cannot move
+    }
     if (navigator.vibrate) navigator.vibrate(20);
     if (ws && ws.readyState === WebSocket.OPEN && currentRole) {
       ws.send(JSON.stringify({ type: 'move', dir: dir }));
@@ -1192,8 +1200,11 @@ QByteArray GameServer::getControllerHtml() const
   }
 
   function sendAction() {
-    if (navigator.vibrate) navigator.vibrate(35);
     const meta = roleMeta[currentRole];
+    if (meta && meta.isHero && latestState && latestState[currentRole] && latestState[currentRole].lives <= 0) {
+      return; // Eliminated players cannot peek
+    }
+    if (navigator.vibrate) navigator.vibrate(35);
     if (meta && meta.isHero) {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'peek' }));
@@ -1215,6 +1226,9 @@ QByteArray GameServer::getControllerHtml() const
     const scoreVal = document.getElementById('hudScore');
     const stageVal = document.getElementById('hudStage');
     const actionBtn = document.getElementById('actionBtn');
+    const livesBox = document.getElementById('hudLivesBox');
+    const livesVal = document.getElementById('hudLives');
+    const dpadEl = document.querySelector('.dpad-container');
 
     if (scoreVal && state.score !== undefined) scoreVal.innerText = state.score;
     if (stageVal && state.world !== undefined && state.stage !== undefined) {
@@ -1223,20 +1237,53 @@ QByteArray GameServer::getControllerHtml() const
 
     const meta = roleMeta[currentRole];
     if (meta && meta.isHero) {
-      let peeks = 3;
-      if (state.peeks && state.peeks[currentRole] !== undefined) {
-        peeks = state.peeks[currentRole];
-      } else if (state.fogPeeks !== undefined) {
-        peeks = state.fogPeeks;
+      if (livesBox) livesBox.style.display = "block";
+      const myHeroState = state[currentRole];
+      const myLives = (myHeroState && myHeroState.lives !== undefined) ? myHeroState.lives : 3;
+      if (livesVal) {
+        if (myLives <= 0) {
+          livesVal.innerHTML = '<span style="color:#ff3355;font-weight:900;">💀 OUT (0)</span>';
+        } else {
+          let hearts = "";
+          for (let i = 0; i < myLives; ++i) hearts += "❤️";
+          livesVal.innerHTML = hearts + ' (' + myLives + ')';
+        }
       }
-      if (peeks > 0) {
-        actionBtn.innerHTML = '👁️ FOG PEEK (' + peeks + ' left)<div class="btn-subhint">Press [Space] or [F]</div>';
-        actionBtn.disabled = false;
-        actionBtn.style.opacity = "1";
-      } else {
-        actionBtn.innerHTML = '🔒 0 PEEKS (Eat fruit for +1)<div class="btn-subhint">Collect fruits on map</div>';
+
+      if (myLives <= 0) {
+        actionBtn.innerHTML = '💀 OUT OF LIVES (SPECTATING)<div class="btn-subhint">Cheer on your classmates!</div>';
         actionBtn.disabled = true;
-        actionBtn.style.opacity = "0.6";
+        actionBtn.style.opacity = "0.5";
+        if (dpadEl) {
+          dpadEl.style.opacity = "0.35";
+          dpadEl.style.pointerEvents = "none";
+        }
+      } else {
+        if (dpadEl) {
+          dpadEl.style.opacity = "1";
+          dpadEl.style.pointerEvents = "auto";
+        }
+        let peeks = 3;
+        if (state.peeks && state.peeks[currentRole] !== undefined) {
+          peeks = state.peeks[currentRole];
+        } else if (state.fogPeeks !== undefined) {
+          peeks = state.fogPeeks;
+        }
+        if (peeks > 0) {
+          actionBtn.innerHTML = '👁️ FOG PEEK (' + peeks + ' left)<div class="btn-subhint">Press [Space] or [F]</div>';
+          actionBtn.disabled = false;
+          actionBtn.style.opacity = "1";
+        } else {
+          actionBtn.innerHTML = '🔒 0 PEEKS (Eat fruit for +1)<div class="btn-subhint">Collect fruits on map</div>';
+          actionBtn.disabled = true;
+          actionBtn.style.opacity = "0.6";
+        }
+      }
+    } else {
+      if (livesBox) livesBox.style.display = "none";
+      if (dpadEl) {
+        dpadEl.style.opacity = "1";
+        dpadEl.style.pointerEvents = "auto";
       }
     }
 
@@ -1701,6 +1748,26 @@ QByteArray GameServer::getControllerHtml() const
   }
 
   function drawOverlays(state) {
+    const meta = roleMeta[currentRole];
+    const myHeroState = (meta && meta.isHero && state[currentRole]) ? state[currentRole] : null;
+    const isEliminated = (myHeroState && myHeroState.lives <= 0);
+
+    if (isEliminated && !state.gameOver) {
+      ctx.fillStyle = "rgba(18, 5, 12, 0.85)";
+      ctx.fillRect(0, 530, 630, 85);
+      ctx.strokeStyle = "#ff3355";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(0, 530, 630, 85);
+
+      ctx.fillStyle = "#ff3355";
+      ctx.font = "bold 20px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("💀 YOU ARE OUT OF LIVES (ELIMINATED)", 315, 562);
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "14px sans-serif";
+      ctx.fillText("Spectating remaining classmates... Hang in there!", 315, 592);
+    }
+
     if (state.peek) {
       ctx.fillStyle = "rgba(255, 200, 0, 0.25)";
       ctx.fillRect(0, 0, 630, 36);
@@ -1723,10 +1790,13 @@ QByteArray GameServer::getControllerHtml() const
       ctx.fillStyle = "#ff3355";
       ctx.font = "900 34px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("GAME OVER", 315, 300);
+      ctx.fillText("GAME OVER", 315, 290);
+      ctx.fillStyle = "#ffcc00";
+      ctx.font = "bold 18px sans-serif";
+      ctx.fillText("All 3 Lives Lost!", 315, 325);
       ctx.fillStyle = "#ffffff";
-      ctx.font = "16px sans-serif";
-      ctx.fillText("Host can restart stage on main screen", 315, 345);
+      ctx.font = "15px sans-serif";
+      ctx.fillText("Host can restart stage on main screen ([R] or [Space])", 315, 360);
     } else if (state.levelComplete) {
       ctx.fillStyle = "rgba(2, 20, 10, 0.88)";
       ctx.fillRect(0, 220, 630, 190);

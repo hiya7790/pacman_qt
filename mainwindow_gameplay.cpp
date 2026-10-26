@@ -469,7 +469,16 @@ void MainWindow::checkGhostCollisions()
                 respawnGhostFarAway(g);
             } else {
                 p1Alive = false;
-                p1RespawnTicks = 30;
+                p1Lives--;
+                if (p1Lives > 0) {
+                    p1RespawnTicks = 30; // ~4s respawn
+                    peekToastMessage = QString("🟡 Pac-Man was eaten! (%1 %2 left)").arg(p1Lives).arg(p1Lives == 1 ? "life" : "lives");
+                    peekToastTimer.start();
+                } else {
+                    p1RespawnTicks = 0; // 0 lives: OUT of the game!
+                    peekToastMessage = "💀 Pac-Man is OUT OF LIVES!";
+                    peekToastTimer.start();
+                }
             }
         }
 
@@ -481,7 +490,16 @@ void MainWindow::checkGhostCollisions()
                 respawnGhostFarAway(g);
             } else {
                 p2Alive = false;
-                p2RespawnTicks = 30;
+                p2Lives--;
+                if (p2Lives > 0) {
+                    p2RespawnTicks = 30;
+                    peekToastMessage = QString("🎀 Ms. Pac-Man was eaten! (%1 %2 left)").arg(p2Lives).arg(p2Lives == 1 ? "life" : "lives");
+                    peekToastTimer.start();
+                } else {
+                    p2RespawnTicks = 0;
+                    peekToastMessage = "💀 Ms. Pac-Man is OUT OF LIVES!";
+                    peekToastTimer.start();
+                }
             }
         }
 
@@ -493,7 +511,16 @@ void MainWindow::checkGhostCollisions()
                 respawnGhostFarAway(g);
             } else {
                 hero3.alive = false;
-                hero3.respawnTicks = 30;
+                hero3.lives--;
+                if (hero3.lives > 0) {
+                    hero3.respawnTicks = 30;
+                    peekToastMessage = QString("🧢 Jr. Pac-Man was eaten! (%1 %2 left)").arg(hero3.lives).arg(hero3.lives == 1 ? "life" : "lives");
+                    peekToastTimer.start();
+                } else {
+                    hero3.respawnTicks = 0;
+                    peekToastMessage = "💀 Jr. Pac-Man is OUT OF LIVES!";
+                    peekToastTimer.start();
+                }
             }
         }
 
@@ -505,7 +532,16 @@ void MainWindow::checkGhostCollisions()
                 respawnGhostFarAway(g);
             } else {
                 hero4.alive = false;
-                hero4.respawnTicks = 30;
+                hero4.lives--;
+                if (hero4.lives > 0) {
+                    hero4.respawnTicks = 30;
+                    peekToastMessage = QString("🟢 Miracle Pac-Man was eaten! (%1 %2 left)").arg(hero4.lives).arg(hero4.lives == 1 ? "life" : "lives");
+                    peekToastTimer.start();
+                } else {
+                    hero4.respawnTicks = 0;
+                    peekToastMessage = "💀 Miracle Pac-Man is OUT OF LIVES!";
+                    peekToastTimer.start();
+                }
             }
         }
     }
@@ -523,7 +559,12 @@ void MainWindow::checkGhostCollisions()
                            (isP3Active() && hero3.respawnTicks > 0) ||
                            (isP4Active() && hero4.respawnTicks > 0);
 
-    if (anyHeroConfigured && !anyHeroAlive && !anyHeroSpawning) {
+    bool anyHeroHasLives = (isP1Active() && p1Lives > 0) ||
+                           (isP2Active() && p2Lives > 0) ||
+                           (isP3Active() && hero3.lives > 0) ||
+                           (isP4Active() && hero4.lives > 0);
+
+    if (anyHeroConfigured && !anyHeroAlive && !anyHeroSpawning && !anyHeroHasLives) {
         gameOver = true;
     }
 }

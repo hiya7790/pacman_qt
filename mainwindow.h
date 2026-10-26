@@ -40,6 +40,7 @@ struct ExtraHero {
     bool alive = false;
     int respawnTicks = 0;
     int score = 0;
+    int lives = 3;           // 3 lives per stage
     int clientId = -1;       // -1 if not connected
     QString playerName = "";
 };
@@ -176,6 +177,16 @@ private:
     bool p2Alive;
     int p1RespawnTicks;
     int p2RespawnTicks;
+    int p1Lives;
+    int p2Lives;
+    static constexpr int INITIAL_LIVES = 3;
+    int getHeroLives(const QString &role) const {
+        if (role == "p1") return p1Lives;
+        if (role == "p2") return p2Lives;
+        if (role == "p3") return hero3.lives;
+        if (role == "p4") return hero4.lives;
+        return 0;
+    }
 
     // Embedded Classroom Web Server & Extra Heroes
     GameServer *gameServer;

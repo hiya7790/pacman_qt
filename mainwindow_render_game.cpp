@@ -843,48 +843,87 @@ void MainWindow::drawGameScreen(QPainter &painter)
         painter.drawText(width() * 0.16, hudY + 20, QString("W%1-S%2 (LVL %3)").arg(worldNum).arg(stageNum).arg(currentLevel));
 
         painter.setPen(QColor(0, 210, 255));
-        painter.drawText(width() * 0.30, hudY + 20,
+        painter.drawText(width() * 0.28, hudY + 20,
                          QString("SECTOR: (%1, %2)").arg(currentSectorX + 1).arg(currentSectorY + 1));
 
         painter.setPen(QColor(255, 180, 0));
-        painter.drawText(width() * 0.44, hudY + 20,
+        painter.drawText(width() * 0.40, hudY + 20,
                          QString("EXPLORED: %1").arg(discCount));
 
-        painter.setPen(QColor(180, 200, 255));
-        painter.drawText(width() * 0.56, hudY + 20, QString("MOVES: %1").arg(moveCount));
+        // Lives indicator in single player
+        painter.setPen(p1Lives > 1 ? QColor(255, 60, 100) : (p1Lives == 1 ? QColor(255, 140, 0) : QColor(180, 60, 60)));
+        QString heartsStr;
+        for (int i = 0; i < p1Lives; ++i) heartsStr += "❤️";
+        if (p1Lives <= 0) heartsStr = "💀 0 (OUT)";
+        if (!p1Alive && p1RespawnTicks > 0) {
+            painter.drawText(width() * 0.51, hudY + 20, QString("LIVES: %1 [RESPAWN %2s]").arg(heartsStr).arg((p1RespawnTicks * 130 + 999) / 1000));
+        } else {
+            painter.drawText(width() * 0.51, hudY + 20, QString("LIVES: %1 (%2)").arg(heartsStr).arg(p1Lives));
+        }
     } else {
         int hudColX = 20;
 
+        auto formatHearts = [](int lives) {
+            if (lives <= 0) return QString("💀 OUT");
+            QString h;
+            for (int i = 0; i < lives; ++i) h += "❤️";
+            return h;
+        };
+
         // P1 Status (Yellow)
         if (isP1Active()) {
-            painter.setPen(p1Alive ? QColor(255, 230, 30) : QColor(160, 160, 80));
-            QString p1Str = p1Alive ? QString("P1 (🟡): %1").arg(scoreP1)
-                                    : QString("P1: RESPAWN (%1s)").arg((p1RespawnTicks * 130 + 999) / 1000);
-            painter.drawText(hudColX, hudY + 20, p1Str);
+            if (p1Lives <= 0) {
+                painter.setPen(QColor(160, 60, 60));
+                painter.drawText(hudColX, hudY + 20, "P1 (🟡): 💀 OUT");
+            } else if (!p1Alive && p1RespawnTicks > 0) {
+                painter.setPen(QColor(255, 160, 0));
+                painter.drawText(hudColX, hudY + 20, QString("P1: RESPAWN (%1s) %2").arg((p1RespawnTicks * 130 + 999) / 1000).arg(formatHearts(p1Lives)));
+            } else {
+                painter.setPen(p1Alive ? QColor(255, 230, 30) : QColor(160, 160, 80));
+                painter.drawText(hudColX, hudY + 20, QString("P1 (🟡): %1 %2").arg(scoreP1).arg(formatHearts(p1Lives)));
+            }
             hudColX += int(width() * 0.12);
         }
 
         if (isP2Active()) {
-            painter.setPen(p2Alive ? QColor(255, 120, 190) : QColor(160, 80, 120));
-            QString p2Str = p2Alive ? QString("P2 (🎀): %1").arg(scoreP2)
-                                    : QString("P2: RESPAWN (%1s)").arg((p2RespawnTicks * 130 + 999) / 1000);
-            painter.drawText(hudColX, hudY + 20, p2Str);
+            if (p2Lives <= 0) {
+                painter.setPen(QColor(160, 60, 60));
+                painter.drawText(hudColX, hudY + 20, "P2 (🎀): 💀 OUT");
+            } else if (!p2Alive && p2RespawnTicks > 0) {
+                painter.setPen(QColor(255, 160, 0));
+                painter.drawText(hudColX, hudY + 20, QString("P2: RESPAWN (%1s) %2").arg((p2RespawnTicks * 130 + 999) / 1000).arg(formatHearts(p2Lives)));
+            } else {
+                painter.setPen(p2Alive ? QColor(255, 120, 190) : QColor(160, 80, 120));
+                painter.drawText(hudColX, hudY + 20, QString("P2 (🎀): %1 %2").arg(scoreP2).arg(formatHearts(p2Lives)));
+            }
             hudColX += int(width() * 0.12);
         }
 
         if (hero3.clientId != -1 || hostRole == "p3") {
-            painter.setPen(hero3.alive ? QColor(0, 229, 255) : QColor(80, 160, 180));
-            QString p3Str = hero3.alive ? QString("P3 (🧢): %1").arg(hero3.score)
-                                        : QString("P3: RESPAWN (%1s)").arg((hero3.respawnTicks * 130 + 999) / 1000);
-            painter.drawText(hudColX, hudY + 20, p3Str);
+            if (hero3.lives <= 0) {
+                painter.setPen(QColor(160, 60, 60));
+                painter.drawText(hudColX, hudY + 20, "P3 (🧢): 💀 OUT");
+            } else if (!hero3.alive && hero3.respawnTicks > 0) {
+                painter.setPen(QColor(255, 160, 0));
+                painter.drawText(hudColX, hudY + 20, QString("P3: RESPAWN (%1s) %2").arg((hero3.respawnTicks * 130 + 999) / 1000).arg(formatHearts(hero3.lives)));
+            } else {
+                painter.setPen(hero3.alive ? QColor(0, 229, 255) : QColor(80, 160, 180));
+                painter.drawText(hudColX, hudY + 20, QString("P3 (🧢): %1 %2").arg(hero3.score).arg(formatHearts(hero3.lives)));
+            }
             hudColX += int(width() * 0.12);
         }
 
         if (hero4.clientId != -1 || hostRole == "p4") {
-            painter.setPen(hero4.alive ? QColor(0, 255, 100) : QColor(80, 180, 100));
-            QString p4Str = hero4.alive ? QString("P4 (🟢): %1").arg(hero4.score)
-                                        : QString("P4: RESPAWN (%1s)").arg((hero4.respawnTicks * 130 + 999) / 1000);
-            painter.drawText(hudColX, hudY + 20, p4Str);
+            if (hero4.lives <= 0) {
+                painter.setPen(QColor(160, 60, 60));
+                painter.drawText(hudColX, hudY + 20, "P4 (🟢): 💀 OUT");
+            } else if (!hero4.alive && hero4.respawnTicks > 0) {
+                painter.setPen(QColor(255, 160, 0));
+                painter.drawText(hudColX, hudY + 20, QString("P4: RESPAWN (%1s) %2").arg((hero4.respawnTicks * 130 + 999) / 1000).arg(formatHearts(hero4.lives)));
+            } else {
+                painter.setPen(hero4.alive ? QColor(0, 255, 100) : QColor(80, 180, 100));
+                painter.drawText(hudColX, hudY + 20, QString("P4 (🟢): %1 %2").arg(hero4.score).arg(formatHearts(hero4.lives)));
+            }
             hudColX += int(width() * 0.12);
         }
 
@@ -1017,14 +1056,14 @@ void MainWindow::drawGameScreen(QPainter &painter)
         painter.setPen(QColor(255, 60, 60));
         painter.setFont(QFont("Arial", std::max(18, width() / 50), QFont::Bold));
         QString goMsg = isAnyMultiplayer()
-            ? QString("GAME OVER! Team Defeated (Stage %1/20 • %2)").arg(curStage).arg(getWorldName(curWorld))
-            : QString("GAME OVER! (Stage %1/20 • %2)").arg(curStage).arg(getWorldName(curWorld));
+            ? QString("GAME OVER! All Players Lost Their 3 Lives (Stage %1/20 • %2)").arg(curStage).arg(getWorldName(curWorld))
+            : QString("GAME OVER! All 3 Lives Lost (Stage %1/20 • %2)").arg(curStage).arg(getWorldName(curWorld));
         painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter, goMsg);
 
         painter.setPen(QColor(255, 220, 100));
         painter.setFont(QFont("Arial", std::max(12, width() / 70)));
         painter.drawText(0, height() / 2 + 16, width(), 25, Qt::AlignCenter,
-                         QString("Press [R] or [Space] to Retry Stage %1  |  Press [M] for Saga Map").arg(curStage));
+                         QString("Press [R] or [Space] to Restart Stage %1  |  Press [M] for Saga Map").arg(curStage));
     } else if (levelComplete) {
         painter.fillRect(0, height() / 2 - 50, width(), 100, QColor(0, 0, 0, 235));
         painter.setPen(QColor(60, 255, 120));
@@ -1274,14 +1313,29 @@ void MainWindow::drawMultiplayerLobby(QPainter &painter)
 
         // Subtitle / Status
         painter.setFont(QFont("Arial", 9));
+        int rLives = getHeroLives(role);
+        QString livesBadge;
+        if (role.startsWith("p")) {
+            if (rLives <= 0) livesBadge = " • 💀 0 Lives (OUT)";
+            else {
+                QString h;
+                for (int i = 0; i < rLives; ++i) h += "❤️";
+                livesBadge = QString(" • %1 (%2)").arg(h).arg(rLives);
+            }
+        }
+
         if (isHost) {
             painter.setPen(QColor(255, 240, 160));
-            painter.drawText(slotR.left() + 50, slotR.top() + 32, slotR.width() - 170, 18, Qt::AlignLeft,
-                             "Controlled via Host Keyboard [Arrows / WASD]");
+            QString hostSub = role.startsWith("p")
+                ? QString("Host Keyboard%1").arg(livesBadge)
+                : QString("Host Keyboard [Ghost Hunter]");
+            painter.drawText(slotR.left() + 50, slotR.top() + 32, slotR.width() - 170, 18, Qt::AlignLeft, hostSub);
         } else if (isConnectedPlayer) {
             painter.setPen(QColor(200, 240, 255));
-            painter.drawText(slotR.left() + 50, slotR.top() + 32, slotR.width() - 170, 18, Qt::AlignLeft,
-                             QString("● Connected: %1").arg(pName));
+            QString playerSub = role.startsWith("p")
+                ? QString("● %1%2").arg(pName, livesBadge)
+                : QString("● %1").arg(pName);
+            painter.drawText(slotR.left() + 50, slotR.top() + 32, slotR.width() - 170, 18, Qt::AlignLeft, playerSub);
         } else {
             painter.setPen(QColor(110, 130, 160));
             if (role.startsWith("p")) {
