@@ -122,12 +122,17 @@ open pacman_qt.app
 
 ```
 pacman_qt/
-├── pacman_qt.pro        # Qt Project configuration file
-├── main.cpp             # Application entry point (QApplication setup)
-├── mainwindow.h         # Game state definitions, structs, and declarations
-├── mainwindow.cpp       # Game engine: rendering, procedural generation, input & physics
-├── mazesolver.h         # Maze pathfinding & BFS exploration utilities
-└── README.md            # Project documentation & gameplay guide
+├── pacman_qt.pro              # Qt Project configuration file (sources & headers)
+├── main.cpp                   # Application entry point (QApplication setup)
+├── mainwindow.h               # Game state definitions, structs, and declarations
+├── mainwindow.cpp             # Game lifecycle, initialization, main loop & top-level router
+├── mainwindow_maze.cpp        # Procedural DFS labyrinth generator, grid sizing & exit checks
+├── mainwindow_gameplay.cpp    # Pac-Man & Ghost movement physics, collisions, fruit logic & vision
+├── mainwindow_render_game.cpp # In-game labyrinth renderer, minimap radar, HUD & overlays
+├── mainwindow_map.cpp         # Serpentine Candy Crush Saga world map, avatars & gateways
+├── mainwindow_input.cpp       # Keyboard controls, mouse dragging, scrolling & click events
+├── mazesolver.h               # Maze pathfinding & BFS exploration utilities
+└── README.md                  # Project documentation & gameplay guide
 ```
 
 ---
