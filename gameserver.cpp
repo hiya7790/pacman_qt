@@ -451,7 +451,7 @@ QByteArray GameServer::getControllerHtml() const
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
   body {
-    background: #070914;
+    background: #060814;
     color: #fff;
     font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     min-height: 100vh;
@@ -463,10 +463,11 @@ QByteArray GameServer::getControllerHtml() const
   .app-container {
     width: 100%;
     max-width: 440px;
-    padding: 12px 14px 24px;
+    padding: 10px 12px 20px;
     display: flex;
     flex-direction: column;
     align-items: center;
+    transition: max-width 0.2s ease;
   }
   header {
     text-align: center;
@@ -613,6 +614,11 @@ QByteArray GameServer::getControllerHtml() const
   }
   .hud-lbl { font-size: 8px; font-weight: 800; color: #7384a8; letter-spacing: 1px; }
   .hud-val { font-size: 13px; font-weight: 900; color: #ffe600; font-family: monospace; }
+  .hud-right {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
   .status-pill {
     font-size: 10px;
     font-weight: 800;
@@ -630,17 +636,40 @@ QByteArray GameServer::getControllerHtml() const
   }
   @keyframes pulse { from { opacity: 0.5; } to { opacity: 1; } }
 
+  .fullscreen-btn {
+    background: #192040;
+    border: 1px solid #2d3b70;
+    color: #00e5ff;
+    border-radius: 8px;
+    padding: 4px 8px;
+    font-size: 13px;
+    cursor: pointer;
+    line-height: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .fullscreen-btn:active { background: #00e5ff; color: #070914; }
+
+  /* Stage Layout (Responsive Mobile vs Desktop) */
+  .stage-layout {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
   /* Canvas Box */
   .canvas-box {
     position: relative;
-    width: 100%;
     display: flex;
     justify-content: center;
-    margin-bottom: 10px;
+    align-items: center;
+    margin-bottom: 8px;
   }
   #gameCanvas {
-    width: 100%;
-    max-width: 390px;
+    width: min(94vw, 390px);
+    height: min(94vw, 390px);
     aspect-ratio: 1;
     background: #060814;
     border-radius: 12px;
@@ -648,6 +677,14 @@ QByteArray GameServer::getControllerHtml() const
     box-shadow: 0 6px 20px rgba(0,0,0,0.6), 0 0 16px rgba(0, 229, 255, 0.15);
     display: block;
     touch-action: none;
+  }
+
+  /* Side Panel & Controls */
+  .side-panel {
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
   }
 
   /* D-Pad Controls */
@@ -709,8 +746,8 @@ QByteArray GameServer::getControllerHtml() const
     margin-top: 4px;
   }
   .action-btn {
-    flex: 2;
-    padding: 11px;
+    width: 100%;
+    padding: 12px;
     border-radius: 10px;
     border: none;
     font-size: 13px;
@@ -720,6 +757,7 @@ QByteArray GameServer::getControllerHtml() const
     box-shadow: 0 4px 12px rgba(0,0,0,0.4);
     transition: transform 0.1s;
     touch-action: manipulation;
+    text-align: center;
   }
   .action-btn:active { transform: scale(0.96); }
   .btn-peek {
@@ -733,6 +771,9 @@ QByteArray GameServer::getControllerHtml() const
     box-shadow: none;
     cursor: not-allowed;
   }
+  .btn-subhint {
+    display: none;
+  }
   .btn-ghost-status {
     background: #1b1328;
     border: 1.5px solid #6c2a9a;
@@ -740,22 +781,140 @@ QByteArray GameServer::getControllerHtml() const
     cursor: default;
   }
   .leave-btn {
-    flex: 1;
+    width: 100%;
     background: transparent;
     border: 1px solid #2d3866;
     color: #8292b3;
     font-size: 11px;
     font-weight: 700;
-    padding: 11px 8px;
+    padding: 10px 8px;
     border-radius: 10px;
     cursor: pointer;
+    margin-top: 6px;
   }
   .leave-btn:active { background: #161b36; }
+  .desktop-guide {
+    display: none;
+  }
   .keyboard-hint {
     margin-top: 8px;
     font-size: 10px;
     color: #617192;
     text-align: center;
+  }
+
+  /* ======================================================== */
+  /* LAPTOP / DESKTOP PC MODE (Screen width >= 768px)         */
+  /* Expands to match host desktop view and fill screen!      */
+  /* ======================================================== */
+  @media (min-width: 768px) {
+    .app-container {
+      max-width: 1100px;
+      padding: 14px 20px 24px;
+    }
+    header h1 {
+      font-size: 24px;
+    }
+    header .subtitle {
+      font-size: 11px;
+    }
+    .hud-bar {
+      padding: 10px 18px;
+      margin-bottom: 14px;
+    }
+    .hero-chip-icon { font-size: 26px; }
+    .hero-chip-title { font-size: 15px; }
+    .hero-chip-sub { font-size: 11px; }
+    .hud-lbl { font-size: 9px; }
+    .hud-val { font-size: 16px; }
+    .status-pill { font-size: 11px; padding: 4px 10px; }
+
+    .stage-layout {
+      flex-direction: row;
+      align-items: flex-start;
+      justify-content: center;
+      gap: 24px;
+      width: 100%;
+    }
+    .canvas-box {
+      margin-bottom: 0;
+    }
+    #gameCanvas {
+      width: min(74vh, 640px);
+      height: min(74vh, 640px);
+      border-radius: 16px;
+      border: 3px solid #2b3972;
+      box-shadow: 0 10px 35px rgba(0,0,0,0.8), 0 0 25px rgba(0,229,255,0.22);
+    }
+    .side-panel {
+      width: 270px;
+      align-items: stretch;
+      gap: 10px;
+    }
+    .action-row {
+      flex-direction: column;
+      gap: 6px;
+    }
+    .action-btn {
+      padding: 14px;
+      font-size: 14px;
+      border-radius: 12px;
+    }
+    .btn-subhint {
+      display: block;
+      font-size: 10px;
+      opacity: 0.85;
+      font-weight: 600;
+      margin-top: 2px;
+    }
+    .dpad-container {
+      margin: 2px auto;
+      transform: scale(0.9);
+    }
+    .desktop-guide {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+      background: #111429;
+      border: 1px solid #232b54;
+      border-radius: 12px;
+      padding: 12px 14px;
+      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+    }
+    .guide-title {
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 1.5px;
+      color: #00e5ff;
+      margin-bottom: 2px;
+    }
+    .guide-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      color: #b0c2de;
+    }
+    .key-badge {
+      font-family: monospace;
+      font-weight: 700;
+      background: #1c234a;
+      border: 1px solid #364484;
+      color: #ffe600;
+      padding: 2px 7px;
+      border-radius: 5px;
+      font-size: 11px;
+    }
+    .guide-note {
+      font-size: 10px;
+      color: #00ff88;
+      font-weight: 700;
+      margin-top: 3px;
+      text-align: center;
+    }
+    .keyboard-hint {
+      display: none;
+    }
   }
 </style>
 </head>
@@ -831,31 +990,51 @@ QByteArray GameServer::getControllerHtml() const
         <div class="hud-lbl">SCORE</div>
         <div class="hud-val" id="hudScore">0</div>
       </div>
-      <div>
+      <div class="hud-right">
         <div class="status-pill" id="statusPill">LIVE</div>
+        <button class="fullscreen-btn" onclick="toggleFullscreen()" title="Toggle Fullscreen">⛶</button>
       </div>
     </div>
 
-    <!-- LIVE INTERACTIVE GAME CANVAS -->
-    <div class="canvas-box">
-      <canvas id="gameCanvas" width="420" height="420"></canvas>
-    </div>
+    <!-- RESPONSIVE STAGE LAYOUT -->
+    <div class="stage-layout">
+      <!-- LIVE INTERACTIVE HIGH-RES GAME CANVAS -->
+      <div class="canvas-box">
+        <canvas id="gameCanvas" width="630" height="630"></canvas>
+      </div>
 
-    <!-- TOUCH D-PAD (1 TAP = 1 STEP) -->
-    <div class="dpad-container">
-      <button class="d-btn btn-up" ontouchstart="sendDir(0, event)" onclick="sendDir(0, event)">▲</button>
-      <button class="d-btn btn-left" ontouchstart="sendDir(2, event)" onclick="sendDir(2, event)">◀</button>
-      <div class="dpad-center" id="centerIcon">🕹️</div>
-      <button class="d-btn btn-right" ontouchstart="sendDir(3, event)" onclick="sendDir(3, event)">▶</button>
-      <button class="d-btn btn-down" ontouchstart="sendDir(1, event)" onclick="sendDir(1, event)">▼</button>
-    </div>
+      <!-- SIDE DASHBOARD / CONTROLS -->
+      <div class="side-panel">
+        <div class="action-row">
+          <button class="action-btn btn-peek" id="actionBtn" onclick="sendAction()">
+            👁️ FOG PEEK (3 left)
+            <div class="btn-subhint">Press [Space] or [F]</div>
+          </button>
+        </div>
 
-    <!-- ACTION BUTTONS -->
-    <div class="action-row">
-      <button class="action-btn btn-peek" id="actionBtn" onclick="sendAction()">👁️ FOG PEEK (3 left)</button>
-      <button class="leave-btn" onclick="leaveRole()">⇄ Switch Role</button>
+        <!-- TOUCH D-PAD (1 TAP = 1 STEP) -->
+        <div class="dpad-container">
+          <button class="d-btn btn-up" ontouchstart="sendDir(0, event)" onclick="sendDir(0, event)">▲</button>
+          <button class="d-btn btn-left" ontouchstart="sendDir(2, event)" onclick="sendDir(2, event)">◀</button>
+          <div class="dpad-center" id="centerIcon">🕹️</div>
+          <button class="d-btn btn-right" ontouchstart="sendDir(3, event)" onclick="sendDir(3, event)">▶</button>
+          <button class="d-btn btn-down" ontouchstart="sendDir(1, event)" onclick="sendDir(1, event)">▼</button>
+        </div>
+
+        <!-- LAPTOP KEYBOARD GUIDE -->
+        <div class="desktop-guide">
+          <div class="guide-title">💻 LAPTOP KEYBOARD</div>
+          <div class="guide-row"><span class="key-badge">W / ↑</span><span class="key-desc">Step Up</span></div>
+          <div class="guide-row"><span class="key-badge">A / ←</span><span class="key-desc">Step Left</span></div>
+          <div class="guide-row"><span class="key-badge">S / ↓</span><span class="key-desc">Step Down</span></div>
+          <div class="guide-row"><span class="key-badge">D / →</span><span class="key-desc">Step Right</span></div>
+          <div class="guide-row"><span class="key-badge">Space / F</span><span class="key-desc">Fog Peek</span></div>
+          <div class="guide-note">⚡ 1 Press = 1 Step (Same as host)</div>
+        </div>
+
+        <button class="leave-btn" onclick="leaveRole()">⇄ Switch Role / Leave</button>
+      </div>
     </div>
-    <div class="keyboard-hint">💻 1 Click / Key Press = 1 Step (Same as host)</div>
   </div>
 </div>
 
@@ -868,14 +1047,15 @@ QByteArray GameServer::getControllerHtml() const
   let myName = localStorage.getItem('pacman_pname') || '';
   if (myName) document.getElementById('nameInput').value = myName;
 
+  // High-Resolution 630x630 Coordinate System (30px per cell)
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
-  const C_SIZE = 20; // 420 / 21 = 20px per cell
+  const C_SIZE = 30; // 630 / 21 = 30px per cell
 
   // Offscreen canvas for lantern fog spotlight
   const fogCanvas = document.createElement('canvas');
-  fogCanvas.width = 420;
-  fogCanvas.height = 420;
+  fogCanvas.width = 630;
+  fogCanvas.height = 630;
   const fogCtx = fogCanvas.getContext('2d');
 
   const roleMeta = {
@@ -887,6 +1067,14 @@ QByteArray GameServer::getControllerHtml() const
     inky: { icon: "🩵", name: "Inky", color: "#00ffff", isHero: false, ghostIdx: 2 },
     clyde: { icon: "🟠", name: "Clyde", color: "#ffaa00", isHero: false, ghostIdx: 3 }
   };
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen().catch(() => {});
+    } else {
+      if (document.exitFullscreen) document.exitFullscreen().catch(() => {});
+    }
+  }
 
   function connect() {
     const loc = window.location;
@@ -960,11 +1148,11 @@ QByteArray GameServer::getControllerHtml() const
     const actionBtn = document.getElementById('actionBtn');
     if (meta.isHero) {
       actionBtn.className = "action-btn btn-peek";
-      actionBtn.innerText = "👁️ FOG PEEK (3 left)";
+      actionBtn.innerHTML = '👁️ FOG PEEK (3 left)<div class="btn-subhint">Press [Space] or [F]</div>';
       actionBtn.disabled = false;
     } else {
       actionBtn.className = "action-btn btn-ghost-status";
-      actionBtn.innerText = "🎯 HUNT PAC-MAN!";
+      actionBtn.innerHTML = '🎯 HUNT PAC-MAN!<div class="btn-subhint">Catch the Pac-Heroes!</div>';
       actionBtn.disabled = true;
     }
   }
@@ -1024,11 +1212,11 @@ QByteArray GameServer::getControllerHtml() const
         peeks = state.fogPeeks;
       }
       if (peeks > 0) {
-        actionBtn.innerText = "👁️ FOG PEEK (" + peeks + " left)";
+        actionBtn.innerHTML = '👁️ FOG PEEK (' + peeks + ' left)<div class="btn-subhint">Press [Space] or [F]</div>';
         actionBtn.disabled = false;
         actionBtn.style.opacity = "1";
       } else {
-        actionBtn.innerText = "🔒 0 PEEKS (Eat fruit for +1)";
+        actionBtn.innerHTML = '🔒 0 PEEKS (Eat fruit for +1)<div class="btn-subhint">Collect fruits on map</div>';
         actionBtn.disabled = true;
         actionBtn.style.opacity = "0.6";
       }
@@ -1038,7 +1226,7 @@ QByteArray GameServer::getControllerHtml() const
       pill.innerText = "ENERGIZED!";
       pill.classList.add('frightened');
       if (meta && !meta.isHero) {
-        actionBtn.innerText = "😱 DANGER! ESCAPE PAC-MAN!";
+        actionBtn.innerHTML = '😱 DANGER! ESCAPE PAC-MAN!<div class="btn-subhint">Pac-Man is energized!</div>';
         actionBtn.style.background = "#0044aa";
         actionBtn.style.color = "#00ffff";
       }
@@ -1059,7 +1247,7 @@ QByteArray GameServer::getControllerHtml() const
       }
 
       if (meta && !meta.isHero) {
-        actionBtn.innerText = "🎯 HUNT PAC-MAN!";
+        actionBtn.innerHTML = '🎯 HUNT PAC-MAN!<div class="btn-subhint">Catch the Pac-Heroes!</div>';
         actionBtn.style.background = "#1b1328";
         actionBtn.style.color = "#da70d6";
       }
@@ -1078,19 +1266,19 @@ QByteArray GameServer::getControllerHtml() const
   });
 
   // ==========================================
-  // HTML5 Canvas 2D Game Renderer
+  // HTML5 Canvas 2D Game Renderer (630x630)
   // ==========================================
   function render() {
     animTick++;
-    ctx.clearRect(0, 0, 420, 420);
+    ctx.clearRect(0, 0, 630, 630);
 
     if (!latestState) {
       ctx.fillStyle = "#070914";
-      ctx.fillRect(0, 0, 420, 420);
+      ctx.fillRect(0, 0, 630, 630);
       ctx.fillStyle = "#4a5980";
-      ctx.font = "bold 13px sans-serif";
+      ctx.font = "bold 15px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("Connecting to classroom game server...", 210, 205);
+      ctx.fillText("Connecting to classroom game server...", 315, 305);
       requestAnimationFrame(render);
       return;
     }
@@ -1115,42 +1303,42 @@ QByteArray GameServer::getControllerHtml() const
 
   function drawMapStandby() {
     ctx.fillStyle = "#070914";
-    ctx.fillRect(0, 0, 420, 420);
+    ctx.fillRect(0, 0, 630, 630);
 
     ctx.strokeStyle = "rgba(40, 55, 100, 0.25)";
-    ctx.lineWidth = 1;
-    for (let i = 0; i < 420; i += 30) {
-      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 420); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(420, i); ctx.stroke();
+    ctx.lineWidth = 1.5;
+    for (let i = 0; i < 630; i += 45) {
+      ctx.beginPath(); ctx.moveTo(i, 0); ctx.lineTo(i, 630); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(630, i); ctx.stroke();
     }
 
-    const pulse = Math.sin(animTick * 0.05) * 5;
+    const pulse = Math.sin(animTick * 0.05) * 6;
     ctx.strokeStyle = "#00e5ff";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(210, 160, 40 + pulse, 0, Math.PI * 2);
+    ctx.arc(315, 240, 55 + pulse, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.fillStyle = "#00e5ff";
-    ctx.font = "30px sans-serif";
+    ctx.font = "44px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("🗺️", 210, 172);
+    ctx.fillText("🗺️", 315, 255);
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 16px sans-serif";
-    ctx.fillText("WORLD ADVENTURE MAP", 210, 240);
+    ctx.font = "bold 22px sans-serif";
+    ctx.fillText("WORLD ADVENTURE MAP", 315, 345);
 
     ctx.fillStyle = "#8aa0c4";
-    ctx.font = "12px sans-serif";
-    ctx.fillText("Stage selection in progress on host console...", 210, 265);
+    ctx.font = "15px sans-serif";
+    ctx.fillText("Stage selection in progress on host console...", 315, 380);
     ctx.fillStyle = "#ffe600";
-    ctx.font = "bold 11px sans-serif";
-    ctx.fillText("⚡ Get ready to play!", 210, 290);
+    ctx.font = "bold 14px sans-serif";
+    ctx.fillText("⚡ Get ready to play!", 315, 415);
   }
 
   function drawMaze(state) {
     ctx.fillStyle = "#070914";
-    ctx.fillRect(0, 0, 420, 420);
+    ctx.fillRect(0, 0, 630, 630);
 
     const board = state.board;
     const explored = state.explored;
@@ -1173,8 +1361,8 @@ QByteArray GameServer::getControllerHtml() const
           } else {
             ctx.fillStyle = wasExplored ? "#141c48" : "#0c112e";
             ctx.strokeStyle = wasExplored ? "#2844a8" : "#1a2c6d";
-            ctx.lineWidth = 1.5;
-            roundRect(ctx, cx + 1, cy + 1, C_SIZE - 2, C_SIZE - 2, 4);
+            ctx.lineWidth = 2;
+            roundRect(ctx, cx + 1.5, cy + 1.5, C_SIZE - 3, C_SIZE - 3, 5);
             ctx.fill();
             ctx.stroke();
           }
@@ -1186,26 +1374,26 @@ QByteArray GameServer::getControllerHtml() const
             if (!isFog || wasExplored) {
               ctx.fillStyle = "#ffe6b0";
               ctx.beginPath();
-              ctx.arc(cx + 10, cy + 10, 2.5, 0, Math.PI * 2);
+              ctx.arc(cx + 15, cy + 15, 3.5, 0, Math.PI * 2);
               ctx.fill();
             }
           } else if (cell === '3') {
             if (!isFog || wasExplored) {
-              const pelletPulse = Math.sin(animTick * 0.15) * 1.5;
+              const pelletPulse = Math.sin(animTick * 0.15) * 2;
               ctx.fillStyle = "#ffffff";
               ctx.shadowColor = "#ffcc00";
-              ctx.shadowBlur = 8;
+              ctx.shadowBlur = 10;
               ctx.beginPath();
-              ctx.arc(cx + 10, cy + 10, 5 + pelletPulse, 0, Math.PI * 2);
+              ctx.arc(cx + 15, cy + 15, 7.5 + pelletPulse, 0, Math.PI * 2);
               ctx.fill();
               ctx.shadowBlur = 0;
             }
           } else if (cell === '4') {
             ctx.strokeStyle = "#ff69b4";
-            ctx.lineWidth = 2;
+            ctx.lineWidth = 3;
             ctx.beginPath();
-            ctx.moveTo(cx, cy + 10);
-            ctx.lineTo(cx + C_SIZE, cy + 10);
+            ctx.moveTo(cx, cy + 15);
+            ctx.lineTo(cx + C_SIZE, cy + 15);
             ctx.stroke();
           }
         }
@@ -1231,38 +1419,38 @@ QByteArray GameServer::getControllerHtml() const
 
     if (isFog && !wasExplored) return;
 
-    const ex = state.exitX * C_SIZE + 10;
-    const ey = state.exitY * C_SIZE + 10;
-    const pulse = Math.sin(animTick * 0.1) * 3;
+    const ex = state.exitX * C_SIZE + 15;
+    const ey = state.exitY * C_SIZE + 15;
+    const pulse = Math.sin(animTick * 0.1) * 4;
 
-    const grad = ctx.createRadialGradient(ex, ey, 3, ex, ey, 18 + pulse);
+    const grad = ctx.createRadialGradient(ex, ey, 4, ex, ey, 24 + pulse);
     grad.addColorStop(0, "rgba(0, 255, 128, 0.9)");
     grad.addColorStop(0.5, "rgba(0, 200, 100, 0.4)");
     grad.addColorStop(1, "rgba(0, 0, 0, 0)");
     ctx.fillStyle = grad;
     ctx.beginPath();
-    ctx.arc(ex, ey, 18 + pulse, 0, Math.PI * 2);
+    ctx.arc(ex, ey, 24 + pulse, 0, Math.PI * 2);
     ctx.fill();
 
     ctx.strokeStyle = "#00ff88";
-    ctx.lineWidth = 2;
+    ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(ex, ey, 8, 0, Math.PI * 2);
+    ctx.arc(ex, ey, 11, 0, Math.PI * 2);
     ctx.stroke();
 
     ctx.fillStyle = "#ffffff";
-    ctx.font = "bold 8px sans-serif";
+    ctx.font = "bold 11px sans-serif";
     ctx.textAlign = "center";
-    ctx.fillText("EXIT", ex, ey + 3);
+    ctx.fillText("EXIT", ex, ey + 4);
   }
 
   function drawFruits(state) {
     if (!state.fruits || state.fruits.length === 0) return;
     const fruitIcons = ["🍒", "🍓", "🍊", "🍎", "🍈", "🔔", "🔑"];
     for (const f of state.fruits) {
-      const fx = f.x * C_SIZE + 10;
-      const fy = f.y * C_SIZE + 14;
-      ctx.font = "14px sans-serif";
+      const fx = f.x * C_SIZE + 15;
+      const fy = f.y * C_SIZE + 22;
+      ctx.font = "20px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText(fruitIcons[f.type % fruitIcons.length] || "🍒", fx, fy);
     }
@@ -1290,8 +1478,8 @@ QByteArray GameServer::getControllerHtml() const
 
   function drawPacHero(h, color, roleKey, bow, cap, headband, defaultTag) {
     if (!h || !h.alive) return;
-    const hx = h.x * C_SIZE + 10;
-    const hy = h.y * C_SIZE + 10;
+    const hx = h.x * C_SIZE + 15;
+    const hy = h.y * C_SIZE + 15;
     const dir = h.dir; // 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT
 
     let angle = 0;
@@ -1309,7 +1497,7 @@ QByteArray GameServer::getControllerHtml() const
 
     ctx.fillStyle = color;
     ctx.beginPath();
-    ctx.arc(0, 0, 8.5, mouthRad, Math.PI * 2 - mouthRad);
+    ctx.arc(0, 0, 12.5, mouthRad, Math.PI * 2 - mouthRad);
     ctx.lineTo(0, 0);
     ctx.closePath();
     ctx.fill();
@@ -1320,38 +1508,38 @@ QByteArray GameServer::getControllerHtml() const
     if (bow) {
       ctx.fillStyle = "#ff1744";
       ctx.beginPath();
-      ctx.arc(hx - 3.5, hy - 7, 2.5, 0, Math.PI * 2);
-      ctx.arc(hx + 3.5, hy - 7, 2.5, 0, Math.PI * 2);
+      ctx.arc(hx - 5, hy - 10, 3.8, 0, Math.PI * 2);
+      ctx.arc(hx + 5, hy - 10, 3.8, 0, Math.PI * 2);
       ctx.fill();
       ctx.fillStyle = "#fff";
-      ctx.fillRect(hx - 1, hy - 8, 2, 2);
+      ctx.fillRect(hx - 1.5, hy - 12, 3, 3);
     }
     if (cap) {
       ctx.fillStyle = "#0066ff";
-      ctx.fillRect(hx - 5, hy - 9, 10, 2.5);
+      ctx.fillRect(hx - 7, hy - 13, 14, 3.5);
       ctx.strokeStyle = "#ff3333";
-      ctx.lineWidth = 1.2;
+      ctx.lineWidth = 1.8;
       ctx.beginPath();
-      ctx.moveTo(hx, hy - 9); ctx.lineTo(hx, hy - 12);
-      ctx.moveTo(hx - 3, hy - 12); ctx.lineTo(hx + 3, hy - 12);
+      ctx.moveTo(hx, hy - 13); ctx.lineTo(hx, hy - 18);
+      ctx.moveTo(hx - 5, hy - 18); ctx.lineTo(hx + 5, hy - 18);
       ctx.stroke();
     }
     if (headband) {
       ctx.fillStyle = "#00a833";
-      ctx.fillRect(hx - 6, hy - 4, 12, 2);
+      ctx.fillRect(hx - 9, hy - 6, 18, 3);
     }
 
     // Role Indicator Tag
     const isMe = (currentRole === roleKey);
-    ctx.font = "bold 8px sans-serif";
+    ctx.font = "bold 11px sans-serif";
     ctx.textAlign = "center";
     if (isMe) {
       ctx.fillStyle = "#00f0ff";
-      ctx.fillText("▼ YOU", hx, hy - 11);
+      ctx.fillText("▼ YOU", hx, hy - 15);
     } else {
       ctx.fillStyle = "#ffffff";
       const tag = (h.name && h.name.length > 0) ? h.name : defaultTag;
-      ctx.fillText(tag.substring(0, 8), hx, hy - 11);
+      ctx.fillText(tag.substring(0, 10), hx, hy - 15);
     }
   }
 
@@ -1362,8 +1550,8 @@ QByteArray GameServer::getControllerHtml() const
     const ghostRoleNames = ["blinky", "pinky", "inky", "clyde"];
 
     for (const g of state.ghosts) {
-      const gx = g.x * C_SIZE + 10;
-      const gy = g.y * C_SIZE + 10;
+      const gx = g.x * C_SIZE + 15;
+      const gy = g.y * C_SIZE + 15;
       const isFrightened = state.frightened;
 
       let bodyColor = ghostColors[g.color] || "#ff3333";
@@ -1375,15 +1563,15 @@ QByteArray GameServer::getControllerHtml() const
       ctx.fillStyle = bodyColor;
       ctx.beginPath();
       // Dome
-      ctx.arc(gx, gy - 2, 7.5, Math.PI, 0, false);
+      ctx.arc(gx, gy - 3, 11, Math.PI, 0, false);
       // Sides
-      ctx.lineTo(gx + 7.5, gy + 7);
+      ctx.lineTo(gx + 11, gy + 10);
       // Wavy Skirt
-      const waveOffset = Math.sin(animTick * 0.2) * 1.5;
-      ctx.lineTo(gx + 4, gy + 5 + waveOffset);
-      ctx.lineTo(gx, gy + 7);
-      ctx.lineTo(gx - 4, gy + 5 - waveOffset);
-      ctx.lineTo(gx - 7.5, gy + 7);
+      const waveOffset = Math.sin(animTick * 0.2) * 2;
+      ctx.lineTo(gx + 6, gy + 7 + waveOffset);
+      ctx.lineTo(gx, gy + 10);
+      ctx.lineTo(gx - 6, gy + 7 - waveOffset);
+      ctx.lineTo(gx - 11, gy + 10);
       ctx.closePath();
       ctx.fill();
 
@@ -1391,46 +1579,46 @@ QByteArray GameServer::getControllerHtml() const
       if (!isFrightened) {
         ctx.fillStyle = "#ffffff";
         ctx.beginPath();
-        ctx.arc(gx - 3, gy - 2, 2.5, 0, Math.PI * 2);
-        ctx.arc(gx + 3, gy - 2, 2.5, 0, Math.PI * 2);
+        ctx.arc(gx - 4.5, gy - 3, 3.8, 0, Math.PI * 2);
+        ctx.arc(gx + 4.5, gy - 3, 3.8, 0, Math.PI * 2);
         ctx.fill();
 
         ctx.fillStyle = "#002288";
-        let ox = (g.dir === 2 ? -1 : (g.dir === 3 ? 1 : 0));
-        let oy = (g.dir === 0 ? -1 : (g.dir === 1 ? 1 : 0));
+        let ox = (g.dir === 2 ? -1.5 : (g.dir === 3 ? 1.5 : 0));
+        let oy = (g.dir === 0 ? -1.5 : (g.dir === 1 ? 1.5 : 0));
         ctx.beginPath();
-        ctx.arc(gx - 3 + ox, gy - 2 + oy, 1.2, 0, Math.PI * 2);
-        ctx.arc(gx + 3 + ox, gy - 2 + oy, 1.2, 0, Math.PI * 2);
+        ctx.arc(gx - 4.5 + ox, gy - 3 + oy, 1.8, 0, Math.PI * 2);
+        ctx.arc(gx + 4.5 + ox, gy - 3 + oy, 1.8, 0, Math.PI * 2);
         ctx.fill();
       } else {
         ctx.fillStyle = "#ffaaaa";
-        ctx.fillRect(gx - 4, gy - 3, 2, 2);
-        ctx.fillRect(gx + 2, gy - 3, 2, 2);
+        ctx.fillRect(gx - 6, gy - 4, 3, 3);
+        ctx.fillRect(gx + 3, gy - 4, 3, 3);
         ctx.strokeStyle = "#ffaaaa";
-        ctx.lineWidth = 1;
+        ctx.lineWidth = 1.5;
         ctx.beginPath();
-        ctx.moveTo(gx - 5, gy + 3);
-        ctx.lineTo(gx - 2, gy + 1);
-        ctx.lineTo(gx, gy + 3);
-        ctx.lineTo(gx + 2, gy + 1);
-        ctx.lineTo(gx + 5, gy + 3);
+        ctx.moveTo(gx - 7, gy + 4);
+        ctx.lineTo(gx - 3, gy + 1.5);
+        ctx.lineTo(gx, gy + 4);
+        ctx.lineTo(gx + 3, gy + 1.5);
+        ctx.lineTo(gx + 7, gy + 4);
         ctx.stroke();
       }
       ctx.restore();
 
       // Ghost Badge
       const isMe = (currentRole && currentRole.toLowerCase() === ghostRoleNames[g.color]);
-      ctx.font = "bold 8px sans-serif";
+      ctx.font = "bold 11px sans-serif";
       ctx.textAlign = "center";
       if (isMe) {
         ctx.fillStyle = "#ff5577";
-        ctx.fillText("▼ YOU (Ghost)", gx, gy - 11);
+        ctx.fillText("▼ YOU (Ghost)", gx, gy - 16);
       } else if (g.isHuman && g.name) {
         ctx.fillStyle = bodyColor;
-        ctx.fillText("👻 " + g.name.substring(0, 8), gx, gy - 11);
+        ctx.fillText("👻 " + g.name.substring(0, 10), gx, gy - 16);
       } else {
         ctx.fillStyle = "#8a9ab8";
-        ctx.fillText("👻 " + ghostNames[g.color], gx, gy - 11);
+        ctx.fillText("👻 " + ghostNames[g.color], gx, gy - 16);
       }
     }
   }
@@ -1438,10 +1626,9 @@ QByteArray GameServer::getControllerHtml() const
   function applyFogOfWar(state) {
     if (!state.fog || state.peek) return;
 
-    // Reset fog canvas to pitch darkness
-    fogCtx.clearRect(0, 0, 420, 420);
+    fogCtx.clearRect(0, 0, 630, 630);
     fogCtx.fillStyle = "rgba(4, 6, 15, 0.95)";
-    fogCtx.fillRect(0, 0, 420, 420);
+    fogCtx.fillRect(0, 0, 630, 630);
 
     // Carve out illuminated spotlights for alive & active heroes using destination-out
     fogCtx.globalCompositeOperation = 'destination-out';
@@ -1454,8 +1641,8 @@ QByteArray GameServer::getControllerHtml() const
     const rPx = (state.radius || 3.5) * C_SIZE;
 
     for (const h of heroes) {
-      const hx = h.x * C_SIZE + 10;
-      const hy = h.y * C_SIZE + 10;
+      const hx = h.x * C_SIZE + 15;
+      const hy = h.y * C_SIZE + 15;
 
       const grad = fogCtx.createRadialGradient(hx, hy, rPx * 0.25, hx, hy, rPx);
       grad.addColorStop(0, "rgba(0,0,0,1.0)");
@@ -1468,7 +1655,6 @@ QByteArray GameServer::getControllerHtml() const
       fogCtx.fill();
     }
 
-    // Blend fog layer on top of main canvas
     fogCtx.globalCompositeOperation = 'source-over';
     ctx.drawImage(fogCanvas, 0, 0);
   }
@@ -1476,44 +1662,44 @@ QByteArray GameServer::getControllerHtml() const
   function drawOverlays(state) {
     if (state.peek) {
       ctx.fillStyle = "rgba(255, 200, 0, 0.25)";
-      ctx.fillRect(0, 0, 420, 24);
+      ctx.fillRect(0, 0, 630, 36);
       ctx.strokeStyle = "#ffe600";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(0, 0, 420, 24);
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(0, 0, 630, 36);
       ctx.fillStyle = "#ffe600";
-      ctx.font = "bold 11px sans-serif";
+      ctx.font = "bold 15px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("👁️ FOG PEEK ACTIVE! FULL MAZE REVEALED", 210, 16);
+      ctx.fillText("👁️ FOG PEEK ACTIVE! FULL MAZE REVEALED", 315, 24);
     }
 
     if (state.gameOver) {
-      ctx.fillStyle = "rgba(8, 2, 10, 0.85)";
-      ctx.fillRect(0, 150, 420, 120);
+      ctx.fillStyle = "rgba(8, 2, 10, 0.88)";
+      ctx.fillRect(0, 220, 630, 190);
       ctx.strokeStyle = "#ff3355";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(0, 150, 420, 120);
+      ctx.lineWidth = 3;
+      ctx.strokeRect(0, 220, 630, 190);
 
       ctx.fillStyle = "#ff3355";
-      ctx.font = "900 24px sans-serif";
+      ctx.font = "900 34px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("GAME OVER", 210, 200);
+      ctx.fillText("GAME OVER", 315, 300);
       ctx.fillStyle = "#ffffff";
-      ctx.font = "12px sans-serif";
-      ctx.fillText("Host can restart stage on main screen", 210, 230);
+      ctx.font = "16px sans-serif";
+      ctx.fillText("Host can restart stage on main screen", 315, 345);
     } else if (state.levelComplete) {
-      ctx.fillStyle = "rgba(2, 20, 10, 0.85)";
-      ctx.fillRect(0, 150, 420, 120);
+      ctx.fillStyle = "rgba(2, 20, 10, 0.88)";
+      ctx.fillRect(0, 220, 630, 190);
       ctx.strokeStyle = "#00ff88";
-      ctx.lineWidth = 2;
-      ctx.strokeRect(0, 150, 420, 120);
+      ctx.lineWidth = 3;
+      ctx.strokeRect(0, 220, 630, 190);
 
       ctx.fillStyle = "#00ff88";
-      ctx.font = "900 22px sans-serif";
+      ctx.font = "900 32px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("STAGE COMPLETE! 🏆", 210, 200);
+      ctx.fillText("STAGE COMPLETE! 🏆", 315, 300);
       ctx.fillStyle = "#ffffff";
-      ctx.font = "12px sans-serif";
-      ctx.fillText("Entering next labyrinth sector...", 210, 230);
+      ctx.font = "16px sans-serif";
+      ctx.fillText("Entering next labyrinth sector...", 315, 345);
     }
   }
 
