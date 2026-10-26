@@ -90,11 +90,41 @@ void MainWindow::drawOrangeFruit(QPainter &painter, int cx, int cy, int s)
 // Drawing a Single Sector Window
 // ========================================================
 
+struct MazeTheme {
+    QColor wallBase;
+    QColor wallBorder;
+    QColor wallGlow;
+    QColor corridor;
+    QColor dotCore;
+    QColor dotGlow;
+};
+
+static MazeTheme getMazeThemeForWorld(int world)
+{
+    switch ((world - 1) % 6) {
+        case 0: // World 1: Neon Sapphire & Electric Cyan (Cyber-Matrix)
+            return { QColor(16, 26, 68), QColor(0, 210, 255), QColor(140, 245, 255), QColor(6, 8, 20), QColor(255, 240, 180), QColor(255, 220, 100, 75) };
+        case 1: // World 2: Molten Caramel & Amber Caverns
+            return { QColor(48, 18, 10), QColor(255, 120, 30), QColor(255, 190, 90), QColor(14, 6, 4), QColor(255, 210, 120), QColor(255, 160, 40, 75) };
+        case 2: // World 3: Gummy Galaxy & Cosmic Amethyst
+            return { QColor(28, 14, 58), QColor(190, 80, 255), QColor(230, 160, 255), QColor(10, 5, 20), QColor(220, 240, 255), QColor(180, 120, 255, 75) };
+        case 3: // World 4: Cotton Candy Clouds & Strawberry Velvet
+            return { QColor(46, 16, 52), QColor(255, 80, 175), QColor(255, 180, 225), QColor(16, 6, 18), QColor(255, 235, 210), QColor(255, 130, 190, 75) };
+        case 4: // World 5: Chocolate Chip Chasm & Sunstone Gold
+            return { QColor(32, 18, 10), QColor(235, 175, 35), QColor(255, 230, 110), QColor(12, 7, 5), QColor(255, 225, 80), QColor(235, 180, 40, 75) };
+        case 5: // World 6: Emerald Lagoon & Jade Sanctum
+        default:
+            return { QColor(10, 34, 38), QColor(0, 230, 150), QColor(130, 255, 210), QColor(4, 14, 16), QColor(235, 255, 245), QColor(0, 230, 150, 75) };
+    }
+}
+
 void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int originY, int cellSize)
 {
     bool isCurrent = (sx == currentSectorX && sy == currentSectorY);
+    int worldNum = (currentLevel - 1) / LEVELS_PER_WORLD + 1;
+    MazeTheme theme = getMazeThemeForWorld(worldNum);
 
-    // 1. Draw Maze Tiles & Dots
+    // 1. Draw Maze Tiles & Glowing Candy Pellets
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
             int cx = originX + c * cellSize;
@@ -109,32 +139,51 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
             }
 
             if (board[sy][sx][r][c] == 1) {
-                // Wall
+                // 3D Beveled Acrylic Wall
+                int cornerR = std::max(4, cellSize / 5);
                 if (visible) {
-                    painter.setBrush(QColor(25, 45, 130));
-                    painter.setPen(QPen(QColor(40, 80, 200), std::max(1, cellSize / 25)));
+                    painter.setBrush(theme.wallBase);
+                    painter.setPen(QPen(theme.wallBorder, std::max(1.5, cellSize * 0.08)));
+                    painter.drawRoundedRect(cx + 1, cy + 1, cellSize - 2, cellSize - 2, cornerR, cornerR);
+
+                    // Specular gleam highlight on top and left edges
+                    painter.setPen(QPen(theme.wallGlow, 1.2));
+                    painter.drawLine(cx + cornerR, cy + 2, cx + cellSize - cornerR, cy + 2);
+                    painter.drawLine(cx + 2, cy + cornerR, cx + 2, cy + cellSize - cornerR);
                 } else {
-                    painter.setBrush(QColor(14, 22, 50));
-                    painter.setPen(QPen(QColor(24, 38, 80), std::max(1, cellSize / 25)));
+                    painter.setBrush(theme.wallBase.darker(240));
+                    painter.setPen(QPen(theme.wallBorder.darker(220), 1.0));
+                    painter.drawRoundedRect(cx + 1, cy + 1, cellSize - 2, cellSize - 2, cornerR, cornerR);
                 }
-                int cornerR = std::max(3, cellSize / 7);
-                painter.drawRoundedRect(cx + 1, cy + 1, cellSize - 2, cellSize - 2, cornerR, cornerR);
             } else {
                 // Open corridor
                 if (visible) {
-                    painter.fillRect(cx, cy, cellSize, cellSize, QColor(8, 8, 16));
+                    painter.fillRect(cx, cy, cellSize, cellSize, theme.corridor);
                     if (board[sy][sx][r][c] == 2) {
-                        painter.setBrush(QColor(255, 230, 180));
+                        // Glowing Candy Energy Pellet
+                        int dotSize = std::max(5, cellSize * 6 / 30);
+                        int dX = cx + cellSize / 2;
+                        int dY = cy + cellSize / 2;
+
+                        // Luminous soft halo
+                        painter.setBrush(theme.dotGlow);
                         painter.setPen(Qt::NoPen);
-                        int dotSize = std::max(4, cellSize * 5 / 30);
-                        painter.drawEllipse(cx + cellSize/2 - dotSize/2, cy + cellSize/2 - dotSize/2, dotSize, dotSize);
+                        painter.drawEllipse(dX - dotSize, dY - dotSize, dotSize * 2, dotSize * 2);
+
+                        // Shiny crisp candy pellet
+                        painter.setBrush(theme.dotCore);
+                        painter.drawEllipse(dX - dotSize/2, dY - dotSize/2, dotSize, dotSize);
+
+                        // Specular glint
+                        painter.setBrush(QColor(255, 255, 255, 220));
+                        painter.drawEllipse(dX - dotSize/4, dY - dotSize/3, std::max(1, dotSize/3), std::max(1, dotSize/3));
                     }
                 } else {
                     painter.fillRect(cx, cy, cellSize, cellSize, QColor(4, 4, 10));
                     if (board[sy][sx][r][c] == 2) {
-                        painter.setBrush(QColor(100, 95, 80, 75));
-                        painter.setPen(Qt::NoPen);
                         int dotSize = std::max(2, cellSize * 3 / 30);
+                        painter.setBrush(QColor(120, 110, 95, 70));
+                        painter.setPen(Qt::NoPen);
                         painter.drawEllipse(cx + cellSize/2 - dotSize/2, cy + cellSize/2 - dotSize/2, dotSize, dotSize);
                     }
                 }
@@ -169,21 +218,41 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
         bool isPinkSolo = (!isAnyMultiplayer() && singlePlayerHero == 2);
 
-        if (isPinkSolo) {
-            // Drawn as Pink Ms. Pacman in solo mode
-            painter.setBrush(p1Alive ? QColor(255, 105, 180) : QColor(255, 150, 200, 110));
-        } else {
-            painter.setBrush(p1Alive ? QColor(255, 220, 0) : QColor(255, 240, 100, 110));
-        }
-        painter.setPen(Qt::NoPen);
         int startAngle = 0;
         if (pacmanDir == RIGHT) startAngle = pacmanMouthAngle;
         else if (pacmanDir == DOWN) startAngle = 270 + pacmanMouthAngle;
         else if (pacmanDir == LEFT) startAngle = 180 + pacmanMouthAngle;
         else if (pacmanDir == UP) startAngle = 90 + pacmanMouthAngle;
-
         int spanAngle = 360 - 2 * pacmanMouthAngle;
+
+        // 3D Spherical Radial Gradient
+        QRadialGradient heroGrad(px + cellSize * 0.38, py + cellSize * 0.32, cellSize * 0.65);
+        if (isPinkSolo) {
+            heroGrad.setColorAt(0.0, p1Alive ? QColor(255, 215, 235) : QColor(255, 220, 240, 130));
+            heroGrad.setColorAt(0.55, p1Alive ? QColor(255, 105, 180) : QColor(255, 130, 190, 120));
+            heroGrad.setColorAt(1.0, p1Alive ? QColor(190, 45, 120) : QColor(170, 50, 110, 100));
+        } else {
+            heroGrad.setColorAt(0.0, p1Alive ? QColor(255, 255, 160) : QColor(255, 255, 180, 130));
+            heroGrad.setColorAt(0.55, p1Alive ? QColor(255, 220, 0) : QColor(255, 230, 40, 120));
+            heroGrad.setColorAt(1.0, p1Alive ? QColor(210, 145, 0) : QColor(190, 150, 20, 100));
+        }
+        painter.setBrush(heroGrad);
+        painter.setPen(QPen(isPinkSolo ? QColor(255, 70, 150) : QColor(210, 150, 0), 1.2));
         painter.drawPie(px + 2, py + 2, cellSize - 4, cellSize - 4, startAngle * 16, spanAngle * 16);
+
+        // Expressive Cartoon Eye
+        int eyeR = std::max(3, cellSize / 8);
+        int eyeX = px + cellSize * 0.42;
+        int eyeY = py + cellSize * 0.28;
+        if (pacmanDir == LEFT) eyeX = px + cellSize * 0.32;
+        else if (pacmanDir == RIGHT) eyeX = px + cellSize * 0.58;
+        else if (pacmanDir == DOWN) { eyeX = px + cellSize * 0.35; eyeY = py + cellSize * 0.60; }
+
+        painter.setBrush(QColor(25, 20, 30));
+        painter.setPen(Qt::NoPen);
+        painter.drawEllipse(eyeX - eyeR/2, eyeY - eyeR/2, eyeR, eyeR);
+        painter.setBrush(Qt::white);
+        painter.drawEllipse(eyeX - eyeR/4, eyeY - eyeR/3, std::max(1, eyeR/3), std::max(1, eyeR/3));
 
         if (isPinkSolo) {
             // Cute Red Ribbon Bow on head
@@ -196,7 +265,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
             painter.setBrush(QColor(255, 220, 230));
             painter.drawEllipse(bx - bowSize / 4, by + bowSize / 6, bowSize / 2, bowSize / 2);
 
-            // Eye beauty mark
+            // Beauty mark
             painter.setBrush(QColor(20, 20, 60));
             painter.drawEllipse(px + cellSize * 3 / 5, py + cellSize / 3, std::max(2, cellSize / 7), std::max(2, cellSize / 7));
         }
@@ -221,16 +290,34 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         int px = originX + p2X * cellSize;
         int py = originY + p2Y * cellSize;
 
-        painter.setBrush(p2Alive ? QColor(255, 105, 180) : QColor(255, 150, 200, 110));
-        painter.setPen(Qt::NoPen);
         int startAngle = 0;
         if (p2Dir == RIGHT) startAngle = p2MouthAngle;
         else if (p2Dir == DOWN) startAngle = 270 + p2MouthAngle;
         else if (p2Dir == LEFT) startAngle = 180 + p2MouthAngle;
         else if (p2Dir == UP) startAngle = 90 + p2MouthAngle;
-
         int spanAngle = 360 - 2 * p2MouthAngle;
+
+        QRadialGradient p2Grad(px + cellSize * 0.38, py + cellSize * 0.32, cellSize * 0.65);
+        p2Grad.setColorAt(0.0, p2Alive ? QColor(255, 215, 235) : QColor(255, 220, 240, 130));
+        p2Grad.setColorAt(0.55, p2Alive ? QColor(255, 105, 180) : QColor(255, 130, 190, 120));
+        p2Grad.setColorAt(1.0, p2Alive ? QColor(190, 45, 120) : QColor(170, 50, 110, 100));
+        painter.setBrush(p2Grad);
+        painter.setPen(QPen(QColor(255, 70, 150), 1.2));
         painter.drawPie(px + 2, py + 2, cellSize - 4, cellSize - 4, startAngle * 16, spanAngle * 16);
+
+        // Expressive cartoon eye with glamorous eyelashes
+        int eyeR = std::max(3, cellSize / 8);
+        int eyeX = px + cellSize * 0.42;
+        int eyeY = py + cellSize * 0.28;
+        if (p2Dir == LEFT) eyeX = px + cellSize * 0.32;
+        else if (p2Dir == RIGHT) eyeX = px + cellSize * 0.58;
+        else if (p2Dir == DOWN) { eyeX = px + cellSize * 0.35; eyeY = py + cellSize * 0.60; }
+
+        painter.setBrush(QColor(25, 20, 30));
+        painter.setPen(Qt::NoPen);
+        painter.drawEllipse(eyeX - eyeR/2, eyeY - eyeR/2, eyeR, eyeR);
+        painter.setBrush(Qt::white);
+        painter.drawEllipse(eyeX - eyeR/4, eyeY - eyeR/3, std::max(1, eyeR/3), std::max(1, eyeR/3));
 
         // Cute Red Ribbon Bow on head
         painter.setBrush(QColor(235, 20, 60));
@@ -242,7 +329,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         painter.setBrush(QColor(255, 220, 230));
         painter.drawEllipse(bx - bowSize / 4, by + bowSize / 6, bowSize / 2, bowSize / 2);
 
-        // Eye beauty mark
+        // Beauty mark
         painter.setBrush(QColor(20, 20, 60));
         painter.drawEllipse(px + cellSize * 3 / 5, py + cellSize / 3, std::max(2, cellSize / 7), std::max(2, cellSize / 7));
 
@@ -259,19 +346,35 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         int px = originX + hero3.x * cellSize;
         int py = originY + hero3.y * cellSize;
 
-        painter.setBrush(hero3.alive ? QColor(0, 229, 255) : QColor(100, 240, 255, 110));
-        painter.setPen(Qt::NoPen);
         int startAngle = 0;
         if (hero3.dir == RIGHT) startAngle = hero3.mouthAngle;
         else if (hero3.dir == DOWN) startAngle = 270 + hero3.mouthAngle;
         else if (hero3.dir == LEFT) startAngle = 180 + hero3.mouthAngle;
         else if (hero3.dir == UP) startAngle = 90 + hero3.mouthAngle;
-
         int spanAngle = 360 - 2 * hero3.mouthAngle;
+
+        QRadialGradient h3Grad(px + cellSize * 0.38, py + cellSize * 0.32, cellSize * 0.65);
+        h3Grad.setColorAt(0.0, hero3.alive ? QColor(160, 245, 255) : QColor(190, 250, 255, 130));
+        h3Grad.setColorAt(0.55, hero3.alive ? QColor(0, 229, 255) : QColor(80, 210, 240, 120));
+        h3Grad.setColorAt(1.0, hero3.alive ? QColor(0, 140, 200) : QColor(40, 130, 180, 100));
+        painter.setBrush(h3Grad);
+        painter.setPen(QPen(QColor(0, 180, 240), 1.2));
         painter.drawPie(px + 2, py + 2, cellSize - 4, cellSize - 4, startAngle * 16, spanAngle * 16);
 
+        // Expressive Eye
+        int eyeR = std::max(3, cellSize / 8);
+        int eyeX = px + cellSize * 0.42;
+        int eyeY = py + cellSize * 0.30;
+        if (hero3.dir == LEFT) eyeX = px + cellSize * 0.32;
+        else if (hero3.dir == RIGHT) eyeX = px + cellSize * 0.58;
+        painter.setBrush(QColor(25, 20, 30));
+        painter.setPen(Qt::NoPen);
+        painter.drawEllipse(eyeX - eyeR/2, eyeY - eyeR/2, eyeR, eyeR);
+        painter.setBrush(Qt::white);
+        painter.drawEllipse(eyeX - eyeR/4, eyeY - eyeR/3, std::max(1, eyeR/3), std::max(1, eyeR/3));
+
         // Blue Propeller Beanie Cap
-        painter.setBrush(QColor(0, 100, 255));
+        painter.setBrush(QColor(20, 90, 240));
         painter.drawEllipse(px + cellSize / 4, py + 1, cellSize / 2, cellSize / 4);
         painter.setPen(QPen(QColor(255, 50, 50), 2));
         painter.drawLine(px + cellSize / 2, py + 2, px + cellSize / 2, py - 3);
@@ -291,20 +394,38 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         int px = originX + hero4.x * cellSize;
         int py = originY + hero4.y * cellSize;
 
-        painter.setBrush(hero4.alive ? QColor(0, 255, 100) : QColor(100, 255, 150, 110));
-        painter.setPen(Qt::NoPen);
         int startAngle = 0;
         if (hero4.dir == RIGHT) startAngle = hero4.mouthAngle;
         else if (hero4.dir == DOWN) startAngle = 270 + hero4.mouthAngle;
         else if (hero4.dir == LEFT) startAngle = 180 + hero4.mouthAngle;
         else if (hero4.dir == UP) startAngle = 90 + hero4.mouthAngle;
-
         int spanAngle = 360 - 2 * hero4.mouthAngle;
+
+        QRadialGradient h4Grad(px + cellSize * 0.38, py + cellSize * 0.32, cellSize * 0.65);
+        h4Grad.setColorAt(0.0, hero4.alive ? QColor(140, 255, 180) : QColor(180, 255, 210, 130));
+        h4Grad.setColorAt(0.55, hero4.alive ? QColor(0, 235, 100) : QColor(60, 220, 120, 120));
+        h4Grad.setColorAt(1.0, hero4.alive ? QColor(0, 150, 60) : QColor(30, 140, 60, 100));
+        painter.setBrush(h4Grad);
+        painter.setPen(QPen(QColor(0, 180, 70), 1.2));
         painter.drawPie(px + 2, py + 2, cellSize - 4, cellSize - 4, startAngle * 16, spanAngle * 16);
 
-        // Superhero headband
-        painter.setBrush(QColor(0, 160, 50));
+        // Expressive Eye
+        int eyeR = std::max(3, cellSize / 8);
+        int eyeX = px + cellSize * 0.42;
+        int eyeY = py + cellSize * 0.30;
+        if (hero4.dir == LEFT) eyeX = px + cellSize * 0.32;
+        else if (hero4.dir == RIGHT) eyeX = px + cellSize * 0.58;
+        painter.setBrush(QColor(25, 20, 30));
+        painter.setPen(Qt::NoPen);
+        painter.drawEllipse(eyeX - eyeR/2, eyeY - eyeR/2, eyeR, eyeR);
+        painter.setBrush(Qt::white);
+        painter.drawEllipse(eyeX - eyeR/4, eyeY - eyeR/3, std::max(1, eyeR/3), std::max(1, eyeR/3));
+
+        // Superhero headband with golden star
+        painter.setBrush(QColor(0, 170, 60));
         painter.drawRect(px + 2, py + cellSize / 4, cellSize - 4, std::max(2, cellSize / 8));
+        painter.setBrush(QColor(255, 225, 50));
+        painter.drawEllipse(px + cellSize / 2 - 2, py + cellSize / 4, 4, 4);
 
         // Name tag
         painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
@@ -314,10 +435,10 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, tag);
     }
 
-    // 6. Draw Ghosts in this sector
+    // 6. Draw Ghosts in this sector (with floating hover bobbing & pupil tracking!)
     QColor ghostNormalColors[] = {
         QColor(255, 50, 50),   // Blinky (Red)
-        QColor(255, 180, 220), // Pinky (Pink)
+        QColor(255, 150, 210), // Pinky (Pink)
         QColor(50, 220, 255),  // Inky (Cyan)
         QColor(255, 160, 50)   // Clyde (Orange)
     };
@@ -326,39 +447,53 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         if (g.sectorX != sx || g.sectorY != sy) continue;
         if (!isCellVisible(sx, sy, g.x, g.y)) continue;
 
+        // Floating hover bobbing animation
+        int bobY = int(std::sin(elapsedTimer.elapsed() * 0.007f + g.colorIndex * 1.5f) * (cellSize * 0.09f));
         int gx = originX + g.x * cellSize;
-        int gy = originY + g.y * cellSize;
+        int gy = originY + g.y * cellSize + bobY;
 
+        QRadialGradient ghostGrad(gx + cellSize * 0.38, gy + cellSize * 0.32, cellSize * 0.65);
         if (ghostsFrightened) {
             if (frightenedTicksLeft <= 8 && (frightenedTicksLeft % 2 == 0)) {
-                painter.setBrush(QColor(255, 255, 255));
+                ghostGrad.setColorAt(0.0, QColor(255, 255, 255));
+                ghostGrad.setColorAt(1.0, QColor(210, 230, 255));
             } else {
-                painter.setBrush(QColor(30, 30, 200));
+                ghostGrad.setColorAt(0.0, QColor(90, 130, 255));
+                ghostGrad.setColorAt(0.6, QColor(35, 45, 220));
+                ghostGrad.setColorAt(1.0, QColor(15, 20, 150));
             }
         } else {
-            painter.setBrush(ghostNormalColors[g.colorIndex]);
+            QColor base = ghostNormalColors[g.colorIndex];
+            ghostGrad.setColorAt(0.0, base.lighter(140));
+            ghostGrad.setColorAt(0.65, base);
+            ghostGrad.setColorAt(1.0, base.darker(150));
         }
+        painter.setBrush(ghostGrad);
         painter.setPen(Qt::NoPen);
 
-        // Body
+        // Body Dome
         painter.drawEllipse(gx + 2, gy + 2, cellSize - 4, cellSize - 4);
         painter.drawRect(gx + 2, gy + cellSize/2, cellSize - 4, (cellSize - 4)/2);
 
-        // Wavy bottom
+        // Animated Rippling Tentacle Skirt
         int waveW = (cellSize - 4) / 3;
+        float wavePhase = elapsedTimer.elapsed() * 0.012f + g.colorIndex;
         for (int w = 0; w < 3; ++w) {
             int wx = gx + 2 + w * waveW;
-            int wy = gy + cellSize - cellSize / 5;
+            int waveOffset = int(std::sin(wavePhase + w * 2.2f) * 2.0f);
+            int wy = gy + cellSize - cellSize / 5 + waveOffset;
             painter.drawEllipse(wx, wy, waveW, cellSize / 5);
         }
 
+        // Expressive Googly Cartoon Eyes that turn in direction of travel!
         if (ghostsFrightened) {
-            painter.setBrush(QColor(255, 200, 200));
+            painter.setBrush(QColor(255, 210, 210));
             int eyeSize = std::max(3, cellSize * 4 / 30);
             painter.drawEllipse(gx + cellSize * 8 / 30, gy + cellSize * 10 / 30, eyeSize, eyeSize);
             painter.drawEllipse(gx + cellSize * 18 / 30, gy + cellSize * 10 / 30, eyeSize, eyeSize);
 
-            painter.setPen(QPen(QColor(255, 200, 200), 1));
+            // Shivering panic wavy mouth
+            painter.setPen(QPen(QColor(255, 210, 210), 1.5));
             for (int m = 0; m < 4; ++m) {
                 int mx = gx + cellSize * 6 / 30 + m * (cellSize * 5 / 30);
                 int my = gy + cellSize * 18 / 30 + (m % 2 == 0 ? 0 : 2);
@@ -366,15 +501,33 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
             }
             painter.setPen(Qt::NoPen);
         } else {
-            painter.setBrush(Qt::white);
-            int eyeSize = std::max(5, cellSize * 6 / 30);
-            painter.drawEllipse(gx + cellSize * 6 / 30, gy + cellSize * 8 / 30, eyeSize, eyeSize);
-            painter.drawEllipse(gx + cellSize * 16 / 30, gy + cellSize * 8 / 30, eyeSize, eyeSize);
+            int eyeW = std::max(5, cellSize * 7 / 30);
+            int eyeH = std::max(6, cellSize * 9 / 30);
+            int eye1X = gx + cellSize * 5 / 30;
+            int eye2X = gx + cellSize * 16 / 30;
+            int eyeY = gy + cellSize * 7 / 30;
 
-            painter.setBrush(Qt::blue);
-            int pupilSize = std::max(3, cellSize * 3 / 30);
-            painter.drawEllipse(gx + cellSize * 8 / 30, gy + cellSize * 10 / 30, pupilSize, pupilSize);
-            painter.drawEllipse(gx + cellSize * 18 / 30, gy + cellSize * 10 / 30, pupilSize, pupilSize);
+            // Sclera (White)
+            painter.setBrush(Qt::white);
+            painter.drawEllipse(eye1X, eyeY, eyeW, eyeH);
+            painter.drawEllipse(eye2X, eyeY, eyeW, eyeH);
+
+            // Pupils pointing towards movement direction (g.dir)
+            int pdx = 0, pdy = 0;
+            if (g.dir == UP) pdy = -2;
+            else if (g.dir == DOWN) pdy = 2;
+            else if (g.dir == LEFT) pdx = -2;
+            else if (g.dir == RIGHT) pdx = 2;
+
+            int pupilSize = std::max(3, cellSize * 4 / 30);
+            painter.setBrush(QColor(20, 50, 180));
+            painter.drawEllipse(eye1X + (eyeW - pupilSize)/2 + pdx, eyeY + (eyeH - pupilSize)/2 + pdy, pupilSize, pupilSize);
+            painter.drawEllipse(eye2X + (eyeW - pupilSize)/2 + pdx, eyeY + (eyeH - pupilSize)/2 + pdy, pupilSize, pupilSize);
+
+            // Catchlight glints
+            painter.setBrush(Qt::white);
+            painter.drawEllipse(eye1X + (eyeW - pupilSize)/2 + pdx + 1, eyeY + (eyeH - pupilSize)/2 + pdy, std::max(1, pupilSize/3), std::max(1, pupilSize/3));
+            painter.drawEllipse(eye2X + (eyeW - pupilSize)/2 + pdx + 1, eyeY + (eyeH - pupilSize)/2 + pdy, std::max(1, pupilSize/3), std::max(1, pupilSize/3));
         }
 
         // Mode B: Show player name tag if controlled by host or classmate
@@ -583,45 +736,96 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         }
     }
 
-    // 7. Glowing EXIT Portal (Hidden until Pacman is close or Fog Peek is triggered)
+    // 7. Dynamic Stargate Vortex EXIT Portal (Hidden until Pacman is close or Fog Peek is triggered)
     if (sx == exitSectorX && sy == exitSectorY) {
         bool exitVisible = isCellVisible(sx, sy, exitX, exitY);
 
         if (!fogOfWarEnabled || exitVisible) {
-            int ex = originX + exitX * cellSize;
-            int ey = originY + exitY * cellSize;
+            float pcx = originX + (exitX + 0.5f) * cellSize;
+            float pcy = originY + (exitY + 0.5f) * cellSize;
+            float pr = cellSize * 0.50f;
+            float exitPulse = (std::sin(pulseTime * 2.4f) + 1.0f) * 0.5f;
+            float spinAngle = elapsedTimer.elapsed() * 0.08f;
 
-            float exitPulse = (std::sin(pulseTime * 1.2f) + 1.0f) * 0.5f;
-
-            // Emerald aura
-            QRadialGradient exitAura(ex + cellSize / 2, ey + cellSize / 2, cellSize * 2.2);
-            exitAura.setColorAt(0.0, QColor(0, 255, 120, 130));
-            exitAura.setColorAt(0.5, QColor(0, 200, 80, 40));
+            // Multi-tier Pulsating Cosmic Aura
+            QRadialGradient exitAura(pcx, pcy, cellSize * 2.5f);
+            exitAura.setColorAt(0.0, QColor(0, 255, 180, int(150 + 60 * exitPulse)));
+            exitAura.setColorAt(0.4, QColor(0, 200, 110, int(60 + 40 * exitPulse)));
+            exitAura.setColorAt(0.75, QColor(0, 140, 240, 20));
             exitAura.setColorAt(1.0, QColor(0, 0, 0, 0));
-            painter.fillRect(ex - cellSize, ey - cellSize, cellSize * 3, cellSize * 3, exitAura);
+            painter.fillRect(int(pcx - cellSize * 2.5f), int(pcy - cellSize * 2.5f),
+                             int(cellSize * 5.0f), int(cellSize * 5.0f), exitAura);
 
-            // Glowing portal box
-            painter.setBrush(QColor(0, 255, 120, 70 + int(50 * exitPulse)));
-            painter.setPen(QPen(QColor(0, 255, 140, 220), std::max(2, cellSize / 10)));
-            painter.drawRoundedRect(ex + 2, ey + 2, cellSize - 4, cellSize - 4, 6, 6);
+            // Swirling Outer Ripple Rings
+            painter.save();
+            painter.translate(pcx, pcy);
 
-            // Inner core
-            painter.setBrush(QColor(200, 255, 220, 180 + int(60 * exitPulse)));
+            for (int ring = 1; ring <= 3; ++ring) {
+                float ringR = pr * (0.65f + ring * 0.22f + 0.08f * exitPulse);
+                int ringAlpha = int(130 / ring + 35 * exitPulse);
+                painter.setPen(QPen(QColor(0, 255, 200, ringAlpha), std::max(1, cellSize / 16), Qt::DashLine));
+                painter.setBrush(Qt::NoBrush);
+                painter.drawEllipse(QPointF(0, 0), ringR, ringR);
+            }
+
+            // Stargate Metallic Obsidian Ring Frame
+            painter.setPen(QPen(QColor(0, 255, 170, 230), std::max(2, cellSize / 9)));
+            QRadialGradient ringGrad(0, 0, pr);
+            ringGrad.setColorAt(0.0, QColor(0, 255, 150, 180));
+            ringGrad.setColorAt(0.65, QColor(10, 50, 42, 230));
+            ringGrad.setColorAt(1.0, QColor(4, 24, 18, 255));
+            painter.setBrush(ringGrad);
+            painter.drawEllipse(QPointF(0, 0), pr, pr);
+
+            // Glowing Concentric Event Horizon Core
+            QRadialGradient coreGrad(0, 0, pr * 0.65f);
+            coreGrad.setColorAt(0.0, QColor(255, 255, 255, 255));
+            coreGrad.setColorAt(0.3, QColor(160, 255, 220, 230));
+            coreGrad.setColorAt(0.7, QColor(0, 240, 150, 190));
+            coreGrad.setColorAt(1.0, QColor(0, 160, 100, 100));
+            painter.setBrush(coreGrad);
             painter.setPen(Qt::NoPen);
-            int coreSize = std::max(6, cellSize / 2);
-            painter.drawEllipse(ex + cellSize/2 - coreSize/2, ey + cellSize/2 - coreSize/2, coreSize, coreSize);
+            painter.drawEllipse(QPointF(0, 0), pr * 0.62f, pr * 0.62f);
 
-            // Bold white text
+            // Rotating 4-Point Star Core Sparkle
+            painter.rotate(spinAngle);
+            QPainterPath starSparkle;
+            float starLen = pr * (0.46f + 0.12f * exitPulse);
+            float starWid = pr * 0.14f;
+            starSparkle.moveTo(0, -starLen);
+            starSparkle.lineTo(starWid, -starWid);
+            starSparkle.lineTo(starLen, 0);
+            starSparkle.lineTo(starWid, starWid);
+            starSparkle.lineTo(0, starLen);
+            starSparkle.lineTo(-starWid, starWid);
+            starSparkle.lineTo(-starLen, 0);
+            starSparkle.lineTo(-starWid, -starWid);
+            starSparkle.closeSubpath();
+            painter.setBrush(QColor(255, 255, 255, 235));
+            painter.fillPath(starSparkle, QColor(255, 255, 255, 235));
+
+            painter.restore();
+
+            // Floating "★ EXIT ★" Arcade Badge
+            int badgeW = std::max(48, int(cellSize * 1.55f));
+            int badgeH = std::max(15, int(cellSize * 0.42f));
+            int badgeX = int(pcx - badgeW / 2);
+            int badgeY = int(pcy + pr + 2);
+
+            painter.setBrush(QColor(6, 26, 20, 230));
+            painter.setPen(QPen(QColor(0, 255, 150, 235), 1.2));
+            painter.drawRoundedRect(badgeX, badgeY, badgeW, badgeH, badgeH / 2, badgeH / 2);
+
+            painter.setFont(QFont("Arial", std::max(7, int(badgeH * 0.60)), QFont::Bold));
             painter.setPen(QColor(255, 255, 255));
-            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
-            painter.drawText(ex, ey + cellSize * 0.72, cellSize, cellSize * 0.28, Qt::AlignCenter, "EXIT");
+            painter.drawText(QRect(badgeX, badgeY, badgeW, badgeH), Qt::AlignCenter, "★ EXIT ★");
         }
     }
 }
 
 void MainWindow::drawGameScreen(QPainter &painter)
 {
-    int hudHeight = 72;
+    int hudHeight = 74;
     int availW = width();
     int availH = height() - hudHeight;
 
@@ -633,18 +837,38 @@ void MainWindow::drawGameScreen(QPainter &painter)
     int startX = (availW - mazeW) / 2;
     int startY = (availH - mazeH) / 2;
 
-    // Fill background letterbox
-    painter.fillRect(rect(), QColor(5, 5, 8));
+    // Fill background letterbox with subtle dark grid atmosphere
+    painter.fillRect(rect(), QColor(6, 7, 14));
 
-    // Top-Left Saga Map Button
+    // Top-Left Saga Map Button (Glassmorphism Capsule)
     QRect mapBtn = getMapButtonRect();
     bool mapBtnHovered = mapBtn.contains(mapFromGlobal(QCursor::pos()));
-    painter.setBrush(mapBtnHovered ? QColor(25, 45, 90, 230) : QColor(14, 25, 55, 200));
-    painter.setPen(QPen(mapBtnHovered ? QColor(0, 255, 240) : QColor(0, 180, 255), 1.5));
-    painter.drawRoundedRect(mapBtn, 6, 6);
+
+    // Drop shadow
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 110));
+    painter.drawRoundedRect(mapBtn.adjusted(1, 2, 1, 2), mapBtn.height() / 2, mapBtn.height() / 2);
+
+    QLinearGradient mapBtnGrad(mapBtn.left(), mapBtn.top(), mapBtn.left(), mapBtn.bottom());
+    if (mapBtnHovered) {
+        mapBtnGrad.setColorAt(0.0, QColor(35, 75, 155, 240));
+        mapBtnGrad.setColorAt(1.0, QColor(15, 35, 80, 240));
+    } else {
+        mapBtnGrad.setColorAt(0.0, QColor(20, 45, 95, 215));
+        mapBtnGrad.setColorAt(1.0, QColor(10, 20, 50, 215));
+    }
+    painter.setBrush(mapBtnGrad);
+    painter.setPen(QPen(mapBtnHovered ? QColor(0, 255, 240) : QColor(0, 180, 255, 180), mapBtnHovered ? 2.0 : 1.3));
+    painter.drawRoundedRect(mapBtn, mapBtn.height() / 2, mapBtn.height() / 2);
+
+    // Specular highlight
+    QPainterPath mapGlint;
+    mapGlint.addRoundedRect(QRectF(mapBtn.left() + 3, mapBtn.top() + 1, mapBtn.width() - 6, mapBtn.height() * 0.45),
+                            (mapBtn.height() * 0.45) / 2, (mapBtn.height() * 0.45) / 2);
+    painter.fillPath(mapGlint, QColor(255, 255, 255, 30));
 
     painter.setFont(QFont("Arial", 10, QFont::Bold));
-    painter.setPen(mapBtnHovered ? Qt::white : QColor(220, 240, 255));
+    painter.setPen(mapBtnHovered ? Qt::white : QColor(220, 245, 255));
     painter.drawText(mapBtn, Qt::AlignCenter, "🗺️ SAGA MAP [M]");
 
     // Render Sector(s)
@@ -817,15 +1041,52 @@ void MainWindow::drawGameScreen(QPainter &painter)
     }
 
     // ========================================================
-    // Bottom Fullscreen HUD Bar (3-Line Command Center)
+    // Bottom Fullscreen HUD Bar (Arcade Glass Command Deck)
     // ========================================================
     int hudY = height() - hudHeight;
-    painter.fillRect(0, hudY, width(), hudHeight, QColor(14, 16, 26));
-    painter.setPen(QPen(QColor(40, 60, 100), 2));
+
+    // 1. Frosted Glassmorphism Panel
+    QLinearGradient hudGrad(0, hudY, 0, hudY + hudHeight);
+    hudGrad.setColorAt(0.0, QColor(14, 18, 38, 245));
+    hudGrad.setColorAt(1.0, QColor(6, 8, 18, 255));
+    painter.fillRect(0, hudY, width(), hudHeight, hudGrad);
+
+    // Glowing Top Border Neon Highlight
+    QLinearGradient topBorderGrad(0, hudY, width(), hudY);
+    topBorderGrad.setColorAt(0.0, QColor(0, 240, 255, 120));
+    topBorderGrad.setColorAt(0.3, QColor(0, 255, 180, 200));
+    topBorderGrad.setColorAt(0.7, QColor(255, 90, 200, 200));
+    topBorderGrad.setColorAt(1.0, QColor(0, 240, 255, 120));
+    painter.setPen(QPen(topBorderGrad, 2));
     painter.drawLine(0, hudY, width(), hudY);
 
-    int baseFont1 = std::max(11, width() / 110);
-    int baseFont2 = std::max(9, width() / 135);
+    // Helper: Draw Glass Capsule Pill Badge
+    auto drawHudPill = [&](int x, int y, int w, int h, const QString &text, const QColor &bgCol, const QColor &borderCol, const QColor &textCol, bool pulsing = false) {
+        // Drop shadow
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(0, 0, 0, 95));
+        painter.drawRoundedRect(x + 1, y + 2, w, h, h / 2, h / 2);
+
+        // Body with gradient
+        QLinearGradient bg(x, y, x, y + h);
+        bg.setColorAt(0.0, bgCol.lighter(135));
+        bg.setColorAt(1.0, bgCol);
+        painter.setBrush(bg);
+
+        float penW = pulsing ? (1.5f + 0.8f * std::sin(elapsedTimer.elapsed() * 0.012f)) : 1.3f;
+        painter.setPen(QPen(borderCol, penW));
+        painter.drawRoundedRect(x, y, w, h, h / 2, h / 2);
+
+        // Top specular arc highlight
+        QPainterPath glint;
+        glint.addRoundedRect(QRectF(x + 2, y + 1, w - 4, h * 0.44), (h * 0.44) / 2, (h * 0.44) / 2);
+        painter.fillPath(glint, QColor(255, 255, 255, 30));
+
+        // Text
+        painter.setFont(QFont("Arial", std::clamp(int(h * 0.46), 8, 11), QFont::Bold));
+        painter.setPen(textCol);
+        painter.drawText(QRect(x, y, w, h), Qt::AlignCenter, text);
+    };
 
     // Count discovered sectors for HUD
     int discCount = 0;
@@ -835,38 +1096,62 @@ void MainWindow::drawGameScreen(QPainter &painter)
         }
     }
 
-    // Line 1: Stats & Window location (hudY + 20)
-    painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
+    int pillH = 22;
+    int pillY = hudY + 5;
+    int curX = 14;
+    int gap = 8;
     int worldNum = (currentLevel - 1) / LEVELS_PER_WORLD + 1;
     int stageNum = (currentLevel - 1) % LEVELS_PER_WORLD + 1;
+
     if (!isAnyMultiplayer()) {
-        painter.setPen(Qt::white);
-        painter.drawText(20, hudY + 20, QString("SCORE: %1").arg(score));
+        // 1. SCORE
+        QString scoreStr = QString("🏆 %1").arg(score);
+        int scoreW = std::max(78, int(width() * 0.085));
+        drawHudPill(curX, pillY, scoreW, pillH, scoreStr, QColor(48, 36, 10), QColor(255, 215, 0), QColor(255, 240, 150));
+        curX += scoreW + gap;
 
-        painter.setPen(QColor(0, 230, 160));
-        painter.drawText(width() * 0.16, hudY + 20, QString("W%1-S%2 (LVL %3)").arg(worldNum).arg(stageNum).arg(currentLevel));
+        // 2. WORLD & STAGE
+        QString wsStr = QString("🪐 W%1-S%2 (L%3)").arg(worldNum).arg(stageNum).arg(currentLevel);
+        int wsW = std::max(105, int(width() * 0.11));
+        drawHudPill(curX, pillY, wsW, pillH, wsStr, QColor(12, 38, 55), QColor(0, 230, 180), QColor(200, 255, 240));
+        curX += wsW + gap;
 
-        painter.setPen(QColor(0, 210, 255));
-        painter.drawText(width() * 0.28, hudY + 20,
-                         QString("SECTOR: (%1, %2)").arg(currentSectorX + 1).arg(currentSectorY + 1));
+        // 3. SECTOR
+        QString secStr = QString("🧭 (%1,%2)").arg(currentSectorX + 1).arg(currentSectorY + 1);
+        int secW = std::max(68, int(width() * 0.075));
+        drawHudPill(curX, pillY, secW, pillH, secStr, QColor(14, 28, 60), QColor(0, 200, 255), QColor(180, 240, 255));
+        curX += secW + gap;
 
-        painter.setPen(QColor(255, 180, 0));
-        painter.drawText(width() * 0.40, hudY + 20,
-                         QString("EXPLORED: %1").arg(discCount));
+        // 4. EXPLORED SECTORS
+        QString expStr = QString("🗺️ %1 SEC").arg(discCount);
+        int expW = std::max(68, int(width() * 0.075));
+        drawHudPill(curX, pillY, expW, pillH, expStr, QColor(32, 20, 52), QColor(190, 120, 255), QColor(235, 210, 255));
+        curX += expW + gap;
 
-        // Lives indicator in single player
-        painter.setPen(p1Lives > 1 ? QColor(255, 60, 100) : (p1Lives == 1 ? QColor(255, 140, 0) : QColor(180, 60, 60)));
-        QString heartsStr;
-        for (int i = 0; i < p1Lives; ++i) heartsStr += "❤️";
-        if (p1Lives <= 0) heartsStr = "💀 0 (OUT)";
-        if (!p1Alive && p1RespawnTicks > 0) {
-            painter.drawText(width() * 0.51, hudY + 20, QString("LIVES: %1 [RESPAWN %2s]").arg(heartsStr).arg((p1RespawnTicks * 130 + 999) / 1000));
+        // 5. LIVES
+        QString livesStr;
+        if (p1Lives <= 0) {
+            livesStr = "💀 0 LIVES";
+            int livW = std::max(90, int(width() * 0.09));
+            drawHudPill(curX, pillY, livW, pillH, livesStr, QColor(50, 14, 18), QColor(255, 60, 80), QColor(255, 140, 150), true);
+            curX += livW + gap;
+        } else if (!p1Alive && p1RespawnTicks > 0) {
+            livesStr = QString("⏳ RESPAWN %1s").arg((p1RespawnTicks * 130 + 999) / 1000);
+            int livW = std::max(115, int(width() * 0.12));
+            drawHudPill(curX, pillY, livW, pillH, livesStr, QColor(52, 32, 12), QColor(255, 160, 40), QColor(255, 220, 140), true);
+            curX += livW + gap;
         } else {
-            painter.drawText(width() * 0.51, hudY + 20, QString("LIVES: %1 (%2)").arg(heartsStr).arg(p1Lives));
+            QString hearts;
+            for (int i = 0; i < p1Lives; ++i) hearts += "❤️";
+            livesStr = QString("💖 %1").arg(hearts);
+            int livW = std::max(85, int(width() * 0.085));
+            QColor lBg = p1Lives > 1 ? QColor(48, 16, 32) : QColor(55, 20, 10);
+            QColor lBorder = p1Lives > 1 ? QColor(255, 80, 140) : QColor(255, 140, 0);
+            drawHudPill(curX, pillY, livW, pillH, livesStr, lBg, lBorder, Qt::white, p1Lives == 1);
+            curX += livW + gap;
         }
     } else {
-        int hudColX = 20;
-
+        // MULTIPLAYER TEAM DASHBOARD
         auto formatHearts = [](int lives) {
             if (lives <= 0) return QString("💀 OUT");
             QString h;
@@ -874,120 +1159,151 @@ void MainWindow::drawGameScreen(QPainter &painter)
             return h;
         };
 
-        // P1 Status (Yellow)
+        // P1 Pill
         if (isP1Active()) {
+            QString p1Str;
+            QColor p1Bg, p1Border;
             if (p1Lives <= 0) {
-                painter.setPen(QColor(160, 60, 60));
-                painter.drawText(hudColX, hudY + 20, "P1 (🟡): 💀 OUT");
+                p1Str = "🟡 P1: 💀 OUT";
+                p1Bg = QColor(48, 14, 18); p1Border = QColor(255, 60, 80);
             } else if (p1ReachedExit) {
-                painter.setPen(QColor(0, 255, 140));
-                painter.drawText(hudColX, hudY + 20, QString("P1 (🟡): %1 %2 🏁").arg(scoreP1).arg(formatHearts(p1Lives)));
+                p1Str = QString("🟡 P1: %1 🏁").arg(scoreP1);
+                p1Bg = QColor(10, 48, 28); p1Border = QColor(0, 255, 150);
             } else if (!p1Alive && p1RespawnTicks > 0) {
-                painter.setPen(QColor(255, 160, 0));
-                painter.drawText(hudColX, hudY + 20, QString("P1: RESPAWN (%1s) %2").arg((p1RespawnTicks * 130 + 999) / 1000).arg(formatHearts(p1Lives)));
+                p1Str = QString("🟡 P1: ⏳%1s").arg((p1RespawnTicks * 130 + 999) / 1000);
+                p1Bg = QColor(50, 32, 10); p1Border = QColor(255, 160, 40);
             } else {
-                painter.setPen(p1Alive ? QColor(255, 230, 30) : QColor(160, 160, 80));
-                painter.drawText(hudColX, hudY + 20, QString("P1 (🟡): %1 %2").arg(scoreP1).arg(formatHearts(p1Lives)));
+                p1Str = QString("🟡 P1: %1 %2").arg(scoreP1).arg(formatHearts(p1Lives));
+                p1Bg = QColor(42, 36, 12); p1Border = QColor(255, 220, 40);
             }
-            hudColX += int(width() * 0.12);
+            int pW = std::max(105, int(width() * 0.105));
+            drawHudPill(curX, pillY, pW, pillH, p1Str, p1Bg, p1Border, Qt::white);
+            curX += pW + gap;
         }
 
+        // P2 Pill
         if (isP2Active()) {
+            QString p2Str;
+            QColor p2Bg, p2Border;
             if (p2Lives <= 0) {
-                painter.setPen(QColor(160, 60, 60));
-                painter.drawText(hudColX, hudY + 20, "P2 (🎀): 💀 OUT");
+                p2Str = "🎀 P2: 💀 OUT";
+                p2Bg = QColor(48, 14, 18); p2Border = QColor(255, 60, 80);
             } else if (p2ReachedExit) {
-                painter.setPen(QColor(0, 255, 140));
-                painter.drawText(hudColX, hudY + 20, QString("P2 (🎀): %1 %2 🏁").arg(scoreP2).arg(formatHearts(p2Lives)));
+                p2Str = QString("🎀 P2: %1 🏁").arg(scoreP2);
+                p2Bg = QColor(10, 48, 28); p2Border = QColor(0, 255, 150);
             } else if (!p2Alive && p2RespawnTicks > 0) {
-                painter.setPen(QColor(255, 160, 0));
-                painter.drawText(hudColX, hudY + 20, QString("P2: RESPAWN (%1s) %2").arg((p2RespawnTicks * 130 + 999) / 1000).arg(formatHearts(p2Lives)));
+                p2Str = QString("🎀 P2: ⏳%1s").arg((p2RespawnTicks * 130 + 999) / 1000);
+                p2Bg = QColor(50, 32, 10); p2Border = QColor(255, 160, 40);
             } else {
-                painter.setPen(p2Alive ? QColor(255, 120, 190) : QColor(160, 80, 120));
-                painter.drawText(hudColX, hudY + 20, QString("P2 (🎀): %1 %2").arg(scoreP2).arg(formatHearts(p2Lives)));
+                p2Str = QString("🎀 P2: %1 %2").arg(scoreP2).arg(formatHearts(p2Lives));
+                p2Bg = QColor(48, 16, 38); p2Border = QColor(255, 105, 180);
             }
-            hudColX += int(width() * 0.12);
+            int pW = std::max(105, int(width() * 0.105));
+            drawHudPill(curX, pillY, pW, pillH, p2Str, p2Bg, p2Border, Qt::white);
+            curX += pW + gap;
         }
 
+        // P3 Pill
         if (hero3.clientId != -1 || hostRole == "p3") {
+            QString p3Str;
+            QColor p3Bg, p3Border;
             if (hero3.lives <= 0) {
-                painter.setPen(QColor(160, 60, 60));
-                painter.drawText(hudColX, hudY + 20, "P3 (🧢): 💀 OUT");
+                p3Str = "🧢 P3: 💀 OUT";
+                p3Bg = QColor(48, 14, 18); p3Border = QColor(255, 60, 80);
             } else if (hero3.reachedExit) {
-                painter.setPen(QColor(0, 255, 140));
-                painter.drawText(hudColX, hudY + 20, QString("P3 (🧢): %1 %2 🏁").arg(hero3.score).arg(formatHearts(hero3.lives)));
+                p3Str = QString("🧢 P3: %1 🏁").arg(hero3.score);
+                p3Bg = QColor(10, 48, 28); p3Border = QColor(0, 255, 150);
             } else if (!hero3.alive && hero3.respawnTicks > 0) {
-                painter.setPen(QColor(255, 160, 0));
-                painter.drawText(hudColX, hudY + 20, QString("P3: RESPAWN (%1s) %2").arg((hero3.respawnTicks * 130 + 999) / 1000).arg(formatHearts(hero3.lives)));
+                p3Str = QString("🧢 P3: ⏳%1s").arg((hero3.respawnTicks * 130 + 999) / 1000);
+                p3Bg = QColor(50, 32, 10); p3Border = QColor(255, 160, 40);
             } else {
-                painter.setPen(hero3.alive ? QColor(0, 229, 255) : QColor(80, 160, 180));
-                painter.drawText(hudColX, hudY + 20, QString("P3 (🧢): %1 %2").arg(hero3.score).arg(formatHearts(hero3.lives)));
+                p3Str = QString("🧢 P3: %1 %2").arg(hero3.score).arg(formatHearts(hero3.lives));
+                p3Bg = QColor(10, 36, 52); p3Border = QColor(0, 229, 255);
             }
-            hudColX += int(width() * 0.12);
+            int pW = std::max(105, int(width() * 0.105));
+            drawHudPill(curX, pillY, pW, pillH, p3Str, p3Bg, p3Border, Qt::white);
+            curX += pW + gap;
         }
 
+        // P4 Pill
         if (hero4.clientId != -1 || hostRole == "p4") {
+            QString p4Str;
+            QColor p4Bg, p4Border;
             if (hero4.lives <= 0) {
-                painter.setPen(QColor(160, 60, 60));
-                painter.drawText(hudColX, hudY + 20, "P4 (🟢): 💀 OUT");
+                p4Str = "🟢 P4: 💀 OUT";
+                p4Bg = QColor(48, 14, 18); p4Border = QColor(255, 60, 80);
             } else if (hero4.reachedExit) {
-                painter.setPen(QColor(0, 255, 140));
-                painter.drawText(hudColX, hudY + 20, QString("P4 (🟢): %1 %2 🏁").arg(hero4.score).arg(formatHearts(hero4.lives)));
+                p4Str = QString("🟢 P4: %1 🏁").arg(hero4.score);
+                p4Bg = QColor(10, 48, 28); p4Border = QColor(0, 255, 150);
             } else if (!hero4.alive && hero4.respawnTicks > 0) {
-                painter.setPen(QColor(255, 160, 0));
-                painter.drawText(hudColX, hudY + 20, QString("P4: RESPAWN (%1s) %2").arg((hero4.respawnTicks * 130 + 999) / 1000).arg(formatHearts(hero4.lives)));
+                p4Str = QString("🟢 P4: ⏳%1s").arg((hero4.respawnTicks * 130 + 999) / 1000);
+                p4Bg = QColor(50, 32, 10); p4Border = QColor(255, 160, 40);
             } else {
-                painter.setPen(hero4.alive ? QColor(0, 255, 100) : QColor(80, 180, 100));
-                painter.drawText(hudColX, hudY + 20, QString("P4 (🟢): %1 %2").arg(hero4.score).arg(formatHearts(hero4.lives)));
+                p4Str = QString("🟢 P4: %1 %2").arg(hero4.score).arg(formatHearts(hero4.lives));
+                p4Bg = QColor(10, 44, 25); p4Border = QColor(0, 255, 120);
             }
-            hudColX += int(width() * 0.12);
+            int pW = std::max(105, int(width() * 0.105));
+            drawHudPill(curX, pillY, pW, pillH, p4Str, p4Bg, p4Border, Qt::white);
+            curX += pW + gap;
         }
 
-        if (isAnyMultiplayer()) {
-            painter.setPen(isHostGhost() ? QColor(255, 120, 120) : QColor(255, 230, 80));
-            painter.drawText(hudColX, hudY + 14, QString("★ HOST: %1 %2").arg(getRoleIcon(hostRole), getRoleDisplayName(hostRole)));
-            painter.setPen(QColor(160, 190, 220));
-            painter.setFont(QFont("Arial", std::max(7, cellSize / 5)));
-            painter.drawText(hudColX, hudY + 27, "[Tab] Switch • [Arrows/WASD]");
-            hudColX += int(width() * 0.15);
-        }
+        // Host Role Indicator
+        QString hostStr = QString("★ HOST: %1 %2").arg(getRoleIcon(hostRole), getRoleDisplayName(hostRole));
+        int hostW = std::max(115, int(width() * 0.115));
+        QColor hBg = isHostGhost() ? QColor(48, 18, 22) : QColor(48, 38, 14);
+        QColor hBorder = isHostGhost() ? QColor(255, 100, 100) : QColor(255, 215, 60);
+        drawHudPill(curX, pillY, hostW, pillH, hostStr, hBg, hBorder, Qt::white);
+        curX += hostW + gap;
 
         // Team Total Score
-        painter.setPen(Qt::white);
-        painter.drawText(hudColX, hudY + 20, QString("TEAM: %1").arg(score));
+        QString tScoreStr = QString("🏆 %1").arg(score);
+        int tW = std::max(78, int(width() * 0.075));
+        drawHudPill(curX, pillY, tW, pillH, tScoreStr, QColor(40, 32, 12), QColor(255, 215, 0), QColor(255, 240, 140));
+        curX += tW + gap;
 
-        painter.setPen(QColor(0, 230, 160));
-        painter.drawText(width() * 0.49, hudY + 20, QString("W%1-S%2 (LVL %3)").arg(worldNum).arg(stageNum).arg(currentLevel));
+        // World / Stage
+        QString wsStr = QString("🪐 W%1-S%2").arg(worldNum).arg(stageNum);
+        int wsW = std::max(75, int(width() * 0.07));
+        drawHudPill(curX, pillY, wsW, pillH, wsStr, QColor(12, 38, 55), QColor(0, 230, 180), QColor(200, 255, 240));
+        curX += wsW + gap;
 
-        painter.setPen(QColor(0, 210, 255));
-        painter.drawText(width() * 0.58, hudY + 20,
-                         QString("SECTOR: (%1, %2)").arg(currentSectorX + 1).arg(currentSectorY + 1));
+        // Sector
+        QString secStr = QString("🧭 (%1,%2)").arg(currentSectorX + 1).arg(currentSectorY + 1);
+        int sW = std::max(64, int(width() * 0.06));
+        drawHudPill(curX, pillY, sW, pillH, secStr, QColor(14, 28, 60), QColor(0, 200, 255), QColor(180, 240, 255));
+        curX += sW + gap;
     }
 
+    // Right-aligned Utility Pills (Timer, Fog Peek, Power)
     qint64 elapsedSec = elapsedTimer.elapsed() / 1000;
     int mins = elapsedSec / 60;
     int secs = elapsedSec % 60;
-    painter.setPen(QColor(255, 200, 100));
-    painter.drawText(width() * 0.65, hudY + 20, QString("TIME: %1:%2")
-                     .arg(mins, 2, 10, QChar('0'))
-                     .arg(secs, 2, 10, QChar('0')));
+    QString timeStr = QString("⏱️ %1:%2").arg(mins, 2, 10, QChar('0')).arg(secs, 2, 10, QChar('0'));
+    int timeW = 68;
+    int timeX = width() - timeW - 14;
+    drawHudPill(timeX, pillY, timeW, pillH, timeStr, QColor(25, 20, 48), QColor(170, 130, 240), QColor(230, 215, 255));
 
+    // Fog Peek pill
+    int peekW = 108;
+    int peekX = timeX - peekW - gap;
     if (fogPeekActive) {
         int msLeft = std::max(0, FOG_PEEK_DURATION_MS - (int)fogPeekTimer.elapsed());
         double secLeft = msLeft / 1000.0;
-        painter.setPen(QColor(255, 225, 50));
-        painter.drawText(width() * 0.74, hudY + 20, QString("[PEEKING: %1s 💡 (Host: %2)]").arg(secLeft, 0, 'f', 1).arg(p1FogPeeks));
+        QString peekStr = QString("💡 PEEK %1s").arg(secLeft, 0, 'f', 1);
+        drawHudPill(peekX, pillY, peekW, pillH, peekStr, QColor(50, 42, 10), QColor(255, 230, 50), QColor(255, 255, 200), true);
     } else if (p1FogPeeks > 0) {
-        painter.setPen(QColor(100, 230, 255));
-        painter.drawText(width() * 0.74, hudY + 20, QString("[HOST PEEK (F): %1 left 👁️]").arg(p1FogPeeks));
+        QString peekStr = QString("🏮 PEEK [F]: %1").arg(p1FogPeeks);
+        drawHudPill(peekX, pillY, peekW, pillH, peekStr, QColor(12, 36, 44), QColor(0, 220, 240), QColor(200, 255, 255));
     } else {
-        painter.setPen(QColor(255, 110, 110));
-        painter.drawText(width() * 0.74, hudY + 20, "[HOST PEEK: 0 left 🍒 (Eat Fruit!)]");
+        drawHudPill(peekX, pillY, peekW, pillH, "🏮 PEEK: 0 (Fruit)", QColor(44, 18, 20), QColor(255, 100, 110), QColor(255, 180, 190));
     }
 
+    // Frightened Power pill
     if (ghostsFrightened) {
-        painter.setPen(QColor(255, 100, 140));
-        painter.drawText(width() * 0.89, hudY + 20, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
+        int pwrW = 95;
+        int pwrX = peekX - pwrW - gap;
+        QString pwrStr = QString("⚡ POWER! %1").arg(frightenedTicksLeft);
+        drawHudPill(pwrX, pillY, pwrW, pillH, pwrStr, QColor(50, 14, 45), QColor(255, 80, 200), Qt::white, true);
     }
 
     // Floating Notification / Toast Banner (Fog Peek activation, Out of peeks warning, Fruit bonus)
@@ -1009,32 +1325,33 @@ void MainWindow::drawGameScreen(QPainter &painter)
         painter.setPen(QPen(borderCol, 2));
         painter.drawRoundedRect(tX, tY, tW, tH, 10, 10);
 
-        painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
+        painter.setFont(QFont("Arial", std::max(11, width() / 110), QFont::Bold));
         painter.setPen(borderCol);
         painter.drawText(tX, tY, tW, tH, Qt::AlignCenter, peekToastMessage);
         painter.restore();
     }
 
-    // Line 2: Prominent Mission Objective Guidance (hudY + 42)
+    // Line 2: Sleek Mission Objective Ribbon
     int curWorld = (currentLevel - 1) / LEVELS_PER_WORLD + 1;
     int curStage = (currentLevel - 1) % LEVELS_PER_WORLD + 1;
     QString objectiveText;
+    QColor objColor = QColor(255, 220, 90);
     int elig = getEligibleHeroCount();
     int rch = getReachedExitHeroCount();
 
     if (isAnyMultiplayer() && elig > 1 && rch > 0 && rch < elig) {
         objectiveText = QString("🏁 ALL PLAYERS MUST REACH EXIT! (%1/%2 arrived • Waiting for teammates to reach portal...)").arg(rch).arg(elig);
-        painter.setPen(QColor(0, 255, 240));
+        objColor = QColor(0, 255, 240);
     } else if (currentSectorX == exitSectorX && currentSectorY == exitSectorY) {
         bool exitNear = isCellVisible(currentSectorX, currentSectorY, exitX, exitY) || (!fogOfWarEnabled);
         if (exitNear) {
             objectiveText = isAnyMultiplayer()
                 ? QString("🏁 OBJECTIVE: All alive players must enter the green [EXIT] portal to clear Stage %1/20 (%2)!").arg(curStage).arg(getWorldName(curWorld))
                 : QString("🏁 OBJECTIVE: Enter the green [EXIT] portal to clear Stage %1/20 (%2)!").arg(curStage).arg(getWorldName(curWorld));
-            painter.setPen(QColor(60, 255, 140));
+            objColor = QColor(60, 255, 140);
         } else {
             objectiveText = QString("🧭 OBJECTIVE: Search the dark labyrinth with your lantern to locate the hidden [EXIT] portal! (%1)").arg(getWorldName(curWorld));
-            painter.setPen(QColor(255, 215, 60));
+            objColor = QColor(255, 215, 60);
         }
     } else {
         if (!fogOfWarEnabled) {
@@ -1044,66 +1361,185 @@ void MainWindow::drawGameScreen(QPainter &painter)
             else if (currentSectorY < exitSectorY) dirStr = "BOTTOM wall [▼ GATEWAY]";
             else if (currentSectorY > exitSectorY) dirStr = "TOP wall [▲ GATEWAY]";
             objectiveText = QString("💡 PEEK REVEAL: Head toward the %1 to reach the exit sector! (%2)").arg(dirStr).arg(getWorldName(curWorld));
-            painter.setPen(QColor(0, 255, 240));
+            objColor = QColor(0, 255, 240);
         } else {
             objectiveText = QString("🧭 OBJECTIVE: Explore the dark corridors with your lantern to discover gateways! (%1)").arg(getWorldName(curWorld));
-            painter.setPen(QColor(255, 220, 80));
+            objColor = QColor(255, 220, 80);
         }
     }
-    painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
-    painter.drawText(20, hudY + 42, objectiveText);
 
-    // Line 3: Controls (hudY + 62)
-    painter.setFont(QFont("Arial", baseFont2));
-    painter.setPen(QColor(140, 160, 190));
+    int objBoxW = width() - 28;
+    int objBoxH = 18;
+    int objBoxY = hudY + 31;
+    painter.setBrush(QColor(10, 14, 28, 160));
+    painter.setPen(QPen(objColor.darker(150), 1));
+    painter.drawRoundedRect(14, objBoxY, objBoxW, objBoxH, 4, 4);
+
+    painter.setFont(QFont("Arial", std::clamp(int(width() / 115), 9, 11), QFont::Bold));
+    painter.setPen(objColor);
+    painter.drawText(QRect(20, objBoxY, objBoxW - 12, objBoxH), Qt::AlignVCenter | Qt::AlignLeft, objectiveText);
+
+    // Line 3: Modern Keycap Shortcuts Bar
+    int ctrlY = hudY + 52;
+    painter.setFont(QFont("Arial", std::clamp(int(width() / 135), 8, 10)));
+    painter.setPen(QColor(150, 175, 215));
+
     if (!isAnyMultiplayer()) {
-        if (singlePlayerHero == 2) {
-            painter.drawText(20, hudY + 62,
-                "HERO: [🎀 Pink Ms. Pacman]  |  [Arrows] or [WASD] Move  |  [Tab] Switch to Yellow  |  [F] Fog Peek (1.0s, 3x/lvl + Fruits)  |  [M] Saga Map  |  [F11] Fullscreen");
-        } else {
-            painter.drawText(20, hudY + 62,
-                "HERO: [🟡 Yellow Pacman]  |  [Arrows] or [WASD] Move  |  [Tab] Switch to Pink  |  [F] Fog Peek (1.0s, 3x/lvl + Fruits)  |  [M] Saga Map  |  [F11] Fullscreen");
-        }
+        QString heroName = (singlePlayerHero == 2) ? "🎀 Ms. Pacman" : "🟡 Pacman";
+        painter.drawText(20, ctrlY + 14,
+            QString("HERO: [%1]   •   [Arrows / WASD] Move   •   [Tab] Switch Character   •   [F] Fog Lantern Peek   •   [M] Saga Map   •   [F11] Fullscreen")
+            .arg(heroName));
     } else {
         QString roleDisplay = QString("%1 %2").arg(getRoleIcon(hostRole), getRoleDisplayName(hostRole));
         if (isHostGhost()) {
-            painter.drawText(20, hudY + 62,
-                QString("HOST ROLE: [%1]  |  [Arrows/WASD] Move Ghost  |  [F] Ghost Sonar  |  [Tab] Switch Character  |  [H] Lobby  |  [M] Saga Map")
+            painter.drawText(20, ctrlY + 14,
+                QString("HOST ROLE: [%1]   •   [Arrows / WASD] Move Ghost   •   [F] Ghost Sonar   •   [Tab] Switch Role   •   [H] Multiplayer Lobby   •   [M] Saga Map")
                 .arg(roleDisplay));
         } else {
-            painter.drawText(20, hudY + 62,
-                QString("HOST ROLE: [%1]  |  [Arrows/WASD] Move Hero  |  [F] Fog Peek (%2 left)  |  [Tab] Switch Character  |  [H] Lobby  |  [M] Saga Map")
+            painter.drawText(20, ctrlY + 14,
+                QString("HOST ROLE: [%1]   •   [Arrows / WASD] Move Hero   •   [F] Fog Peek (%2 left)   •   [Tab] Switch Hero   •   [H] Multiplayer Lobby   •   [M] Saga Map")
                 .arg(roleDisplay).arg(p1FogPeeks));
         }
     }
 
-    // Game Over / Level Complete Banner
+    // ========================================================
+    // Frosted Glass Modals: Game Over & Level Complete
+    // ========================================================
     if (gameOver) {
-        painter.fillRect(0, height() / 2 - 45, width(), 95, QColor(0, 0, 0, 235));
-        painter.setPen(QColor(255, 60, 60));
-        painter.setFont(QFont("Arial", std::max(18, width() / 50), QFont::Bold));
-        QString goMsg = isAnyMultiplayer()
-            ? QString("GAME OVER! All Players Lost Their 3 Lives (Stage %1/20 • %2)").arg(curStage).arg(getWorldName(curWorld))
-            : QString("GAME OVER! All 3 Lives Lost (Stage %1/20 • %2)").arg(curStage).arg(getWorldName(curWorld));
-        painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter, goMsg);
+        // Darkened backdrop scrim
+        painter.fillRect(rect(), QColor(5, 4, 12, 215));
 
-        painter.setPen(QColor(255, 220, 100));
-        painter.setFont(QFont("Arial", std::max(12, width() / 70)));
-        painter.drawText(0, height() / 2 + 16, width(), 25, Qt::AlignCenter,
-                         QString("Press [R] or [Space] to Restart Stage %1  |  Press [M] for Saga Map").arg(curStage));
+        int modalW = std::clamp(int(width() * 0.62f), 480, 680);
+        int modalH = 220;
+        int modalX = (width() - modalW) / 2;
+        int modalY = (height() - modalH) / 2;
+
+        // Drop shadow
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(0, 0, 0, 160));
+        painter.drawRoundedRect(modalX + 4, modalY + 6, modalW, modalH, 20, 20);
+
+        // Frosted Card Body
+        QLinearGradient cardGrad(modalX, modalY, modalX, modalY + modalH);
+        cardGrad.setColorAt(0.0, QColor(36, 12, 22, 250));
+        cardGrad.setColorAt(1.0, QColor(14, 6, 12, 255));
+        painter.setBrush(cardGrad);
+
+        float pulse = (std::sin(elapsedTimer.elapsed() * 0.008f) + 1.0f) * 0.5f;
+        painter.setPen(QPen(QColor(255, 50, 80, int(180 + 75 * pulse)), 2.5));
+        painter.drawRoundedRect(modalX, modalY, modalW, modalH, 20, 20);
+
+        // Title Header
+        painter.setFont(QFont("Arial", std::max(20, modalW / 24), QFont::Bold));
+        painter.setPen(QColor(255, 60, 80));
+        painter.drawText(modalX, modalY + 38, modalW, 32, Qt::AlignCenter, "💀 GAME OVER 💀");
+
+        // Subtitle Details
+        painter.setFont(QFont("Arial", std::max(12, modalW / 42)));
+        painter.setPen(QColor(255, 200, 210));
+        QString subMsg = isAnyMultiplayer()
+            ? QString("All Players Lost Their 3 Lives in Stage %1/20 (%2)").arg(curStage).arg(getWorldName(curWorld))
+            : QString("All 3 Lives Lost in Stage %1/20 (%2)").arg(curStage).arg(getWorldName(curWorld));
+        painter.drawText(modalX, modalY + 76, modalW, 24, Qt::AlignCenter, subMsg);
+
+        // Stat Badges
+        int badgeW = (modalW - 50) / 2;
+        int b1X = modalX + 20;
+        int b2X = modalX + 30 + badgeW;
+        int bY = modalY + 110;
+        int bH = 34;
+
+        // Stat 1: Total Score
+        painter.setBrush(QColor(24, 8, 14, 200));
+        painter.setPen(QPen(QColor(255, 100, 120, 160), 1.2));
+        painter.drawRoundedRect(b1X, bY, badgeW, bH, 8, 8);
+        painter.setFont(QFont("Arial", 11, QFont::Bold));
+        painter.setPen(QColor(255, 220, 120));
+        painter.drawText(QRect(b1X, bY, badgeW, bH), Qt::AlignCenter, QString("🏆 FINAL SCORE: %1").arg(score));
+
+        // Stat 2: Sectors Explored
+        painter.setBrush(QColor(24, 8, 14, 200));
+        painter.setPen(QPen(QColor(255, 100, 120, 160), 1.2));
+        painter.drawRoundedRect(b2X, bY, badgeW, bH, 8, 8);
+        painter.setPen(QColor(180, 220, 255));
+        painter.drawText(QRect(b2X, bY, badgeW, bH), Qt::AlignCenter, QString("🧭 EXPLORED: %1 SECTORS").arg(discCount));
+
+        // Action Prompts
+        int promptY = modalY + 165;
+        painter.setFont(QFont("Arial", 12, QFont::Bold));
+        painter.setPen(QColor(255, 230, 120));
+        painter.drawText(modalX, promptY, modalW, 22, Qt::AlignCenter,
+                         "Press [Space] or [R] to Restart Stage   •   Press [M] for Saga Map");
+
     } else if (levelComplete) {
-        painter.fillRect(0, height() / 2 - 50, width(), 100, QColor(0, 0, 0, 235));
-        painter.setPen(QColor(60, 255, 120));
-        painter.setFont(QFont("Arial", std::max(16, width() / 55), QFont::Bold));
-        QString levelMsg = isAnyMultiplayer()
-            ? QString("STAGE %1/20 COMPLETE!  (%2) • Team Escaped!").arg(curStage).arg(getWorldName(curWorld))
-            : QString("STAGE %1/20 COMPLETE!  (%2) • Labyrinth Escaped!").arg(curStage).arg(getWorldName(curWorld));
-        painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter, levelMsg);
+        // Darkened backdrop scrim with festive emerald tone
+        painter.fillRect(rect(), QColor(4, 12, 10, 215));
 
-        painter.setPen(QColor(255, 220, 100));
-        painter.setFont(QFont("Arial", std::max(12, width() / 70)));
-        painter.drawText(0, height() / 2 + 16, width(), 25, Qt::AlignCenter,
-                         "Press [Space] for Next Level  |  Press [M] for Saga Map");
+        int modalW = std::clamp(int(width() * 0.62f), 480, 680);
+        int modalH = 225;
+        int modalX = (width() - modalW) / 2;
+        int modalY = (height() - modalH) / 2;
+
+        // Drop shadow
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(QColor(0, 0, 0, 160));
+        painter.drawRoundedRect(modalX + 4, modalY + 6, modalW, modalH, 20, 20);
+
+        // Frosted Card Body
+        QLinearGradient cardGrad(modalX, modalY, modalX, modalY + modalH);
+        cardGrad.setColorAt(0.0, QColor(10, 36, 26, 250));
+        cardGrad.setColorAt(1.0, QColor(4, 16, 12, 255));
+        painter.setBrush(cardGrad);
+
+        float pulse = (std::sin(elapsedTimer.elapsed() * 0.008f) + 1.0f) * 0.5f;
+        painter.setPen(QPen(QColor(0, 255, 160, int(180 + 75 * pulse)), 2.5));
+        painter.drawRoundedRect(modalX, modalY, modalW, modalH, 20, 20);
+
+        // Celebration Title Header
+        painter.setFont(QFont("Arial", std::max(20, modalW / 24), QFont::Bold));
+        painter.setPen(QColor(0, 255, 160));
+        painter.drawText(modalX, modalY + 36, modalW, 32, Qt::AlignCenter, "✨ STAGE COMPLETE! ✨");
+
+        // 3 Golden Bouncing Celebration Stars
+        float starBob = 3.0f * std::sin(elapsedTimer.elapsed() * 0.009f);
+        painter.setFont(QFont("Arial", 22));
+        painter.setPen(QColor(255, 215, 0));
+        painter.drawText(modalX, int(modalY + 68 + starBob), modalW, 28, Qt::AlignCenter, "⭐ ⭐ ⭐");
+
+        // Subtitle
+        painter.setFont(QFont("Arial", std::max(12, modalW / 42)));
+        painter.setPen(QColor(200, 255, 225));
+        QString clrMsg = isAnyMultiplayer()
+            ? QString("Team Escaped Stage %1/20 (%2)!").arg(curStage).arg(getWorldName(curWorld))
+            : QString("Labyrinth Escaped: Stage %1/20 (%2)!").arg(curStage).arg(getWorldName(curWorld));
+        painter.drawText(modalX, modalY + 104, modalW, 22, Qt::AlignCenter, clrMsg);
+
+        // Stat Badges
+        int badgeW = (modalW - 50) / 2;
+        int b1X = modalX + 20;
+        int b2X = modalX + 30 + badgeW;
+        int bY = modalY + 132;
+        int bH = 32;
+
+        painter.setBrush(QColor(8, 26, 18, 200));
+        painter.setPen(QPen(QColor(0, 230, 140, 160), 1.2));
+        painter.drawRoundedRect(b1X, bY, badgeW, bH, 8, 8);
+        painter.setFont(QFont("Arial", 11, QFont::Bold));
+        painter.setPen(QColor(255, 230, 100));
+        painter.drawText(QRect(b1X, bY, badgeW, bH), Qt::AlignCenter, QString("🏆 SCORE: %1").arg(score));
+
+        painter.setBrush(QColor(8, 26, 18, 200));
+        painter.setPen(QPen(QColor(0, 230, 140, 160), 1.2));
+        painter.drawRoundedRect(b2X, bY, badgeW, bH, 8, 8);
+        painter.setPen(QColor(160, 255, 220));
+        painter.drawText(QRect(b2X, bY, badgeW, bH), Qt::AlignCenter, QString("⏱️ TIME: %1:%2").arg(mins, 2, 10, QChar('0')).arg(secs, 2, 10, QChar('0')));
+
+        // Action Prompts
+        int promptY = modalY + 178;
+        painter.setFont(QFont("Arial", 12, QFont::Bold));
+        painter.setPen(QColor(255, 235, 120));
+        painter.drawText(modalX, promptY, modalW, 22, Qt::AlignCenter,
+                         "Press [Space] for Next Stage   •   Press [M] for Saga Map");
     }
 
     // Top-Right Multiplayer Badge
@@ -1153,12 +1589,32 @@ void MainWindow::drawMultiplayerBadge(QPainter &painter)
     bool hovered = btn.contains(mapFromGlobal(QCursor::pos()));
 
     int count = gameServer ? gameServer->getConnectedClientCount() : 0;
-    painter.setBrush(hovered ? QColor(30, 55, 110, 230) : QColor(14, 25, 55, 200));
-    painter.setPen(QPen(hovered ? QColor(0, 255, 240) : QColor(0, 180, 255), 1.5));
-    painter.drawRoundedRect(btn, 8, 8);
+
+    // Drop shadow
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 110));
+    painter.drawRoundedRect(btn.adjusted(1, 2, 1, 2), btn.height() / 2, btn.height() / 2);
+
+    QLinearGradient bgGrad(btn.left(), btn.top(), btn.left(), btn.bottom());
+    if (hovered) {
+        bgGrad.setColorAt(0.0, QColor(35, 75, 155, 240));
+        bgGrad.setColorAt(1.0, QColor(15, 35, 80, 240));
+    } else {
+        bgGrad.setColorAt(0.0, QColor(20, 45, 95, 215));
+        bgGrad.setColorAt(1.0, QColor(10, 20, 50, 215));
+    }
+    painter.setBrush(bgGrad);
+    painter.setPen(QPen(hovered ? QColor(0, 255, 240) : (count > 0 ? QColor(0, 255, 180) : QColor(0, 180, 255, 180)), hovered ? 2.0 : 1.3));
+    painter.drawRoundedRect(btn, btn.height() / 2, btn.height() / 2);
+
+    // Specular highlight
+    QPainterPath glint;
+    glint.addRoundedRect(QRectF(btn.left() + 3, btn.top() + 1, btn.width() - 6, btn.height() * 0.45),
+                         (btn.height() * 0.45) / 2, (btn.height() * 0.45) / 2);
+    painter.fillPath(glint, QColor(255, 255, 255, 30));
 
     painter.setFont(QFont("Arial", 10, QFont::Bold));
-    painter.setPen(count > 0 ? QColor(0, 255, 180) : QColor(120, 220, 255));
+    painter.setPen(hovered ? Qt::white : (count > 0 ? QColor(120, 255, 200) : QColor(210, 240, 255)));
     QString text = count > 0 ? QString("🌐 ROOM: %1 ONLINE [H]").arg(count) : "🌐 HOST ROOM [H]";
     painter.drawText(btn, Qt::AlignCenter, text);
 }

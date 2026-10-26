@@ -837,6 +837,12 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.setPen(QPen(QColor(255, 245, 180), btnHovered ? 3.5 : 2.5));
     painter.drawRoundedRect(btnRect, btnRect.height() / 2, btnRect.height() / 2);
 
+    // Specular highlight arc
+    QPainterPath playGlint;
+    playGlint.addRoundedRect(QRectF(btnRect.left() + 4, btnRect.top() + 2, btnRect.width() - 8, btnRect.height() * 0.44),
+                             (btnRect.height() * 0.44) / 2, (btnRect.height() * 0.44) / 2);
+    painter.fillPath(playGlint, QColor(255, 255, 255, 65));
+
     // Button text
     QString playText;
     if (isMultiplayer) {
