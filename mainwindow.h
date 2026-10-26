@@ -83,6 +83,7 @@ private:
     void drawApple(QPainter &painter, int cx, int cy, int s);
     void drawStrawberry(QPainter &painter, int cx, int cy, int s);
     void drawOrangeFruit(QPainter &painter, int cx, int cy, int s);
+    void drawGameScreen(QPainter &painter);
 
     struct WorldPalette {
         QColor top;
