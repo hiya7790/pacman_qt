@@ -172,7 +172,7 @@ void MainWindow::initLevel()
     // Dynamic difficulty scaling across 20 stages per world
     currentVisionRadius = std::max(2.6, 3.8 - (currentLevel - 1) * 0.05);
     currentFrightenDuration = std::max(12, 28 - (currentLevel / 3) * 2);
-    ghostMoveEveryN = std::clamp(4 - currentLevel / 6, 1, 4);
+    ghostMoveEveryN = (currentLevel >= 7) ? 1 : 2;
     ghostTickCounter = 0;
 
     int baseInterval = std::max(85, 130 - (currentLevel / 5) * 5);
@@ -312,33 +312,94 @@ void MainWindow::initLevel()
 
     // 5. Spawn Ghosts across sectors dynamically based on level
     ghosts.clear();
-    ghosts.push_back({currentSectorX, currentSectorY, 10, 9, UP, 0, -1, ""});     // Blinky (Red)
-    ghosts.push_back({currentSectorX, currentSectorY, 9, 10, LEFT, 1, -1, ""});   // Pinky (Pink)
 
-    if (exitSectorX != currentSectorX || exitSectorY != currentSectorY) {
-        ghosts.push_back({exitSectorX, exitSectorY, 10, 10, RIGHT, 2, -1, ""}); // Inky (Cyan)
-    }
+    // Helper to find a safe, walkable spawn tile in a given sector
+    auto findValidGhostSpawn = [&](int sx, int sy, int &outX, int &outY) {
+        static const int preferredPos[][2] = {
+            {10, 9}, {9, 10}, {10, 10}, {9, 9}, {11, 10}, {10, 11}, {8, 10}, {10, 8}
+        };
+        for (const auto &pos : preferredPos) {
+            if (pos[1] >= 0 && pos[1] < ROWS && pos[0] >= 0 && pos[0] < COLS) {
+                if (board[sy][sx][pos[1]][pos[0]] == 0) {
+                    outX = pos[0]; outY = pos[1];
+                    return;
+                }
+            }
+        }
+        for (int r = 1; r < ROWS - 1; ++r) {
+            for (int c = 1; c < COLS - 1; ++c) {
+                if (board[sy][sx][r][c] == 0) {
+                    outX = c; outY = r;
+                    return;
+                }
+            }
+        }
+        outX = 10; outY = 10;
+    };
 
-    int targetGhostCount = std::clamp(2 + currentLevel / 2, 2, 12);
-    int colorCycle = 3;
+    // --- The Core 4 Classic Ghosts (Blinky, Pinky, Inky, Clyde) ---
+    // Ghost 0: Blinky (Red) - Direct Hunter in Start Sector
+    int bX = 10, bY = 9;
+    findValidGhostSpawn(currentSectorX, currentSectorY, bX, bY);
+    ghosts.push_back({currentSectorX, currentSectorY, bX, bY, UP, 0, -1, ""});
 
+    // Ghost 1: Pinky (Pink) - Ambusher in Start Sector
+    int pX = 9, pY = 10;
+    findValidGhostSpawn(currentSectorX, currentSectorY, pX, pY);
+    ghosts.push_back({currentSectorX, currentSectorY, pX, pY, LEFT, 1, -1, ""});
+
+    // Ghost 2: Inky (Cyan) - Patrols Exit Sector (or Start if single sector)
+    int inkySx = exitSectorX, inkySy = exitSectorY;
+    int iX = 10, iY = 10;
+    findValidGhostSpawn(inkySx, inkySy, iX, iY);
+    ghosts.push_back({inkySx, inkySy, iX, iY, RIGHT, 2, -1, ""});
+
+    // Ghost 3: Clyde (Orange) - Roams Exit Sector or adjacent sector
+    int clydeSx = (exitSectorX != currentSectorX || exitSectorY != currentSectorY) ? exitSectorX : currentSectorX;
+    int clydeSy = (exitSectorX != currentSectorX || exitSectorY != currentSectorY) ? exitSectorY : currentSectorY;
+    int cX = 9, cY = 9;
+    findValidGhostSpawn(clydeSx, clydeSy, cX, cY);
+    ghosts.push_back({clydeSx, clydeSy, cX, cY, DOWN, 3, -1, ""});
+
+    // --- Dynamic Target Ghost Count (Increased for beginner levels & scales with labyrinth size) ---
+    // Beginner levels:
+    // Level 1 (2 sectors): 4 ghosts (2 in start, 2 in exit)
+    // Level 2 (4 sectors): 6 ghosts (1-2 per sector)
+    // Level 3 (6 sectors): 8 ghosts
+    // Level 4 (6 sectors): 8 ghosts
+    // Level 5 (9 sectors): 11 ghosts
+    // Higher levels: scales gracefully up to 22 ghosts across large multi-window labyrinths
+    int baseGhosts = 4 + (currentLevel - 1) * 3 / 2;
+    int sectorMin = sectorCols * sectorRows + (sectorCols * sectorRows > 2 ? 2 : 0);
+    int targetGhostCount = std::clamp(std::max(baseGhosts, sectorMin), 4, 22);
+
+    int colorCycle = 0;
+
+    // Pass 1: Ensure every sector has at least 1 ghost guarding it
     for (int sy = 0; sy < sectorRows && (int)ghosts.size() < targetGhostCount; ++sy) {
         for (int sx = 0; sx < sectorCols && (int)ghosts.size() < targetGhostCount; ++sx) {
-            if (sx == currentSectorX && sy == currentSectorY) continue;
-            if (sx == exitSectorX && sy == exitSectorY && currentLevel < 6) continue;
-
-            Direction initDir = static_cast<Direction>(colorCycle % 4);
-            ghosts.push_back({sx, sy, 10, 10, initDir, colorCycle % 4, -1, ""});
-            colorCycle++;
+            int ghostsInSector = 0;
+            for (const Ghost &g : ghosts) {
+                if (g.sectorX == sx && g.sectorY == sy) ghostsInSector++;
+            }
+            if (ghostsInSector < 1) {
+                int gx = 10, gy = 10;
+                findValidGhostSpawn(sx, sy, gx, gy);
+                Direction initDir = static_cast<Direction>((colorCycle) % 4);
+                ghosts.push_back({sx, sy, gx, gy, initDir, colorCycle % 4, -1, ""});
+                colorCycle++;
+            }
         }
     }
 
+    // Pass 2: Distribute remaining ghosts across sectors (giving extra danger to exit & middle sectors)
     while ((int)ghosts.size() < targetGhostCount) {
         int randSx = QRandomGenerator::global()->bounded(sectorCols);
         int randSy = QRandomGenerator::global()->bounded(sectorRows);
-        int gx = 9 + QRandomGenerator::global()->bounded(3);
-        int gy = 9 + QRandomGenerator::global()->bounded(3);
-        ghosts.push_back({randSx, randSy, gx, gy, UP, colorCycle % 4, -1, ""});
+        int gx = 10, gy = 10;
+        findValidGhostSpawn(randSx, randSy, gx, gy);
+        Direction initDir = static_cast<Direction>((colorCycle) % 4);
+        ghosts.push_back({randSx, randSy, gx, gy, initDir, colorCycle % 4, -1, ""});
         colorCycle++;
     }
 
