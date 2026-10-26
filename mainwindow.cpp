@@ -155,10 +155,11 @@ void MainWindow::startLevel(int lvl)
     gameOver = false;
     levelComplete = false;
     if (!isAnyMultiplayer()) {
-        hostRole = "p1";
+        hostRole = (singlePlayerHero == 2 ? "p2" : "p1");
     }
     initLevel();
     setFocus();
+    activateWindow();
     broadcastCurrentGameState();
     update();
 }
@@ -1015,7 +1016,10 @@ bool MainWindow::isOnlineMultiplayer() const
 
 bool MainWindow::isP1Active() const
 {
-    return (hostRole == "p1") || (p1ClientId >= 0) || !isAnyMultiplayer();
+    if (isOnlineMultiplayer()) {
+        return (hostRole == "p1") || (p1ClientId >= 0);
+    }
+    return (hostRole == "p1") || (p1ClientId >= 0) || (!isMultiplayer && singlePlayerHero == 1);
 }
 
 bool MainWindow::isP2Active() const
@@ -1023,7 +1027,7 @@ bool MainWindow::isP2Active() const
     if (isOnlineMultiplayer()) {
         return (hostRole == "p2") || (p2ClientId >= 0);
     }
-    return (hostRole == "p2") || (p2ClientId >= 0) || isMultiplayer;
+    return (hostRole == "p2") || (p2ClientId >= 0) || isMultiplayer || (!isMultiplayer && singlePlayerHero == 2);
 }
 
 bool MainWindow::isP3Active() const
@@ -1038,7 +1042,7 @@ bool MainWindow::isP4Active() const
 
 bool MainWindow::isAnyMultiplayer() const
 {
-    return isMultiplayer || isOnlineMultiplayer() || isHostGhost() || (hostRole != "p1");
+    return isMultiplayer || isOnlineMultiplayer() || isHostGhost();
 }
 
 QString MainWindow::getRoleDisplayName(const QString &role) const

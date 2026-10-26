@@ -286,20 +286,19 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     }
 
     if (moveCmd != STOP) {
-        // Host controls Player 1 (Yellow Pac-Man) in Single Player OR when hostRole == "p1"
-        bool hostControlsP1 = (!isAnyMultiplayer()) || (hostRole == "p1");
+        // Host controls Player 1 (Yellow Pac-Man) by default, or P2 in solo pink mode, or active chosen role
+        bool hostControlsP1 = (hostRole == "p1") || (!isAnyMultiplayer() && singlePlayerHero == 1);
+        bool hostControlsP2 = (hostRole == "p2") || (!isAnyMultiplayer() && singlePlayerHero == 2);
+        bool hostControlsP3 = (hostRole == "p3");
+        bool hostControlsP4 = (hostRole == "p4");
+
         if (hostControlsP1) {
             if (p1Lives > 0 && !p1Alive && p1RespawnTicks == 0) {
                 p1Alive = true;
             }
             if (p1Alive) {
                 pacmanNextDir = moveCmd;
-                if (canMove(pacmanX, pacmanY, moveCmd)) {
-                    pacmanDir = moveCmd;
-                    movePacman();
-                } else {
-                    pacmanDir = moveCmd; // Turn mouth towards pressed direction for instant feedback
-                }
+                movePacman();
                 moveCount++;
                 checkFruitPickup();
                 checkGhostCollisions();
@@ -308,18 +307,13 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
                 broadcastCurrentGameState();
                 update();
             }
-        } else if (hostRole == "p2") {
+        } else if (hostControlsP2) {
             if (p2Lives > 0 && !p2Alive && p2RespawnTicks == 0) {
                 p2Alive = true;
             }
             if (p2Alive) {
                 p2NextDir = moveCmd;
-                if (canMove(p2X, p2Y, moveCmd)) {
-                    p2Dir = moveCmd;
-                    movePlayer2();
-                } else {
-                    p2Dir = moveCmd;
-                }
+                movePlayer2();
                 moveCount++;
                 checkFruitPickup();
                 checkGhostCollisions();
@@ -328,18 +322,13 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
                 broadcastCurrentGameState();
                 update();
             }
-        } else if (hostRole == "p3") {
+        } else if (hostControlsP3) {
             if (hero3.lives > 0 && !hero3.alive && hero3.respawnTicks == 0) {
                 hero3.alive = true;
             }
             if (hero3.alive) {
                 hero3.nextDir = moveCmd;
-                if (canMove(hero3.x, hero3.y, moveCmd)) {
-                    hero3.dir = moveCmd;
-                    moveHero(hero3, 3);
-                } else {
-                    hero3.dir = moveCmd;
-                }
+                moveHero(hero3, 3);
                 moveCount++;
                 checkFruitPickup();
                 checkGhostCollisions();
@@ -348,18 +337,13 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
                 broadcastCurrentGameState();
                 update();
             }
-        } else if (hostRole == "p4") {
+        } else if (hostControlsP4) {
             if (hero4.lives > 0 && !hero4.alive && hero4.respawnTicks == 0) {
                 hero4.alive = true;
             }
             if (hero4.alive) {
                 hero4.nextDir = moveCmd;
-                if (canMove(hero4.x, hero4.y, moveCmd)) {
-                    hero4.dir = moveCmd;
-                    moveHero(hero4, 4);
-                } else {
-                    hero4.dir = moveCmd;
-                }
+                moveHero(hero4, 4);
                 moveCount++;
                 checkFruitPickup();
                 checkGhostCollisions();
@@ -398,6 +382,7 @@ void MainWindow::wheelEvent(QWheelEvent *event)
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
     setFocus();
+    activateWindow();
     if (showMultiplayerLobby) {
         QPoint pos = event->pos();
         if (getCopyLinkButtonRect().contains(pos) || getLobbyUrlBoxRect().contains(pos)) {

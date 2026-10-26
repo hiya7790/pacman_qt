@@ -253,8 +253,9 @@ void MainWindow::movePlayer2()
 
 void MainWindow::moveHero(ExtraHero &hero, int heroId)
 {
-    Q_UNUSED(heroId);
-    if (!hero.alive || hero.clientId == -1) return;
+    if (!hero.alive) return;
+    QString expectedHostRole = (heroId == 3) ? "p3" : "p4";
+    if (hero.clientId == -1 && hostRole != expectedHostRole) return;
 
     if (canMove(hero.x, hero.y, hero.nextDir)) {
         hero.dir = hero.nextDir;

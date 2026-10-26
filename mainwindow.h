@@ -71,6 +71,17 @@ public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
 
+    int getPacmanX() const { return pacmanX; }
+    int getPacmanY() const { return pacmanY; }
+    int getSectorX() const { return currentSectorX; }
+    int getSectorY() const { return currentSectorY; }
+    void testStartLevel(int lvl) { startLevel(lvl); }
+    GameScreen getCurrentScreen() const { return currentScreen; }
+    QString getHostRole() const { return hostRole; }
+    bool getP1Alive() const { return p1Alive; }
+    void testOnPlayerJoined(int id, const QString &role, const QString &name) { onPlayerJoined(id, role, name); }
+    void testSwitchHostRole(const QString &r) { switchHostRole(r); }
+
 protected:
     void paintEvent(QPaintEvent *event) override;
     void keyPressEvent(QKeyEvent *event) override;
