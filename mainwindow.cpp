@@ -386,6 +386,8 @@ void MainWindow::gameLoop()
         if (fogPeekTimer.elapsed() >= FOG_PEEK_DURATION_MS) {
             fogOfWarEnabled = true;
             fogPeekActive = false;
+            broadcastCurrentGameState();
+            update();
         }
     }
 
@@ -430,28 +432,6 @@ void MainWindow::gameLoop()
             hero4.x = pacmanX; hero4.y = pacmanY;
             updateFogOfWar();
         }
-    }
-
-    // Move Player 2 (Ms. Pac-Man) if active
-    if ((isMultiplayer || p2ClientId >= 0) && p2Alive) {
-        movePlayer2();
-        checkFruitPickup();
-        checkGhostCollisions();
-        checkLevelExit();
-    }
-
-    // Move extra heroes if active
-    if (hero3.clientId != -1 && hero3.alive) {
-        moveHero(hero3, 3);
-        checkFruitPickup();
-        checkGhostCollisions();
-        checkLevelExit();
-    }
-    if (hero4.clientId != -1 && hero4.alive) {
-        moveHero(hero4, 4);
-        checkFruitPickup();
-        checkGhostCollisions();
-        checkLevelExit();
     }
 
     ghostTickCounter++;
@@ -526,7 +506,7 @@ void MainWindow::broadcastCurrentGameState()
         // Heroes
         QJsonObject h1;
         h1["x"] = pacmanX; h1["y"] = pacmanY; h1["dir"] = (int)pacmanDir;
-        h1["mouth"] = pacmanMouthAngle; h1["alive"] = p1Alive; h1["score"] = scoreP1;
+        h1["mouth"] = pacmanMouthAngle; h1["alive"] = p1Alive; h1["score"] = scoreP1; h1["active"] = true;
         state["p1"] = h1;
 
         QJsonObject h2;
@@ -693,12 +673,14 @@ void MainWindow::onPlayerMoved(int clientId, const QString &role, int dirInt)
         if (p2Alive) {
             if (canMove(p2X, p2Y, d)) {
                 p2Dir = d;
+                movePlayer2();
+                checkFruitPickup();
+                checkGhostCollisions();
+                checkLevelExit();
+                updateFogOfWar();
+            } else {
+                p2Dir = d;
             }
-            movePlayer2();
-            checkFruitPickup();
-            checkGhostCollisions();
-            checkLevelExit();
-            updateFogOfWar();
             broadcastCurrentGameState();
             update();
         }
@@ -707,12 +689,14 @@ void MainWindow::onPlayerMoved(int clientId, const QString &role, int dirInt)
         if (hero3.alive) {
             if (canMove(hero3.x, hero3.y, d)) {
                 hero3.dir = d;
+                moveHero(hero3, 3);
+                checkFruitPickup();
+                checkGhostCollisions();
+                checkLevelExit();
+                updateFogOfWar();
+            } else {
+                hero3.dir = d;
             }
-            moveHero(hero3, 3);
-            checkFruitPickup();
-            checkGhostCollisions();
-            checkLevelExit();
-            updateFogOfWar();
             broadcastCurrentGameState();
             update();
         }
@@ -721,12 +705,14 @@ void MainWindow::onPlayerMoved(int clientId, const QString &role, int dirInt)
         if (hero4.alive) {
             if (canMove(hero4.x, hero4.y, d)) {
                 hero4.dir = d;
+                moveHero(hero4, 4);
+                checkFruitPickup();
+                checkGhostCollisions();
+                checkLevelExit();
+                updateFogOfWar();
+            } else {
+                hero4.dir = d;
             }
-            moveHero(hero4, 4);
-            checkFruitPickup();
-            checkGhostCollisions();
-            checkLevelExit();
-            updateFogOfWar();
             broadcastCurrentGameState();
             update();
         }

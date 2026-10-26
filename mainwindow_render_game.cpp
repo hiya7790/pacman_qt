@@ -380,56 +380,45 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         }
     }
 
-    // 5. Lantern Light Spotlight (only for current sector)
-    if (isCurrent && fogOfWarEnabled) {
+    // 5. Lantern Light Spotlight (Fused multi-hero lighting)
+    if (isCurrent && fogOfWarEnabled && !fogPeekActive) {
+        int secW = COLS * cellSize;
+        int secH = ROWS * cellSize;
+        QPixmap fogPix(secW, secH);
+        fogPix.fill(QColor(4, 6, 14, 235));
+
+        QPainter maskPainter(&fogPix);
+        maskPainter.setRenderHint(QPainter::Antialiasing);
+        maskPainter.setCompositionMode(QPainter::CompositionMode_DestinationOut);
+
+        auto carveLight = [&](int hx, int hy, double r) {
+            int cx = hx * cellSize + cellSize / 2;
+            int cy = hy * cellSize + cellSize / 2;
+            int radiusPx = int((r + 0.6) * cellSize);
+
+            QRadialGradient grad(cx, cy, radiusPx);
+            grad.setColorAt(0.0, QColor(0, 0, 0, 255));
+            grad.setColorAt(0.65, QColor(0, 0, 0, 220));
+            grad.setColorAt(1.0, QColor(0, 0, 0, 0));
+
+            maskPainter.fillRect(cx - radiusPx, cy - radiusPx, radiusPx * 2, radiusPx * 2, grad);
+        };
+
         if (p1Alive) {
-            int pxCenter = originX + pacmanX * cellSize + cellSize / 2;
-            int pyCenter = originY + pacmanY * cellSize + cellSize / 2;
-
-            QRadialGradient lantern(pxCenter, pyCenter, (currentVisionRadius + 0.6) * cellSize);
-            lantern.setColorAt(0.0, QColor(255, 235, 170, 25));
-            lantern.setColorAt(0.45, QColor(255, 200, 100, 10));
-            lantern.setColorAt(0.75, QColor(0, 0, 0, 60));
-            lantern.setColorAt(1.0, QColor(0, 0, 0, 220));
-
-            painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern);
+            carveLight(pacmanX, pacmanY, currentVisionRadius);
         }
         if ((isMultiplayer || p2ClientId >= 0) && p2Alive) {
-            int p2xCenter = originX + p2X * cellSize + cellSize / 2;
-            int p2yCenter = originY + p2Y * cellSize + cellSize / 2;
-
-            QRadialGradient lantern2(p2xCenter, p2yCenter, (currentVisionRadius + 0.6) * cellSize);
-            lantern2.setColorAt(0.0, QColor(255, 190, 230, 25));
-            lantern2.setColorAt(0.45, QColor(255, 150, 200, 10));
-            lantern2.setColorAt(0.75, QColor(0, 0, 0, 60));
-            lantern2.setColorAt(1.0, QColor(0, 0, 0, 220));
-
-            painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern2);
+            carveLight(p2X, p2Y, currentVisionRadius);
         }
         if (hero3.clientId != -1 && hero3.alive) {
-            int p3xCenter = originX + hero3.x * cellSize + cellSize / 2;
-            int p3yCenter = originY + hero3.y * cellSize + cellSize / 2;
-
-            QRadialGradient lantern3(p3xCenter, p3yCenter, (currentVisionRadius + 0.6) * cellSize);
-            lantern3.setColorAt(0.0, QColor(100, 240, 255, 25));
-            lantern3.setColorAt(0.45, QColor(0, 200, 255, 10));
-            lantern3.setColorAt(0.75, QColor(0, 0, 0, 60));
-            lantern3.setColorAt(1.0, QColor(0, 0, 0, 220));
-
-            painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern3);
+            carveLight(hero3.x, hero3.y, currentVisionRadius);
         }
         if (hero4.clientId != -1 && hero4.alive) {
-            int p4xCenter = originX + hero4.x * cellSize + cellSize / 2;
-            int p4yCenter = originY + hero4.y * cellSize + cellSize / 2;
-
-            QRadialGradient lantern4(p4xCenter, p4yCenter, (currentVisionRadius + 0.6) * cellSize);
-            lantern4.setColorAt(0.0, QColor(150, 255, 180, 25));
-            lantern4.setColorAt(0.45, QColor(0, 255, 100, 10));
-            lantern4.setColorAt(0.75, QColor(0, 0, 0, 60));
-            lantern4.setColorAt(1.0, QColor(0, 0, 0, 220));
-
-            painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern4);
+            carveLight(hero4.x, hero4.y, currentVisionRadius);
         }
+        maskPainter.end();
+
+        painter.drawPixmap(originX, originY, fogPix);
     }
 
     // 6. Glowing Sci-Fi Gateway Portals (Cuts through darkness & visible across fog!)

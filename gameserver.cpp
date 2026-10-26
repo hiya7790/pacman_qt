@@ -841,13 +841,13 @@ QByteArray GameServer::getControllerHtml() const
       <canvas id="gameCanvas" width="420" height="420"></canvas>
     </div>
 
-    <!-- TOUCH D-PAD -->
+    <!-- TOUCH D-PAD (1 TAP = 1 STEP) -->
     <div class="dpad-container">
-      <button class="d-btn btn-up" ontouchstart="sendDir(0, event)" onmousedown="sendDir(0)">▲</button>
-      <button class="d-btn btn-left" ontouchstart="sendDir(2, event)" onmousedown="sendDir(2)">◀</button>
+      <button class="d-btn btn-up" ontouchstart="sendDir(0, event)" onclick="sendDir(0, event)">▲</button>
+      <button class="d-btn btn-left" ontouchstart="sendDir(2, event)" onclick="sendDir(2, event)">◀</button>
       <div class="dpad-center" id="centerIcon">🕹️</div>
-      <button class="d-btn btn-right" ontouchstart="sendDir(3, event)" onmousedown="sendDir(3)">▶</button>
-      <button class="d-btn btn-down" ontouchstart="sendDir(1, event)" onmousedown="sendDir(1)">▼</button>
+      <button class="d-btn btn-right" ontouchstart="sendDir(3, event)" onclick="sendDir(3, event)">▶</button>
+      <button class="d-btn btn-down" ontouchstart="sendDir(1, event)" onclick="sendDir(1, event)">▼</button>
     </div>
 
     <!-- ACTION BUTTONS -->
@@ -855,7 +855,7 @@ QByteArray GameServer::getControllerHtml() const
       <button class="action-btn btn-peek" id="actionBtn" onclick="sendAction()">👁️ FOG PEEK (3 left)</button>
       <button class="leave-btn" onclick="leaveRole()">⇄ Switch Role</button>
     </div>
-    <div class="keyboard-hint">💻 On laptop? Use Arrow Keys / WASD to move & Space to Peek</div>
+    <div class="keyboard-hint">💻 1 Click / Key Press = 1 Step (Same as host)</div>
   </div>
 </div>
 
@@ -864,6 +864,7 @@ QByteArray GameServer::getControllerHtml() const
   let currentRole = null;
   let latestState = null;
   let animTick = 0;
+  let lastTouchTime = 0;
   let myName = localStorage.getItem('pacman_pname') || '';
   if (myName) document.getElementById('nameInput').value = myName;
 
@@ -968,8 +969,16 @@ QByteArray GameServer::getControllerHtml() const
     }
   }
 
+  // Single step movement (1 tap/click = 1 step)
   function sendDir(dir, ev) {
-    if (ev) ev.preventDefault();
+    if (ev) {
+      if (ev.type === 'touchstart') {
+        lastTouchTime = Date.now();
+      } else if (ev.type === 'click' && (Date.now() - lastTouchTime < 450)) {
+        return; // ignore synthetic ghost click
+      }
+      ev.preventDefault();
+    }
     if (navigator.vibrate) navigator.vibrate(20);
     if (ws && ws.readyState === WebSocket.OPEN && currentRole) {
       ws.send(JSON.stringify({ type: 'move', dir: dir }));
@@ -1057,13 +1066,14 @@ QByteArray GameServer::getControllerHtml() const
     }
   }
 
-  // Keyboard navigation for laptop / desktop users
+  // Keyboard navigation for laptop users: 1 keypress = 1 step
   window.addEventListener('keydown', (e) => {
     if (!currentRole) return;
-    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { sendDir(0); e.preventDefault(); }
-    else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { sendDir(1); e.preventDefault(); }
-    else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { sendDir(2); e.preventDefault(); }
-    else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { sendDir(3); e.preventDefault(); }
+    if (e.repeat) return; // Prevent continuous fast repeating
+    if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { sendDir(0, e); }
+    else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') { sendDir(1, e); }
+    else if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') { sendDir(2, e); }
+    else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { sendDir(3, e); }
     else if (e.key === ' ' || e.key === 'f' || e.key === 'F') { sendAction(); e.preventDefault(); }
   });
 
@@ -1075,21 +1085,17 @@ QByteArray GameServer::getControllerHtml() const
     ctx.clearRect(0, 0, 420, 420);
 
     if (!latestState) {
-      // Waiting screen
       ctx.fillStyle = "#070914";
       ctx.fillRect(0, 0, 420, 420);
       ctx.fillStyle = "#4a5980";
       ctx.font = "bold 13px sans-serif";
       ctx.textAlign = "center";
       ctx.fillText("Connecting to classroom game server...", 210, 205);
-      ctx.font = "11px sans-serif";
-      ctx.fillText("Please wait...", 210, 225);
       requestAnimationFrame(render);
       return;
     }
 
     if (latestState.screen === 'map') {
-      // Map screen standby
       drawMapStandby();
       requestAnimationFrame(render);
       return;
@@ -1111,7 +1117,6 @@ QByteArray GameServer::getControllerHtml() const
     ctx.fillStyle = "#070914";
     ctx.fillRect(0, 0, 420, 420);
 
-    // Subtle grid
     ctx.strokeStyle = "rgba(40, 55, 100, 0.25)";
     ctx.lineWidth = 1;
     for (let i = 0; i < 420; i += 30) {
@@ -1119,7 +1124,6 @@ QByteArray GameServer::getControllerHtml() const
       ctx.beginPath(); ctx.moveTo(0, i); ctx.lineTo(420, i); ctx.stroke();
     }
 
-    // Compass circle
     const pulse = Math.sin(animTick * 0.05) * 5;
     ctx.strokeStyle = "#00e5ff";
     ctx.lineWidth = 2;
@@ -1163,7 +1167,6 @@ QByteArray GameServer::getControllerHtml() const
         const cy = r * C_SIZE;
 
         if (cell === '1') {
-          // Wall
           if (isFog && !wasExplored) {
             ctx.fillStyle = "#030408";
             ctx.fillRect(cx, cy, C_SIZE, C_SIZE);
@@ -1176,12 +1179,10 @@ QByteArray GameServer::getControllerHtml() const
             ctx.stroke();
           }
         } else {
-          // Corridor
           ctx.fillStyle = "#070914";
           ctx.fillRect(cx, cy, C_SIZE, C_SIZE);
 
           if (cell === '2') {
-            // Food Dot
             if (!isFog || wasExplored) {
               ctx.fillStyle = "#ffe6b0";
               ctx.beginPath();
@@ -1189,7 +1190,6 @@ QByteArray GameServer::getControllerHtml() const
               ctx.fill();
             }
           } else if (cell === '3') {
-            // Power Energizer
             if (!isFog || wasExplored) {
               const pelletPulse = Math.sin(animTick * 0.15) * 1.5;
               ctx.fillStyle = "#ffffff";
@@ -1201,7 +1201,6 @@ QByteArray GameServer::getControllerHtml() const
               ctx.shadowBlur = 0;
             }
           } else if (cell === '4') {
-            // Ghost door barrier
             ctx.strokeStyle = "#ff69b4";
             ctx.lineWidth = 2;
             ctx.beginPath();
@@ -1230,14 +1229,12 @@ QByteArray GameServer::getControllerHtml() const
     const exploredIdx = state.exitY * 21 + state.exitX;
     const wasExplored = (state.explored && state.explored[exploredIdx] === '1');
 
-    // Rule: Hide exit if fog is active, peek is off, and tile hasn't been discovered
     if (isFog && !wasExplored) return;
 
     const ex = state.exitX * C_SIZE + 10;
     const ey = state.exitY * C_SIZE + 10;
     const pulse = Math.sin(animTick * 0.1) * 3;
 
-    // Glowing Aura
     const grad = ctx.createRadialGradient(ex, ey, 3, ex, ey, 18 + pulse);
     grad.addColorStop(0, "rgba(0, 255, 128, 0.9)");
     grad.addColorStop(0.5, "rgba(0, 200, 100, 0.4)");
@@ -1247,7 +1244,6 @@ QByteArray GameServer::getControllerHtml() const
     ctx.arc(ex, ey, 18 + pulse, 0, Math.PI * 2);
     ctx.fill();
 
-    // Portal Ring
     ctx.strokeStyle = "#00ff88";
     ctx.lineWidth = 2;
     ctx.beginPath();
@@ -1272,15 +1268,24 @@ QByteArray GameServer::getControllerHtml() const
     }
   }
 
+  // Draw ONLY active players who have actually joined!
   function drawHeroes(state) {
-    // P1 (Yellow Classic Pac-Man)
-    drawPacHero(state.p1, "#ffe600", "p1", false, false, false, "P1 (Host)");
-    // P2 (Ms. Pac-Man)
-    drawPacHero(state.p2, "#ff69b4", "p2", true, false, false, state.p2 ? state.p2.name : "Ms. Pac");
-    // P3 (Jr. Pac-Man)
-    drawPacHero(state.p3, "#00e5ff", "p3", false, true, false, state.p3 ? state.p3.name : "Jr. Pac");
-    // P4 (Miracle Pac-Man)
-    drawPacHero(state.p4, "#00ff66", "p4", false, false, true, state.p4 ? state.p4.name : "Miracle");
+    // P1 (Host - Yellow Pac-Man)
+    if (state.p1 && state.p1.alive) {
+      drawPacHero(state.p1, "#ffe600", "p1", false, false, false, "P1 (Host)");
+    }
+    // P2 (Ms. Pac-Man) - only if active!
+    if (state.p2 && state.p2.alive && state.p2.active) {
+      drawPacHero(state.p2, "#ff69b4", "p2", true, false, false, state.p2.name || "Ms. Pac");
+    }
+    // P3 (Jr. Pac-Man) - only if active!
+    if (state.p3 && state.p3.alive && state.p3.active) {
+      drawPacHero(state.p3, "#00e5ff", "p3", false, true, false, state.p3.name || "Jr. Pac");
+    }
+    // P4 (Miracle Pac-Man) - only if active!
+    if (state.p4 && state.p4.alive && state.p4.active) {
+      drawPacHero(state.p4, "#00ff66", "p4", false, false, true, state.p4.name || "Miracle");
+    }
   }
 
   function drawPacHero(h, color, roleKey, bow, cap, headband, defaultTag) {
@@ -1313,7 +1318,6 @@ QByteArray GameServer::getControllerHtml() const
 
     // Accessories
     if (bow) {
-      // Red bow on top
       ctx.fillStyle = "#ff1744";
       ctx.beginPath();
       ctx.arc(hx - 3.5, hy - 7, 2.5, 0, Math.PI * 2);
@@ -1323,7 +1327,6 @@ QByteArray GameServer::getControllerHtml() const
       ctx.fillRect(hx - 1, hy - 8, 2, 2);
     }
     if (cap) {
-      // Blue Beanie Propeller Cap
       ctx.fillStyle = "#0066ff";
       ctx.fillRect(hx - 5, hy - 9, 10, 2.5);
       ctx.strokeStyle = "#ff3333";
@@ -1334,7 +1337,6 @@ QByteArray GameServer::getControllerHtml() const
       ctx.stroke();
     }
     if (headband) {
-      // Green Superhero Headband
       ctx.fillStyle = "#00a833";
       ctx.fillRect(hx - 6, hy - 4, 12, 2);
     }
@@ -1356,6 +1358,7 @@ QByteArray GameServer::getControllerHtml() const
   function drawGhosts(state) {
     if (!state.ghosts || state.ghosts.length === 0) return;
     const ghostColors = ["#ff3333", "#ff99cc", "#00ffff", "#ffaa00"];
+    const ghostNames = ["Blinky", "Pinky", "Inky", "Clyde"];
     const ghostRoleNames = ["blinky", "pinky", "inky", "clyde"];
 
     for (const g of state.ghosts) {
@@ -1400,11 +1403,9 @@ QByteArray GameServer::getControllerHtml() const
         ctx.arc(gx + 3 + ox, gy - 2 + oy, 1.2, 0, Math.PI * 2);
         ctx.fill();
       } else {
-        // Scared Eyes
         ctx.fillStyle = "#ffaaaa";
         ctx.fillRect(gx - 4, gy - 3, 2, 2);
         ctx.fillRect(gx + 2, gy - 3, 2, 2);
-        // Scared Mouth
         ctx.strokeStyle = "#ffaaaa";
         ctx.lineWidth = 1;
         ctx.beginPath();
@@ -1417,16 +1418,19 @@ QByteArray GameServer::getControllerHtml() const
       }
       ctx.restore();
 
-      // Tag
+      // Ghost Badge
       const isMe = (currentRole && currentRole.toLowerCase() === ghostRoleNames[g.color]);
       ctx.font = "bold 8px sans-serif";
       ctx.textAlign = "center";
       if (isMe) {
         ctx.fillStyle = "#ff5577";
-        ctx.fillText("▼ YOU", gx, gy - 11);
+        ctx.fillText("▼ YOU (Ghost)", gx, gy - 11);
       } else if (g.isHuman && g.name) {
         ctx.fillStyle = bodyColor;
-        ctx.fillText(g.name.substring(0, 8), gx, gy - 11);
+        ctx.fillText("👻 " + g.name.substring(0, 8), gx, gy - 11);
+      } else {
+        ctx.fillStyle = "#8a9ab8";
+        ctx.fillText("👻 " + ghostNames[g.color], gx, gy - 11);
       }
     }
   }
@@ -1439,26 +1443,29 @@ QByteArray GameServer::getControllerHtml() const
     fogCtx.fillStyle = "rgba(4, 6, 15, 0.95)";
     fogCtx.fillRect(0, 0, 420, 420);
 
-    // Carve out illuminated spotlights for alive heroes using destination-out
+    // Carve out illuminated spotlights for alive & active heroes using destination-out
     fogCtx.globalCompositeOperation = 'destination-out';
-    const heroes = [state.p1, state.p2, state.p3, state.p4];
+    const heroes = [];
+    if (state.p1 && state.p1.alive) heroes.push(state.p1);
+    if (state.p2 && state.p2.alive && state.p2.active) heroes.push(state.p2);
+    if (state.p3 && state.p3.alive && state.p3.active) heroes.push(state.p3);
+    if (state.p4 && state.p4.alive && state.p4.active) heroes.push(state.p4);
+
     const rPx = (state.radius || 3.5) * C_SIZE;
 
     for (const h of heroes) {
-      if (h && h.alive) {
-        const hx = h.x * C_SIZE + 10;
-        const hy = h.y * C_SIZE + 10;
+      const hx = h.x * C_SIZE + 10;
+      const hy = h.y * C_SIZE + 10;
 
-        const grad = fogCtx.createRadialGradient(hx, hy, rPx * 0.25, hx, hy, rPx);
-        grad.addColorStop(0, "rgba(0,0,0,1.0)");
-        grad.addColorStop(0.7, "rgba(0,0,0,0.85)");
-        grad.addColorStop(1, "rgba(0,0,0,0.0)");
+      const grad = fogCtx.createRadialGradient(hx, hy, rPx * 0.25, hx, hy, rPx);
+      grad.addColorStop(0, "rgba(0,0,0,1.0)");
+      grad.addColorStop(0.7, "rgba(0,0,0,0.85)");
+      grad.addColorStop(1, "rgba(0,0,0,0.0)");
 
-        fogCtx.fillStyle = grad;
-        fogCtx.beginPath();
-        fogCtx.arc(hx, hy, rPx, 0, Math.PI * 2);
-        fogCtx.fill();
-      }
+      fogCtx.fillStyle = grad;
+      fogCtx.beginPath();
+      fogCtx.arc(hx, hy, rPx, 0, Math.PI * 2);
+      fogCtx.fill();
     }
 
     // Blend fog layer on top of main canvas
@@ -1468,7 +1475,6 @@ QByteArray GameServer::getControllerHtml() const
 
   function drawOverlays(state) {
     if (state.peek) {
-      // Golden banner for active fog peek
       ctx.fillStyle = "rgba(255, 200, 0, 0.25)";
       ctx.fillRect(0, 0, 420, 24);
       ctx.strokeStyle = "#ffe600";
