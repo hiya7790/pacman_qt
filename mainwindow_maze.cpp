@@ -153,22 +153,51 @@ void MainWindow::generateSectorMaze(int sx, int sy)
 
 void MainWindow::checkLevelExit()
 {
-    bool p1Won = p1Alive && (pacmanX == exitX && pacmanY == exitY);
-    bool p2Won = isP2Active() && p2Alive && (p2X == exitX && p2Y == exitY);
-    bool p3Won = (hero3.clientId != -1 && hero3.alive && hero3.x == exitX && hero3.y == exitY);
-    bool p4Won = (hero4.clientId != -1 && hero4.alive && hero4.x == exitX && hero4.y == exitY);
+    if (currentSectorX == exitSectorX && currentSectorY == exitSectorY) {
+        if (isP1Active() && p1Alive && pacmanX == exitX && pacmanY == exitY) {
+            if (!p1ReachedExit) {
+                p1ReachedExit = true;
+                peekToastMessage = "🏁 🟡 Pac-Man reached the exit portal!";
+                peekToastTimer.start();
+            }
+        }
+        if (isP2Active() && p2Alive && p2X == exitX && p2Y == exitY) {
+            if (!p2ReachedExit) {
+                p2ReachedExit = true;
+                peekToastMessage = "🏁 🎀 Ms. Pac-Man reached the exit portal!";
+                peekToastTimer.start();
+            }
+        }
+        if (isP3Active() && hero3.alive && hero3.x == exitX && hero3.y == exitY) {
+            if (!hero3.reachedExit) {
+                hero3.reachedExit = true;
+                peekToastMessage = "🏁 🧢 Jr. Pac-Man reached the exit portal!";
+                peekToastTimer.start();
+            }
+        }
+        if (isP4Active() && hero4.alive && hero4.x == exitX && hero4.y == exitY) {
+            if (!hero4.reachedExit) {
+                hero4.reachedExit = true;
+                peekToastMessage = "🏁 🟢 Miracle Pac-Man reached the exit portal!";
+                peekToastTimer.start();
+            }
+        }
+    }
 
-    if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && (p1Won || p2Won || p3Won || p4Won)) {
+    int eligibleCount = getEligibleHeroCount();
+    int reachedCount = getReachedExitHeroCount();
+
+    // In single player: 1 player must reach the exit.
+    // In multiplayer: ALL alive (eligible) players must reach the exit portal!
+    if (eligibleCount > 0 && reachedCount >= eligibleCount) {
         levelComplete = true;
         int clearBonus = (300 + currentLevel * 100) * (sectorCols * sectorRows);
-        int winners = (p1Won ? 1 : 0) + (p2Won ? 1 : 0) + (p3Won ? 1 : 0) + (p4Won ? 1 : 0);
-        if (winners == 0) winners = 1;
-        int perHeroBonus = clearBonus / winners;
+        int perHeroBonus = clearBonus / eligibleCount;
 
-        if (p1Won) scoreP1 += perHeroBonus;
-        if (p2Won) scoreP2 += perHeroBonus;
-        if (p3Won) hero3.score += perHeroBonus;
-        if (p4Won) hero4.score += perHeroBonus;
+        if (isP1Active() && p1Lives > 0 && p1ReachedExit) scoreP1 += perHeroBonus;
+        if (isP2Active() && p2Lives > 0 && p2ReachedExit) scoreP2 += perHeroBonus;
+        if (isP3Active() && hero3.lives > 0 && hero3.reachedExit) hero3.score += perHeroBonus;
+        if (isP4Active() && hero4.lives > 0 && hero4.reachedExit) hero4.score += perHeroBonus;
 
         score = scoreP1 + scoreP2 + hero3.score + hero4.score;
         if (currentLevel >= highestUnlockedLevel) {

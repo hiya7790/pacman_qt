@@ -463,12 +463,15 @@ void MainWindow::checkGhostCollisions()
 
         // Player 1 (Yellow Pac-Man)
         if (isP1Active() && p1Alive && g.x == pacmanX && g.y == pacmanY) {
-            if (ghostsFrightened) {
+            if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && pacmanX == exitX && pacmanY == exitY && p1ReachedExit) {
+                // Safe at exit portal sanctuary waiting for team!
+            } else if (ghostsFrightened) {
                 scoreP1 += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 respawnGhostFarAway(g);
             } else {
                 p1Alive = false;
+                p1ReachedExit = false;
                 p1Lives--;
                 if (p1Lives > 0) {
                     p1RespawnTicks = 30; // ~4s respawn
@@ -484,12 +487,15 @@ void MainWindow::checkGhostCollisions()
 
         // Player 2 (Ms. Pac-Man)
         if (isP2Active() && p2Alive && g.x == p2X && g.y == p2Y) {
-            if (ghostsFrightened) {
+            if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && p2X == exitX && p2Y == exitY && p2ReachedExit) {
+                // Safe at exit portal sanctuary waiting for team!
+            } else if (ghostsFrightened) {
                 scoreP2 += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 respawnGhostFarAway(g);
             } else {
                 p2Alive = false;
+                p2ReachedExit = false;
                 p2Lives--;
                 if (p2Lives > 0) {
                     p2RespawnTicks = 30;
@@ -505,12 +511,15 @@ void MainWindow::checkGhostCollisions()
 
         // Hero 3 (Jr. Pac-Man)
         if (isP3Active() && hero3.alive && g.x == hero3.x && g.y == hero3.y) {
-            if (ghostsFrightened) {
+            if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && hero3.x == exitX && hero3.y == exitY && hero3.reachedExit) {
+                // Safe at exit portal sanctuary waiting for team!
+            } else if (ghostsFrightened) {
                 hero3.score += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 respawnGhostFarAway(g);
             } else {
                 hero3.alive = false;
+                hero3.reachedExit = false;
                 hero3.lives--;
                 if (hero3.lives > 0) {
                     hero3.respawnTicks = 30;
@@ -526,12 +535,15 @@ void MainWindow::checkGhostCollisions()
 
         // Hero 4 (Miracle Pac-Man)
         if (isP4Active() && hero4.alive && g.x == hero4.x && g.y == hero4.y) {
-            if (ghostsFrightened) {
+            if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && hero4.x == exitX && hero4.y == exitY && hero4.reachedExit) {
+                // Safe at exit portal sanctuary waiting for team!
+            } else if (ghostsFrightened) {
                 hero4.score += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 respawnGhostFarAway(g);
             } else {
                 hero4.alive = false;
+                hero4.reachedExit = false;
                 hero4.lives--;
                 if (hero4.lives > 0) {
                     hero4.respawnTicks = 30;
@@ -566,6 +578,9 @@ void MainWindow::checkGhostCollisions()
 
     if (anyHeroConfigured && !anyHeroAlive && !anyHeroSpawning && !anyHeroHasLives) {
         gameOver = true;
+    } else {
+        // In case an eliminated player left only players who already reached the exit
+        checkLevelExit();
     }
 }
 

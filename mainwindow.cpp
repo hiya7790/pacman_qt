@@ -67,6 +67,8 @@ MainWindow::MainWindow(QWidget *parent)
     p2RespawnTicks = 0;
     p1Lives = INITIAL_LIVES;
     p2Lives = INITIAL_LIVES;
+    p1ReachedExit = false;
+    p2ReachedExit = false;
     p2X = 9;
     p2Y = 19;
     p2Dir = STOP;
@@ -135,6 +137,10 @@ void MainWindow::initGame()
     p2Lives = INITIAL_LIVES;
     hero3.lives = INITIAL_LIVES;
     hero4.lives = INITIAL_LIVES;
+    p1ReachedExit = false;
+    p2ReachedExit = false;
+    hero3.reachedExit = false;
+    hero4.reachedExit = false;
     currentScreen = SCREEN_HOME_MAP;
 }
 
@@ -252,6 +258,7 @@ void MainWindow::initLevel()
     p1Alive = isP1Active();
     p1RespawnTicks = 0;
     p1Lives = INITIAL_LIVES;
+    p1ReachedExit = false;
 
     // Player 2 (Ms. Pac-Man)
     p2X = 9;
@@ -263,6 +270,7 @@ void MainWindow::initLevel()
     p2Alive = isP2Active();
     p2RespawnTicks = 0;
     p2Lives = INITIAL_LIVES;
+    p2ReachedExit = false;
 
     // Extra Heroes (Jr. Pac-Man & Miracle Pac-Man)
     hero3.x = 9;
@@ -274,6 +282,7 @@ void MainWindow::initLevel()
     hero3.alive = isP3Active();
     hero3.respawnTicks = 0;
     hero3.lives = INITIAL_LIVES;
+    hero3.reachedExit = false;
 
     hero4.x = 10;
     hero4.y = ROWS - 3;
@@ -284,6 +293,7 @@ void MainWindow::initLevel()
     hero4.alive = isP4Active();
     hero4.respawnTicks = 0;
     hero4.lives = INITIAL_LIVES;
+    hero4.reachedExit = false;
 
     board[currentSectorY][currentSectorX][ROWS - 3][9] = 0;
     board[currentSectorY][currentSectorX][ROWS - 3][10] = 0;
@@ -527,6 +537,7 @@ void MainWindow::broadcastCurrentGameState()
         h1["name"] = (hostRole == "p1" ? "Host" : p1PlayerName);
         h1["respawnTicks"] = p1RespawnTicks;
         h1["lives"] = p1Lives;
+        h1["reachedExit"] = p1ReachedExit;
         state["p1"] = h1;
 
         QJsonObject h2;
@@ -535,6 +546,7 @@ void MainWindow::broadcastCurrentGameState()
         h2["name"] = (hostRole == "p2" ? "Host" : p2PlayerName); h2["active"] = isP2Active();
         h2["respawnTicks"] = p2RespawnTicks;
         h2["lives"] = p2Lives;
+        h2["reachedExit"] = p2ReachedExit;
         state["p2"] = h2;
 
         QJsonObject h3;
@@ -543,6 +555,7 @@ void MainWindow::broadcastCurrentGameState()
         h3["name"] = (hostRole == "p3" ? "Host" : hero3.playerName); h3["active"] = isP3Active();
         h3["respawnTicks"] = hero3.respawnTicks;
         h3["lives"] = hero3.lives;
+        h3["reachedExit"] = hero3.reachedExit;
         state["p3"] = h3;
 
         QJsonObject h4;
@@ -551,6 +564,7 @@ void MainWindow::broadcastCurrentGameState()
         h4["name"] = (hostRole == "p4" ? "Host" : hero4.playerName); h4["active"] = isP4Active();
         h4["respawnTicks"] = hero4.respawnTicks;
         h4["lives"] = hero4.lives;
+        h4["reachedExit"] = hero4.reachedExit;
         state["p4"] = h4;
 
         QJsonObject livesObj;
@@ -559,6 +573,9 @@ void MainWindow::broadcastCurrentGameState()
         livesObj["p3"] = hero3.lives;
         livesObj["p4"] = hero4.lives;
         state["lives"] = livesObj;
+
+        state["exitEligible"] = getEligibleHeroCount();
+        state["exitReached"] = getReachedExitHeroCount();
 
         // Exit portal
         state["hasExit"] = (currentSectorX == exitSectorX && currentSectorY == exitSectorY);
@@ -608,6 +625,7 @@ void MainWindow::onPlayerJoined(int clientId, const QString &role, const QString
         p1Alive = true;
         p1RespawnTicks = 0;
         p1Lives = INITIAL_LIVES;
+        p1ReachedExit = false;
         pacmanX = 10;
         pacmanY = ROWS - 2;
         peekToastMessage = QString("🟡 %1 joined as Pac-Man!").arg(name);
@@ -618,6 +636,7 @@ void MainWindow::onPlayerJoined(int clientId, const QString &role, const QString
         p2Alive = true;
         p2RespawnTicks = 0;
         p2Lives = INITIAL_LIVES;
+        p2ReachedExit = false;
         p2X = 9;
         p2Y = ROWS - 2;
         peekToastMessage = QString("🎀 %1 joined as Ms. Pac-Man!").arg(name);
@@ -628,6 +647,7 @@ void MainWindow::onPlayerJoined(int clientId, const QString &role, const QString
         hero3.alive = true;
         hero3.respawnTicks = 0;
         hero3.lives = INITIAL_LIVES;
+        hero3.reachedExit = false;
         hero3.x = 9;
         hero3.y = ROWS - 3;
         peekToastMessage = QString("🧢 %1 joined as Jr. Pac-Man!").arg(name);
@@ -638,6 +658,7 @@ void MainWindow::onPlayerJoined(int clientId, const QString &role, const QString
         hero4.alive = true;
         hero4.respawnTicks = 0;
         hero4.lives = INITIAL_LIVES;
+        hero4.reachedExit = false;
         hero4.x = 10;
         hero4.y = ROWS - 3;
         peekToastMessage = QString("🟢 %1 joined as Miracle Pac-Man!").arg(name);

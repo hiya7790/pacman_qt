@@ -204,13 +204,14 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         // Active control indicator badge
         painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
         if (isAnyMultiplayer()) {
+            QString stat = p1ReachedExit ? " 🏁" : "";
             if (hostRole == "p1") {
-                painter.setPen(QColor(255, 240, 0));
-                painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, "★ HOST");
+                painter.setPen(p1ReachedExit ? QColor(0, 255, 140) : QColor(255, 240, 0));
+                painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, QString("★ HOST%1").arg(stat));
             } else {
-                painter.setPen(QColor(255, 230, 0));
+                painter.setPen(p1ReachedExit ? QColor(0, 255, 140) : QColor(255, 230, 0));
                 QString p1Tag = p1PlayerName.isEmpty() ? "P1 (Pac-Man)" : p1PlayerName;
-                painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, p1Tag);
+                painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, QString("%1%2").arg(p1Tag, stat));
             }
         }
     }
@@ -247,8 +248,9 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
         // Active control indicator badge
         painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
-        painter.setPen(QColor(255, 130, 200));
-        QString p2Tag = (hostRole == "p2") ? "★ HOST" : (p2PlayerName.isEmpty() ? "P2 (Ms. Pac)" : p2PlayerName);
+        painter.setPen(p2ReachedExit ? QColor(0, 255, 140) : QColor(255, 130, 200));
+        QString p2Stat = p2ReachedExit ? " 🏁" : "";
+        QString p2Tag = (hostRole == "p2") ? QString("★ HOST%1").arg(p2Stat) : QString("%1%2").arg(p2PlayerName.isEmpty() ? "P2 (Ms. Pac)" : p2PlayerName, p2Stat);
         painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, p2Tag);
     }
 
@@ -278,8 +280,9 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
         // Name tag
         painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
-        painter.setPen(QColor(0, 255, 255));
-        QString tag = (hostRole == "p3") ? "★ HOST" : (hero3.playerName.isEmpty() ? "P3 (Jr. Pac)" : hero3.playerName);
+        painter.setPen(hero3.reachedExit ? QColor(0, 255, 140) : QColor(0, 255, 255));
+        QString p3Stat = hero3.reachedExit ? " 🏁" : "";
+        QString tag = (hostRole == "p3") ? QString("★ HOST%1").arg(p3Stat) : QString("%1%2").arg(hero3.playerName.isEmpty() ? "P3 (Jr. Pac)" : hero3.playerName, p3Stat);
         painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, tag);
     }
 
@@ -305,8 +308,9 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
         // Name tag
         painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
-        painter.setPen(QColor(50, 255, 120));
-        QString tag = (hostRole == "p4") ? "★ HOST" : (hero4.playerName.isEmpty() ? "P4 (Miracle)" : hero4.playerName);
+        painter.setPen(hero4.reachedExit ? QColor(0, 255, 140) : QColor(50, 255, 120));
+        QString p4Stat = hero4.reachedExit ? " 🏁" : "";
+        QString tag = (hostRole == "p4") ? QString("★ HOST%1").arg(p4Stat) : QString("%1%2").arg(hero4.playerName.isEmpty() ? "P4 (Miracle)" : hero4.playerName, p4Stat);
         painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, tag);
     }
 
@@ -875,6 +879,9 @@ void MainWindow::drawGameScreen(QPainter &painter)
             if (p1Lives <= 0) {
                 painter.setPen(QColor(160, 60, 60));
                 painter.drawText(hudColX, hudY + 20, "P1 (🟡): 💀 OUT");
+            } else if (p1ReachedExit) {
+                painter.setPen(QColor(0, 255, 140));
+                painter.drawText(hudColX, hudY + 20, QString("P1 (🟡): %1 %2 🏁").arg(scoreP1).arg(formatHearts(p1Lives)));
             } else if (!p1Alive && p1RespawnTicks > 0) {
                 painter.setPen(QColor(255, 160, 0));
                 painter.drawText(hudColX, hudY + 20, QString("P1: RESPAWN (%1s) %2").arg((p1RespawnTicks * 130 + 999) / 1000).arg(formatHearts(p1Lives)));
@@ -889,6 +896,9 @@ void MainWindow::drawGameScreen(QPainter &painter)
             if (p2Lives <= 0) {
                 painter.setPen(QColor(160, 60, 60));
                 painter.drawText(hudColX, hudY + 20, "P2 (🎀): 💀 OUT");
+            } else if (p2ReachedExit) {
+                painter.setPen(QColor(0, 255, 140));
+                painter.drawText(hudColX, hudY + 20, QString("P2 (🎀): %1 %2 🏁").arg(scoreP2).arg(formatHearts(p2Lives)));
             } else if (!p2Alive && p2RespawnTicks > 0) {
                 painter.setPen(QColor(255, 160, 0));
                 painter.drawText(hudColX, hudY + 20, QString("P2: RESPAWN (%1s) %2").arg((p2RespawnTicks * 130 + 999) / 1000).arg(formatHearts(p2Lives)));
@@ -903,6 +913,9 @@ void MainWindow::drawGameScreen(QPainter &painter)
             if (hero3.lives <= 0) {
                 painter.setPen(QColor(160, 60, 60));
                 painter.drawText(hudColX, hudY + 20, "P3 (🧢): 💀 OUT");
+            } else if (hero3.reachedExit) {
+                painter.setPen(QColor(0, 255, 140));
+                painter.drawText(hudColX, hudY + 20, QString("P3 (🧢): %1 %2 🏁").arg(hero3.score).arg(formatHearts(hero3.lives)));
             } else if (!hero3.alive && hero3.respawnTicks > 0) {
                 painter.setPen(QColor(255, 160, 0));
                 painter.drawText(hudColX, hudY + 20, QString("P3: RESPAWN (%1s) %2").arg((hero3.respawnTicks * 130 + 999) / 1000).arg(formatHearts(hero3.lives)));
@@ -917,6 +930,9 @@ void MainWindow::drawGameScreen(QPainter &painter)
             if (hero4.lives <= 0) {
                 painter.setPen(QColor(160, 60, 60));
                 painter.drawText(hudColX, hudY + 20, "P4 (🟢): 💀 OUT");
+            } else if (hero4.reachedExit) {
+                painter.setPen(QColor(0, 255, 140));
+                painter.drawText(hudColX, hudY + 20, QString("P4 (🟢): %1 %2 🏁").arg(hero4.score).arg(formatHearts(hero4.lives)));
             } else if (!hero4.alive && hero4.respawnTicks > 0) {
                 painter.setPen(QColor(255, 160, 0));
                 painter.drawText(hudColX, hudY + 20, QString("P4: RESPAWN (%1s) %2").arg((hero4.respawnTicks * 130 + 999) / 1000).arg(formatHearts(hero4.lives)));
@@ -1000,10 +1016,18 @@ void MainWindow::drawGameScreen(QPainter &painter)
     int curWorld = (currentLevel - 1) / LEVELS_PER_WORLD + 1;
     int curStage = (currentLevel - 1) % LEVELS_PER_WORLD + 1;
     QString objectiveText;
-    if (currentSectorX == exitSectorX && currentSectorY == exitSectorY) {
+    int elig = getEligibleHeroCount();
+    int rch = getReachedExitHeroCount();
+
+    if (isAnyMultiplayer() && elig > 1 && rch > 0 && rch < elig) {
+        objectiveText = QString("🏁 ALL PLAYERS MUST REACH EXIT! (%1/%2 arrived • Waiting for teammates to reach portal...)").arg(rch).arg(elig);
+        painter.setPen(QColor(0, 255, 240));
+    } else if (currentSectorX == exitSectorX && currentSectorY == exitSectorY) {
         bool exitNear = isCellVisible(currentSectorX, currentSectorY, exitX, exitY) || (!fogOfWarEnabled);
         if (exitNear) {
-            objectiveText = QString("🏁 OBJECTIVE: Enter the green [EXIT] portal to clear Stage %1/20 (%2)!").arg(curStage).arg(getWorldName(curWorld));
+            objectiveText = isAnyMultiplayer()
+                ? QString("🏁 OBJECTIVE: All alive players must enter the green [EXIT] portal to clear Stage %1/20 (%2)!").arg(curStage).arg(getWorldName(curWorld))
+                : QString("🏁 OBJECTIVE: Enter the green [EXIT] portal to clear Stage %1/20 (%2)!").arg(curStage).arg(getWorldName(curWorld));
             painter.setPen(QColor(60, 255, 140));
         } else {
             objectiveText = QString("🧭 OBJECTIVE: Search the dark labyrinth with your lantern to locate the hidden [EXIT] portal! (%1)").arg(getWorldName(curWorld));

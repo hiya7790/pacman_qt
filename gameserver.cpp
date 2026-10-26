@@ -1250,7 +1250,12 @@ QByteArray GameServer::getControllerHtml() const
         }
       }
 
-      if (myLives <= 0) {
+      if (myHeroState && myHeroState.reachedExit && !state.levelComplete) {
+        actionBtn.innerHTML = '🏁 AT EXIT PORTAL (' + (state.exitReached || 1) + '/' + (state.exitEligible || 1) + ' arrived)<div class="btn-subhint">Safe zone • Waiting for team...</div>';
+        actionBtn.style.background = "#003b22";
+        actionBtn.style.color = "#00ff88";
+        actionBtn.disabled = true;
+      } else if (myLives <= 0) {
         actionBtn.innerHTML = '💀 OUT OF LIVES (SPECTATING)<div class="btn-subhint">Cheer on your classmates!</div>';
         actionBtn.disabled = true;
         actionBtn.style.opacity = "0.5";
@@ -1614,6 +1619,9 @@ QByteArray GameServer::getControllerHtml() const
       ctx.fillStyle = "#ffb300";
       const sLeft = Math.ceil((h.respawnTicks || 30) * 0.13);
       ctx.fillText("⏳ RESPAWN (" + sLeft + "s)", hx, hy - 15);
+    } else if (h.reachedExit) {
+      ctx.fillStyle = "#00ff88";
+      ctx.fillText("🏁 AT EXIT", hx, hy - 15);
     } else if (isMe) {
       ctx.fillStyle = "#00f0ff";
       ctx.fillText("▼ YOU", hx, hy - 15);
@@ -1768,7 +1776,17 @@ QByteArray GameServer::getControllerHtml() const
       ctx.fillText("Spectating remaining classmates... Hang in there!", 315, 592);
     }
 
-    if (state.peek) {
+    if (state.exitEligible > 1 && state.exitReached > 0 && state.exitReached < state.exitEligible && !state.gameOver && !state.levelComplete) {
+      ctx.fillStyle = "rgba(0, 32, 20, 0.90)";
+      ctx.fillRect(0, 0, 630, 36);
+      ctx.strokeStyle = "#00ff88";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(0, 0, 630, 36);
+      ctx.fillStyle = "#00ff88";
+      ctx.font = "bold 13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("🏁 " + state.exitReached + "/" + state.exitEligible + " PLAYERS AT EXIT • ALL ALIVE PLAYERS MUST REACH EXIT!", 315, 23);
+    } else if (state.peek) {
       ctx.fillStyle = "rgba(255, 200, 0, 0.25)";
       ctx.fillRect(0, 0, 630, 36);
       ctx.strokeStyle = "#ffe600";
@@ -1807,7 +1825,7 @@ QByteArray GameServer::getControllerHtml() const
       ctx.fillStyle = "#00ff88";
       ctx.font = "900 32px sans-serif";
       ctx.textAlign = "center";
-      ctx.fillText("STAGE COMPLETE! 🏆", 315, 300);
+      ctx.fillText(state.exitEligible > 1 ? "STAGE COMPLETE! 🏆 ALL ESCAPED!" : "STAGE COMPLETE! 🏆", 315, 300);
       ctx.fillStyle = "#ffffff";
       ctx.font = "16px sans-serif";
       ctx.fillText("Entering next labyrinth sector...", 315, 345);

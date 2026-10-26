@@ -41,6 +41,7 @@ struct ExtraHero {
     int respawnTicks = 0;
     int score = 0;
     int lives = 3;           // 3 lives per stage
+    bool reachedExit = false;
     int clientId = -1;       // -1 if not connected
     QString playerName = "";
 };
@@ -179,6 +180,8 @@ private:
     int p2RespawnTicks;
     int p1Lives;
     int p2Lives;
+    bool p1ReachedExit;
+    bool p2ReachedExit;
     static constexpr int INITIAL_LIVES = 3;
     int getHeroLives(const QString &role) const {
         if (role == "p1") return p1Lives;
@@ -186,6 +189,22 @@ private:
         if (role == "p3") return hero3.lives;
         if (role == "p4") return hero4.lives;
         return 0;
+    }
+    int getEligibleHeroCount() const {
+        int count = 0;
+        if (isP1Active() && p1Lives > 0) count++;
+        if (isP2Active() && p2Lives > 0) count++;
+        if (isP3Active() && hero3.lives > 0) count++;
+        if (isP4Active() && hero4.lives > 0) count++;
+        return count;
+    }
+    int getReachedExitHeroCount() const {
+        int count = 0;
+        if (isP1Active() && p1Lives > 0 && p1ReachedExit) count++;
+        if (isP2Active() && p2Lives > 0 && p2ReachedExit) count++;
+        if (isP3Active() && hero3.lives > 0 && hero3.reachedExit) count++;
+        if (isP4Active() && hero4.lives > 0 && hero4.reachedExit) count++;
+        return count;
     }
 
     // Embedded Classroom Web Server & Extra Heroes
