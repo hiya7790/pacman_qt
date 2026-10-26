@@ -10,6 +10,7 @@ GameServer::GameServer(QObject *parent)
     , tcpServer(nullptr)
     , currentPort(8080)
     , nextClientId(1)
+    , m_hostRole("p1")
 {
 }
 
@@ -101,6 +102,7 @@ QList<ConnectedClient*> GameServer::getActiveClients() const
 
 bool GameServer::isRoleTaken(const QString &role) const
 {
+    if (role == m_hostRole) return true;
     for (ConnectedClient *c : clients) {
         if (c->role == role) return true;
     }
@@ -109,10 +111,20 @@ bool GameServer::isRoleTaken(const QString &role) const
 
 QString GameServer::getRolePlayerName(const QString &role) const
 {
+    if (role == m_hostRole) return "Host (PC)";
     for (ConnectedClient *c : clients) {
         if (c->role == role) return c->playerName;
     }
     return "";
+}
+
+void GameServer::setHostRole(const QString &role)
+{
+    m_hostRole = role;
+    QJsonObject rolesMsg;
+    rolesMsg["type"] = "rolesUpdate";
+    rolesMsg["roles"] = getRolesStatusJson();
+    broadcastGameState(rolesMsg);
 }
 
 void GameServer::onNewConnection()
@@ -429,6 +441,7 @@ QJsonObject GameServer::getRolesStatusJson() const
 {
     QJsonObject roles;
     // Pac-Heroes
+    roles["p1"] = getRolePlayerName("p1");
     roles["p2"] = getRolePlayerName("p2");
     roles["p3"] = getRolePlayerName("p3");
     roles["p4"] = getRolePlayerName("p4");
@@ -936,6 +949,10 @@ QByteArray GameServer::getControllerHtml() const
 
       <div class="section-title" style="color: #ff99cc;">🟡 Mode A: Pac-Family Co-op (4 Heroes)</div>
       <div class="role-grid">
+        <button class="role-btn" id="btn-p1" onclick="selectRole('p1')">
+          <div class="role-info"><span class="role-icon">🟡</span><div><div class="role-name" style="color:#ffe600;">Pac-Man</div><div class="role-sub">Classic Yellow Hero</div></div></div>
+          <span class="role-badge" id="badge-p1">JOIN</span>
+        </button>
         <button class="role-btn" id="btn-p2" onclick="selectRole('p2')">
           <div class="role-info"><span class="role-icon">🎀</span><div><div class="role-name" style="color:#ff69b4;">Ms. Pac-Man</div><div class="role-sub">Pink Hero with Red Ribbon Bow</div></div></div>
           <span class="role-badge" id="badge-p2">JOIN</span>
@@ -1059,6 +1076,7 @@ QByteArray GameServer::getControllerHtml() const
   const fogCtx = fogCanvas.getContext('2d');
 
   const roleMeta = {
+    p1: { icon: "🟡", name: "Pac-Man", color: "#ffe600", isHero: true },
     p2: { icon: "🎀", name: "Ms. Pac-Man", color: "#ff69b4", isHero: true },
     p3: { icon: "🧢", name: "Jr. Pac-Man", color: "#00e5ff", isHero: true },
     p4: { icon: "🟢", name: "Miracle Pac-Man", color: "#00ff66", isHero: true },
@@ -1542,6 +1560,7 @@ QByteArray GameServer::getControllerHtml() const
 
     // Role Indicator Tag
     const isMe = (currentRole === roleKey);
+    const isHost = (latestState && (latestState.hostRole === roleKey || (!latestState.hostRole && roleKey === 'p1')));
     ctx.font = "bold 11px sans-serif";
     ctx.textAlign = "center";
     if (isRespawning) {
@@ -1551,6 +1570,9 @@ QByteArray GameServer::getControllerHtml() const
     } else if (isMe) {
       ctx.fillStyle = "#00f0ff";
       ctx.fillText("▼ YOU", hx, hy - 15);
+    } else if (isHost) {
+      ctx.fillStyle = "#ffe600";
+      ctx.fillText("👑 HOST", hx, hy - 15);
     } else {
       ctx.fillStyle = "#ffffff";
       const tag = (h.name && h.name.length > 0) ? h.name : defaultTag;
@@ -1623,11 +1645,15 @@ QByteArray GameServer::getControllerHtml() const
 
       // Ghost Badge
       const isMe = (currentRole && currentRole.toLowerCase() === ghostRoleNames[g.color]);
+      const isHost = (state.hostRole === ghostRoleNames[g.color]);
       ctx.font = "bold 11px sans-serif";
       ctx.textAlign = "center";
       if (isMe) {
         ctx.fillStyle = "#ff5577";
         ctx.fillText("▼ YOU (Ghost)", gx, gy - 16);
+      } else if (isHost) {
+        ctx.fillStyle = "#ffe600";
+        ctx.fillText("👑 HOST (Ghost)", gx, gy - 16);
       } else if (g.isHuman && g.name) {
         ctx.fillStyle = bodyColor;
         ctx.fillText("👻 " + g.name.substring(0, 10), gx, gy - 16);

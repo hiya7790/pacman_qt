@@ -73,8 +73,11 @@ MainWindow::MainWindow(QWidget *parent)
     p2MouthOpening = false;
 
     // Multiplayer Server & Extra Heroes (Mode A: 4P Co-op, Mode B: Ghost Hunters)
+    hostRole = "p1";
     showMultiplayerLobby = false;
     linkCopiedFeedback = false;
+    p1ClientId = -1;
+    p1PlayerName = "";
     p2ClientId = -1;
     p2PlayerName = "";
     hero3.clientId = -1;
@@ -240,7 +243,7 @@ void MainWindow::initLevel()
     pacmanNextDir = LEFT;
     pacmanMouthAngle = 45;
     pacmanMouthOpening = false;
-    p1Alive = true;
+    p1Alive = isP1Active();
     p1RespawnTicks = 0;
 
     // Player 2 (Ms. Pac-Man)
@@ -260,7 +263,7 @@ void MainWindow::initLevel()
     hero3.nextDir = RIGHT;
     hero3.mouthAngle = 45;
     hero3.mouthOpening = false;
-    hero3.alive = (hero3.clientId != -1);
+    hero3.alive = isP3Active();
     hero3.respawnTicks = 0;
 
     hero4.x = 10;
@@ -269,7 +272,7 @@ void MainWindow::initLevel()
     hero4.nextDir = LEFT;
     hero4.mouthAngle = 45;
     hero4.mouthOpening = false;
-    hero4.alive = (hero4.clientId != -1);
+    hero4.alive = isP4Active();
     hero4.respawnTicks = 0;
 
     board[currentSectorY][currentSectorX][ROWS - 3][9] = 0;
@@ -483,6 +486,7 @@ void MainWindow::broadcastCurrentGameState()
     state["levelComplete"] = levelComplete;
     state["secX"] = currentSectorX;
     state["secY"] = currentSectorY;
+    state["hostRole"] = hostRole;
 
     if (currentScreen == SCREEN_PLAYING) {
         QString boardStr;
@@ -501,28 +505,29 @@ void MainWindow::broadcastCurrentGameState()
         // Heroes
         QJsonObject h1;
         h1["x"] = pacmanX; h1["y"] = pacmanY; h1["dir"] = (int)pacmanDir;
-        h1["mouth"] = pacmanMouthAngle; h1["alive"] = p1Alive; h1["score"] = scoreP1; h1["active"] = true;
+        h1["mouth"] = pacmanMouthAngle; h1["alive"] = (isP1Active() && p1Alive); h1["score"] = scoreP1; h1["active"] = isP1Active();
+        h1["name"] = (hostRole == "p1" ? "Host" : p1PlayerName);
         h1["respawnTicks"] = p1RespawnTicks;
         state["p1"] = h1;
 
         QJsonObject h2;
         h2["x"] = p2X; h2["y"] = p2Y; h2["dir"] = (int)p2Dir;
         h2["mouth"] = p2MouthAngle; h2["alive"] = (isP2Active() && p2Alive); h2["score"] = scoreP2;
-        h2["name"] = p2PlayerName; h2["active"] = isP2Active();
+        h2["name"] = (hostRole == "p2" ? "Host" : p2PlayerName); h2["active"] = isP2Active();
         h2["respawnTicks"] = p2RespawnTicks;
         state["p2"] = h2;
 
         QJsonObject h3;
         h3["x"] = hero3.x; h3["y"] = hero3.y; h3["dir"] = (int)hero3.dir;
-        h3["mouth"] = hero3.mouthAngle; h3["alive"] = hero3.alive; h3["score"] = hero3.score;
-        h3["name"] = hero3.playerName; h3["active"] = (hero3.clientId != -1);
+        h3["mouth"] = hero3.mouthAngle; h3["alive"] = (isP3Active() && hero3.alive); h3["score"] = hero3.score;
+        h3["name"] = (hostRole == "p3" ? "Host" : hero3.playerName); h3["active"] = isP3Active();
         h3["respawnTicks"] = hero3.respawnTicks;
         state["p3"] = h3;
 
         QJsonObject h4;
         h4["x"] = hero4.x; h4["y"] = hero4.y; h4["dir"] = (int)hero4.dir;
-        h4["mouth"] = hero4.mouthAngle; h4["alive"] = hero4.alive; h4["score"] = hero4.score;
-        h4["name"] = hero4.playerName; h4["active"] = (hero4.clientId != -1);
+        h4["mouth"] = hero4.mouthAngle; h4["alive"] = (isP4Active() && hero4.alive); h4["score"] = hero4.score;
+        h4["name"] = (hostRole == "p4" ? "Host" : hero4.playerName); h4["active"] = isP4Active();
         h4["respawnTicks"] = hero4.respawnTicks;
         state["p4"] = h4;
 
@@ -533,15 +538,17 @@ void MainWindow::broadcastCurrentGameState()
 
         // Ghosts in current sector
         QJsonArray gArr;
-        for (const Ghost &g : ghosts) {
+        for (int i = 0; i < ghosts.size(); ++i) {
+            const Ghost &g = ghosts[i];
             if (g.sectorX == currentSectorX && g.sectorY == currentSectorY) {
                 QJsonObject gObj;
                 gObj["x"] = g.x;
                 gObj["y"] = g.y;
                 gObj["dir"] = (int)g.dir;
                 gObj["color"] = g.colorIndex;
-                gObj["name"] = g.playerName;
-                gObj["isHuman"] = (g.clientId >= 0);
+                bool isHost = (getHostGhostIndex() == i);
+                gObj["name"] = isHost ? "Host" : g.playerName;
+                gObj["isHuman"] = (g.clientId >= 0 || isHost);
                 gArr.append(gObj);
             }
         }
@@ -566,7 +573,16 @@ void MainWindow::broadcastCurrentGameState()
 
 void MainWindow::onPlayerJoined(int clientId, const QString &role, const QString &name)
 {
-    if (role == "p2") {
+    if (role == "p1") {
+        p1ClientId = clientId;
+        p1PlayerName = name;
+        p1Alive = true;
+        p1RespawnTicks = 0;
+        pacmanX = 10;
+        pacmanY = ROWS - 2;
+        peekToastMessage = QString("🟡 %1 joined as Pac-Man!").arg(name);
+        peekToastTimer.start();
+    } else if (role == "p2") {
         p2ClientId = clientId;
         p2PlayerName = name;
         p2Alive = true;
@@ -629,7 +645,13 @@ void MainWindow::onPlayerJoined(int clientId, const QString &role, const QString
 
 void MainWindow::onPlayerLeft(int clientId, const QString &role, const QString &name)
 {
-    if (role == "p2" && p2ClientId == clientId) {
+    if (role == "p1" && p1ClientId == clientId) {
+        p1ClientId = -1;
+        p1PlayerName.clear();
+        p1Alive = isP1Active();
+        peekToastMessage = QString("👋 %1 left (Pac-Man)").arg(name);
+        peekToastTimer.start();
+    } else if (role == "p2" && p2ClientId == clientId) {
         p2ClientId = -1;
         p2PlayerName.clear();
         p2Alive = isMultiplayer; // only keep alive if host is in local co-op
@@ -670,7 +692,23 @@ void MainWindow::onPlayerMoved(int clientId, const QString &role, int dirInt)
     else if (dirInt == 2) d = LEFT;
     else if (dirInt == 3) d = RIGHT;
 
-    if (role == "p2" && p2ClientId == clientId) {
+    if (role == "p1" && p1ClientId == clientId) {
+        pacmanNextDir = d;
+        if (p1Alive) {
+            if (canMove(pacmanX, pacmanY, d)) {
+                pacmanDir = d;
+                movePacman();
+                checkFruitPickup();
+                checkGhostCollisions();
+                checkLevelExit();
+                updateFogOfWar();
+            } else {
+                pacmanDir = d;
+            }
+            broadcastCurrentGameState();
+            update();
+        }
+    } else if (role == "p2" && p2ClientId == clientId) {
         p2NextDir = d;
         if (p2Alive) {
             if (canMove(p2X, p2Y, d)) {
@@ -765,7 +803,19 @@ void MainWindow::onPlayerPeek(int clientId, const QString &role)
 {
     if (fogPeekActive) return;
 
-    if (role == "p2" && p2ClientId == clientId) {
+    if (role == "p1" && p1ClientId == clientId) {
+        if (p1FogPeeks > 0) {
+            p1FogPeeks--;
+            fogOfWarEnabled = false;
+            fogPeekActive = true;
+            fogPeekTimer.start();
+            QString name = p1PlayerName.isEmpty() ? "Pac-Man" : p1PlayerName;
+            peekToastMessage = QString("👁️ %1 ACTIVATED FOG PEEK! (%2 left for them)").arg(name).arg(p1FogPeeks);
+            peekToastTimer.start();
+            broadcastCurrentGameState();
+            update();
+        }
+    } else if (role == "p2" && p2ClientId == clientId) {
         if (p2FogPeeks > 0) {
             p2FogPeeks--;
             fogOfWarEnabled = false;
@@ -828,5 +878,135 @@ void MainWindow::paintEvent(QPaintEvent *)
         drawCandyCrushMap(painter);
     } else {
         drawGameScreen(painter);
+    }
+}
+
+void MainWindow::switchHostRole(const QString &newRole)
+{
+    if (newRole == hostRole) return;
+
+    // Check if role is taken by an online client
+    if (gameServer) {
+        for (ConnectedClient *c : gameServer->getActiveClients()) {
+            if (c->role == newRole) {
+                peekToastMessage = QString("⚠️ %1 is already played by %2!").arg(getRoleDisplayName(newRole)).arg(c->playerName);
+                peekToastTimer.start();
+                update();
+                return;
+            }
+        }
+    }
+
+    hostRole = newRole;
+
+    if (hostRole == "p1") {
+        p1Alive = true;
+    } else if (hostRole == "p2") {
+        p2Alive = true;
+        p2RespawnTicks = 0;
+    } else if (hostRole == "p3") {
+        hero3.alive = true;
+        hero3.respawnTicks = 0;
+    } else if (hostRole == "p4") {
+        hero4.alive = true;
+        hero4.respawnTicks = 0;
+    }
+
+    if (gameServer) {
+        gameServer->setHostRole(hostRole);
+    }
+
+    peekToastMessage = QString("🎮 HOST PLAYING AS: %1 %2").arg(getRoleIcon(hostRole)).arg(getRoleDisplayName(hostRole));
+    peekToastTimer.start();
+    updateFogOfWar();
+    broadcastCurrentGameState();
+    update();
+}
+
+void MainWindow::cycleNextHostRole()
+{
+    QStringList allRoles = {"p1", "p2", "p3", "p4", "blinky", "pinky", "inky", "clyde"};
+    int curIdx = allRoles.indexOf(hostRole);
+    if (curIdx == -1) curIdx = 0;
+
+    for (int i = 1; i <= allRoles.size(); ++i) {
+        QString candidate = allRoles[(curIdx + i) % allRoles.size()];
+        bool taken = false;
+        if (gameServer) {
+            for (ConnectedClient *c : gameServer->getActiveClients()) {
+                if (c->role == candidate) { taken = true; break; }
+            }
+        }
+        if (!taken) {
+            switchHostRole(candidate);
+            return;
+        }
+    }
+}
+
+QString MainWindow::getRoleDisplayName(const QString &role) const
+{
+    if (role == "p1") return "Pac-Man";
+    if (role == "p2") return "Ms. Pac-Man";
+    if (role == "p3") return "Jr. Pac-Man";
+    if (role == "p4") return "Miracle Pac-Man";
+    if (role == "blinky") return "Blinky (Red Ghost)";
+    if (role == "pinky") return "Pinky (Pink Ghost)";
+    if (role == "inky") return "Inky (Cyan Ghost)";
+    if (role == "clyde") return "Clyde (Orange Ghost)";
+    return "Pac-Man";
+}
+
+QString MainWindow::getRoleIcon(const QString &role) const
+{
+    if (role == "p1") return "🟡";
+    if (role == "p2") return "🎀";
+    if (role == "p3") return "🧢";
+    if (role == "p4") return "🟢";
+    if (role == "blinky") return "🔴";
+    if (role == "pinky") return "🌸";
+    if (role == "inky") return "🩵";
+    if (role == "clyde") return "🟠";
+    return "🎮";
+}
+
+QRect MainWindow::getLobbyRoleRect(const QString &role) const
+{
+    int modalW = std::min(860, width() - 80);
+    int modalX = (width() - modalW) / 2;
+    int modalY = std::max(20, (height() - 560) / 2);
+    int colW = (modalW - 70) / 2;
+    int col1X = modalX + 25;
+    int col2X = modalX + 45 + colW;
+    int cardY = modalY + 138;
+
+    if (role == "p1") return QRect(col1X + 15, cardY + 65, colW - 30, 52);
+    if (role == "p2") return QRect(col1X + 15, cardY + 125, colW - 30, 52);
+    if (role == "p3") return QRect(col1X + 15, cardY + 185, colW - 30, 52);
+    if (role == "p4") return QRect(col1X + 15, cardY + 245, colW - 30, 52);
+    if (role == "blinky") return QRect(col2X + 15, cardY + 65, colW - 30, 52);
+    if (role == "pinky") return QRect(col2X + 15, cardY + 125, colW - 30, 52);
+    if (role == "inky") return QRect(col2X + 15, cardY + 185, colW - 30, 52);
+    if (role == "clyde") return QRect(col2X + 15, cardY + 245, colW - 30, 52);
+    return QRect();
+}
+
+void MainWindow::moveHostGhost(int ghostIdx, Direction d)
+{
+    if (ghostIdx < 0 || ghostIdx >= ghosts.size()) return;
+    Ghost &g = ghosts[ghostIdx];
+    g.dir = d;
+    int nx = g.x, ny = g.y;
+    if (d == UP) ny--;
+    else if (d == DOWN) ny++;
+    else if (d == LEFT) nx--;
+    else if (d == RIGHT) nx++;
+    if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && board[g.sectorY][g.sectorX][ny][nx] != 1) {
+        g.x = nx;
+        g.y = ny;
+        checkGhostCollisions();
+        updateFogOfWar();
+        broadcastCurrentGameState();
+        update();
     }
 }

@@ -182,12 +182,34 @@ private:
     bool showMultiplayerLobby;
     bool linkCopiedFeedback;
     QElapsedTimer linkCopiedTimer;
+    QString hostRole; // "p1", "p2", "p3", "p4", "blinky", "pinky", "inky", "clyde"
+    int p1ClientId;
+    QString p1PlayerName;
     int p2ClientId;
     QString p2PlayerName;
     ExtraHero hero3; // Jr. Pac-Man (Cyan)
     ExtraHero hero4; // Miracle Pac-Man (Green)
-    bool isP2Active() const { return (p2ClientId >= 0) || (isMultiplayer && p2ClientId == -1); }
-    bool isAnyMultiplayer() const { return isMultiplayer || (p2ClientId >= 0) || (hero3.clientId != -1) || (hero4.clientId != -1); }
+    bool isHostGhost() const { return hostRole == "blinky" || hostRole == "pinky" || hostRole == "inky" || hostRole == "clyde"; }
+    int getHostGhostIndex() const {
+        if (hostRole == "blinky") return 0;
+        if (hostRole == "pinky") return 1;
+        if (hostRole == "inky") return 2;
+        if (hostRole == "clyde") return 3;
+        return -1;
+    }
+    bool isHostHero() const { return !isHostGhost(); }
+    void switchHostRole(const QString &newRole);
+    void cycleNextHostRole();
+    QString getRoleDisplayName(const QString &role) const;
+    QString getRoleIcon(const QString &role) const;
+    QRect getLobbyRoleRect(const QString &role) const;
+    void moveHostGhost(int ghostIdx, Direction d);
+
+    bool isP1Active() const { return (hostRole == "p1") || (p1ClientId >= 0) || !isAnyMultiplayer(); }
+    bool isP2Active() const { return (hostRole == "p2") || (p2ClientId >= 0) || (isMultiplayer && p2ClientId == -1); }
+    bool isP3Active() const { return (hostRole == "p3") || (hero3.clientId != -1); }
+    bool isP4Active() const { return (hostRole == "p4") || (hero4.clientId != -1); }
+    bool isAnyMultiplayer() const { return isMultiplayer || (p1ClientId >= 0) || (p2ClientId >= 0) || (hero3.clientId != -1) || (hero4.clientId != -1) || isHostGhost(); }
 
     static constexpr int ROWS = 21;
     static constexpr int COLS = 21;

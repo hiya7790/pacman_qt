@@ -8,14 +8,16 @@
 
 void MainWindow::updateFogOfWar()
 {
+    int hostGIdx = isHostGhost() ? getHostGhostIndex() : -1;
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
-            double dist1 = (p1Alive ? std::hypot(c - pacmanX, r - pacmanY) : 999.0);
+            double dist1 = (isP1Active() && p1Alive ? std::hypot(c - pacmanX, r - pacmanY) : 999.0);
             double dist2 = (isP2Active() && p2Alive ? std::hypot(c - p2X, r - p2Y) : 999.0);
-            double dist3 = (hero3.clientId != -1 && hero3.alive ? std::hypot(c - hero3.x, r - hero3.y) : 999.0);
-            double dist4 = (hero4.clientId != -1 && hero4.alive ? std::hypot(c - hero4.x, r - hero4.y) : 999.0);
+            double dist3 = (isP3Active() && hero3.alive ? std::hypot(c - hero3.x, r - hero3.y) : 999.0);
+            double dist4 = (isP4Active() && hero4.alive ? std::hypot(c - hero4.x, r - hero4.y) : 999.0);
+            double distG = (hostGIdx >= 0 && hostGIdx < ghosts.size() ? std::hypot(c - ghosts[hostGIdx].x, r - ghosts[hostGIdx].y) : 999.0);
             if (dist1 <= currentVisionRadius || dist2 <= currentVisionRadius ||
-                dist3 <= currentVisionRadius || dist4 <= currentVisionRadius) {
+                dist3 <= currentVisionRadius || dist4 <= currentVisionRadius || distG <= (currentVisionRadius + 0.8)) {
                 explored[currentSectorY][currentSectorX][r][c] = true;
             }
         }
@@ -26,12 +28,14 @@ bool MainWindow::isCellVisible(int sx, int sy, int x, int y) const
 {
     if (!fogOfWarEnabled) return true;
     if (sx != currentSectorX || sy != currentSectorY) return false;
-    double dist1 = (p1Alive ? std::hypot(x - pacmanX, y - pacmanY) : 999.0);
+    int hostGIdx = isHostGhost() ? getHostGhostIndex() : -1;
+    double dist1 = (isP1Active() && p1Alive ? std::hypot(x - pacmanX, y - pacmanY) : 999.0);
     double dist2 = (isP2Active() && p2Alive ? std::hypot(x - p2X, y - p2Y) : 999.0);
-    double dist3 = (hero3.clientId != -1 && hero3.alive ? std::hypot(x - hero3.x, y - hero3.y) : 999.0);
-    double dist4 = (hero4.clientId != -1 && hero4.alive ? std::hypot(x - hero4.x, y - hero4.y) : 999.0);
+    double dist3 = (isP3Active() && hero3.alive ? std::hypot(x - hero3.x, y - hero3.y) : 999.0);
+    double dist4 = (isP4Active() && hero4.alive ? std::hypot(x - hero4.x, y - hero4.y) : 999.0);
+    double distG = (hostGIdx >= 0 && hostGIdx < ghosts.size() ? std::hypot(x - ghosts[hostGIdx].x, y - ghosts[hostGIdx].y) : 999.0);
     return (dist1 <= currentVisionRadius || dist2 <= currentVisionRadius ||
-            dist3 <= currentVisionRadius || dist4 <= currentVisionRadius);
+            dist3 <= currentVisionRadius || dist4 <= currentVisionRadius || distG <= (currentVisionRadius + 0.8));
 }
 
 void MainWindow::movePacman()
@@ -342,26 +346,16 @@ void MainWindow::moveHero(ExtraHero &hero, int heroId)
 
 void MainWindow::moveGhosts()
 {
-    for (Ghost &g : ghosts) {
+    int hostGIdx = isHostGhost() ? getHostGhostIndex() : -1;
+    for (int gi = 0; gi < ghosts.size(); ++gi) {
+        Ghost &g = ghosts[gi];
         if (ghostsFrightened && QRandomGenerator::global()->bounded(3) == 0) {
             continue;
         }
 
-        // Mode B: Ghost controlled by human player via phone/laptop
-        if (g.clientId >= 0) {
-            int nx = g.x, ny = g.y;
-            if (g.dir == UP) ny--;
-            else if (g.dir == DOWN) ny++;
-            else if (g.dir == LEFT) nx--;
-            else if (g.dir == RIGHT) nx++;
-
-            if (nx >= 1 && nx < COLS - 1 && ny >= 1 && ny < ROWS - 1) {
-                if (board[g.sectorY][g.sectorX][ny][nx] != 1) {
-                    g.x = nx;
-                    g.y = ny;
-                }
-            }
-            continue;
+        // Mode B: Ghost controlled by human player via phone/laptop or host PC
+        if (g.clientId >= 0 || (hostGIdx == gi)) {
+            continue; // controlled directly by player input!
         }
 
         // Mode A / AI: Ghost controlled by smart navigation algorithm
@@ -468,7 +462,7 @@ void MainWindow::checkGhostCollisions()
         if (g.sectorX != currentSectorX || g.sectorY != currentSectorY) continue;
 
         // Player 1 (Yellow Pac-Man)
-        if (p1Alive && g.x == pacmanX && g.y == pacmanY) {
+        if (isP1Active() && p1Alive && g.x == pacmanX && g.y == pacmanY) {
             if (ghostsFrightened) {
                 scoreP1 += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
@@ -492,7 +486,7 @@ void MainWindow::checkGhostCollisions()
         }
 
         // Hero 3 (Jr. Pac-Man)
-        if (hero3.clientId != -1 && hero3.alive && g.x == hero3.x && g.y == hero3.y) {
+        if (isP3Active() && hero3.alive && g.x == hero3.x && g.y == hero3.y) {
             if (ghostsFrightened) {
                 hero3.score += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
@@ -504,7 +498,7 @@ void MainWindow::checkGhostCollisions()
         }
 
         // Hero 4 (Miracle Pac-Man)
-        if (hero4.clientId != -1 && hero4.alive && g.x == hero4.x && g.y == hero4.y) {
+        if (isP4Active() && hero4.alive && g.x == hero4.x && g.y == hero4.y) {
             if (ghostsFrightened) {
                 hero4.score += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
@@ -516,16 +510,20 @@ void MainWindow::checkGhostCollisions()
         }
     }
 
-    // Check if entire team has been defeated
-    bool anyHeroAlive = p1Alive || (isP2Active() && p2Alive) ||
-                        (hero3.clientId != -1 && hero3.alive) ||
-                        (hero4.clientId != -1 && hero4.alive);
+    // Check if entire active hero team has been defeated
+    bool anyHeroConfigured = isP1Active() || isP2Active() || isP3Active() || isP4Active();
 
-    bool anyHeroSpawning = (p1RespawnTicks > 0) || (isP2Active() && p2RespawnTicks > 0) ||
-                           (hero3.clientId != -1 && hero3.respawnTicks > 0) ||
-                           (hero4.clientId != -1 && hero4.respawnTicks > 0);
+    bool anyHeroAlive = (isP1Active() && p1Alive) ||
+                        (isP2Active() && p2Alive) ||
+                        (isP3Active() && hero3.alive) ||
+                        (isP4Active() && hero4.alive);
 
-    if (!anyHeroAlive && !anyHeroSpawning) {
+    bool anyHeroSpawning = (isP1Active() && p1RespawnTicks > 0) ||
+                           (isP2Active() && p2RespawnTicks > 0) ||
+                           (isP3Active() && hero3.respawnTicks > 0) ||
+                           (isP4Active() && hero4.respawnTicks > 0);
+
+    if (anyHeroConfigured && !anyHeroAlive && !anyHeroSpawning) {
         gameOver = true;
     }
 }

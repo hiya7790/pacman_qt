@@ -39,6 +39,8 @@ public:
     QList<ConnectedClient*> getActiveClients() const;
     bool isRoleTaken(const QString &role) const;
     QString getRolePlayerName(const QString &role) const;
+    void setHostRole(const QString &role);
+    QString getHostRole() const { return m_hostRole; }
 
     void broadcastGameState(const QJsonObject &state);
     void sendClientMessage(int clientId, const QJsonObject &obj);
@@ -68,6 +70,7 @@ private:
     quint16 currentPort;
     int nextClientId;
     QMap<int, ConnectedClient*> clients;
+    QString m_hostRole;
 };
 
 #endif // GAMESERVER_H

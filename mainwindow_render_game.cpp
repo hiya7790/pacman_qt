@@ -162,8 +162,8 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         painter.drawText(fx + 3, fy + cellSize - 1, "100");
     }
 
-    // 5. Draw Primary Hero / Player 1 (if in this sector)
-    if (isCurrent && (p1Alive || (p1RespawnTicks > 0 && p1RespawnTicks % 4 < 2))) {
+    // 5. Draw Primary Hero / Player 1 (if active and in this sector)
+    if (isP1Active() && isCurrent && (p1Alive || (p1RespawnTicks > 0 && p1RespawnTicks % 4 < 2))) {
         int px = originX + pacmanX * cellSize;
         int py = originY + pacmanY * cellSize;
 
@@ -204,12 +204,13 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         // Active control indicator badge
         painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
         if (isAnyMultiplayer()) {
-            if (arrowPlayer == 1) {
+            if (hostRole == "p1") {
                 painter.setPen(QColor(255, 240, 0));
-                painter.drawText(px - 10, py - 4, cellSize + 20, cellSize / 2, Qt::AlignCenter, "P1 [ARROWS]");
+                painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, "★ HOST");
             } else {
-                painter.setPen(QColor(200, 200, 140));
-                painter.drawText(px - 10, py - 4, cellSize + 20, cellSize / 2, Qt::AlignCenter, "P1 [WASD]");
+                painter.setPen(QColor(255, 230, 0));
+                QString p1Tag = p1PlayerName.isEmpty() ? "P1 (Pac-Man)" : p1PlayerName;
+                painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, p1Tag);
             }
         }
     }
@@ -247,12 +248,12 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         // Active control indicator badge
         painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
         painter.setPen(QColor(255, 130, 200));
-        QString p2Tag = p2PlayerName.isEmpty() ? (arrowPlayer == 2 ? "P2 [ARROWS]" : "P2 [WASD]") : p2PlayerName;
+        QString p2Tag = (hostRole == "p2") ? "★ HOST" : (p2PlayerName.isEmpty() ? "P2 (Ms. Pac)" : p2PlayerName);
         painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, p2Tag);
     }
 
-    // Draw Hero 3 (Jr. Pac-Man - Cyan with cap) (if connected and in this sector)
-    if (hero3.clientId != -1 && isCurrent && (hero3.alive || (hero3.respawnTicks > 0 && hero3.respawnTicks % 4 < 2))) {
+    // Draw Hero 3 (Jr. Pac-Man - Cyan with cap) (if connected or host and in this sector)
+    if ((hero3.clientId != -1 || hostRole == "p3") && isCurrent && (hero3.alive || (hero3.respawnTicks > 0 && hero3.respawnTicks % 4 < 2))) {
         int px = originX + hero3.x * cellSize;
         int py = originY + hero3.y * cellSize;
 
@@ -278,12 +279,12 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         // Name tag
         painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
         painter.setPen(QColor(0, 255, 255));
-        QString tag = hero3.playerName.isEmpty() ? "P3 (Jr. Pac)" : hero3.playerName;
+        QString tag = (hostRole == "p3") ? "★ HOST" : (hero3.playerName.isEmpty() ? "P3 (Jr. Pac)" : hero3.playerName);
         painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, tag);
     }
 
-    // Draw Hero 4 (Miracle Pac-Man - Emerald Green) (if connected and in this sector)
-    if (hero4.clientId != -1 && isCurrent && (hero4.alive || (hero4.respawnTicks > 0 && hero4.respawnTicks % 4 < 2))) {
+    // Draw Hero 4 (Miracle Pac-Man - Emerald Green) (if connected or host and in this sector)
+    if ((hero4.clientId != -1 || hostRole == "p4") && isCurrent && (hero4.alive || (hero4.respawnTicks > 0 && hero4.respawnTicks % 4 < 2))) {
         int px = originX + hero4.x * cellSize;
         int py = originY + hero4.y * cellSize;
 
@@ -305,7 +306,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         // Name tag
         painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
         painter.setPen(QColor(50, 255, 120));
-        QString tag = hero4.playerName.isEmpty() ? "P4 (Miracle)" : hero4.playerName;
+        QString tag = (hostRole == "p4") ? "★ HOST" : (hero4.playerName.isEmpty() ? "P4 (Miracle)" : hero4.playerName);
         painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, tag);
     }
 
@@ -372,15 +373,19 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
             painter.drawEllipse(gx + cellSize * 18 / 30, gy + cellSize * 10 / 30, pupilSize, pupilSize);
         }
 
-        // Mode B: Show player name tag if controlled by classmate
-        if (g.clientId >= 0 && !g.playerName.isEmpty()) {
+        // Mode B: Show player name tag if controlled by host or classmate
+        if (isHostGhost() && getHostGhostIndex() == g.colorIndex) {
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+            painter.setPen(QColor(255, 220, 0)); // Glowing gold badge for host
+            painter.drawText(gx - 25, gy - 6, cellSize + 50, cellSize / 2, Qt::AlignCenter, "★ HOST");
+        } else if (g.clientId >= 0 && !g.playerName.isEmpty()) {
             painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
             painter.setPen(ghostNormalColors[g.colorIndex]);
             painter.drawText(gx - 20, gy - 6, cellSize + 40, cellSize / 2, Qt::AlignCenter, QString("[%1]").arg(g.playerName));
         }
     }
 
-    // 5. Lantern Light Spotlight (Fused multi-hero lighting)
+    // 5. Lantern Light Spotlight (Fused multi-hero & host ghost lighting)
     if (isCurrent && fogOfWarEnabled && !fogPeekActive) {
         int secW = COLS * cellSize;
         int secH = ROWS * cellSize;
@@ -404,17 +409,25 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
             maskPainter.fillRect(cx - radiusPx, cy - radiusPx, radiusPx * 2, radiusPx * 2, grad);
         };
 
-        if (p1Alive) {
+        if (isP1Active() && p1Alive) {
             carveLight(pacmanX, pacmanY, currentVisionRadius);
         }
         if (isP2Active() && p2Alive) {
             carveLight(p2X, p2Y, currentVisionRadius);
         }
-        if (hero3.clientId != -1 && hero3.alive) {
+        if ((hero3.clientId != -1 || hostRole == "p3") && hero3.alive) {
             carveLight(hero3.x, hero3.y, currentVisionRadius);
         }
-        if (hero4.clientId != -1 && hero4.alive) {
+        if ((hero4.clientId != -1 || hostRole == "p4") && hero4.alive) {
             carveLight(hero4.x, hero4.y, currentVisionRadius);
+        }
+        if (isHostGhost()) {
+            int hgi = getHostGhostIndex();
+            if (hgi >= 0 && hgi < ghosts.size()) {
+                if (ghosts[hgi].sectorX == sx && ghosts[hgi].sectorY == sy) {
+                    carveLight(ghosts[hgi].x, ghosts[hgi].y, currentVisionRadius);
+                }
+            }
         }
         maskPainter.end();
 
@@ -840,35 +853,45 @@ void MainWindow::drawGameScreen(QPainter &painter)
         painter.setPen(QColor(180, 200, 255));
         painter.drawText(width() * 0.56, hudY + 20, QString("MOVES: %1").arg(moveCount));
     } else {
-        // P1 Status (Yellow)
-        painter.setPen(p1Alive ? QColor(255, 230, 30) : QColor(160, 160, 80));
-        QString p1Str = p1Alive ? QString("P1 (🟡): %1").arg(scoreP1)
-                                : QString("P1: RESPAWN (%1s)").arg((p1RespawnTicks * 130 + 999) / 1000);
-        painter.drawText(20, hudY + 20, p1Str);
+        int hudColX = 20;
 
-        int hudColX = int(width() * 0.15);
+        // P1 Status (Yellow)
+        if (isP1Active()) {
+            painter.setPen(p1Alive ? QColor(255, 230, 30) : QColor(160, 160, 80));
+            QString p1Str = p1Alive ? QString("P1 (🟡): %1").arg(scoreP1)
+                                    : QString("P1: RESPAWN (%1s)").arg((p1RespawnTicks * 130 + 999) / 1000);
+            painter.drawText(hudColX, hudY + 20, p1Str);
+            hudColX += int(width() * 0.12);
+        }
+
         if (isP2Active()) {
             painter.setPen(p2Alive ? QColor(255, 120, 190) : QColor(160, 80, 120));
             QString p2Str = p2Alive ? QString("P2 (🎀): %1").arg(scoreP2)
                                     : QString("P2: RESPAWN (%1s)").arg((p2RespawnTicks * 130 + 999) / 1000);
             painter.drawText(hudColX, hudY + 20, p2Str);
-            hudColX += int(width() * 0.11);
+            hudColX += int(width() * 0.12);
         }
 
-        if (hero3.clientId != -1) {
+        if (hero3.clientId != -1 || hostRole == "p3") {
             painter.setPen(hero3.alive ? QColor(0, 229, 255) : QColor(80, 160, 180));
             QString p3Str = hero3.alive ? QString("P3 (🧢): %1").arg(hero3.score)
                                         : QString("P3: RESPAWN (%1s)").arg((hero3.respawnTicks * 130 + 999) / 1000);
             painter.drawText(hudColX, hudY + 20, p3Str);
-            hudColX += int(width() * 0.11);
+            hudColX += int(width() * 0.12);
         }
 
-        if (hero4.clientId != -1) {
+        if (hero4.clientId != -1 || hostRole == "p4") {
             painter.setPen(hero4.alive ? QColor(0, 255, 100) : QColor(80, 180, 100));
             QString p4Str = hero4.alive ? QString("P4 (🟢): %1").arg(hero4.score)
                                         : QString("P4: RESPAWN (%1s)").arg((hero4.respawnTicks * 130 + 999) / 1000);
             painter.drawText(hudColX, hudY + 20, p4Str);
-            hudColX += int(width() * 0.11);
+            hudColX += int(width() * 0.12);
+        }
+
+        if (isHostGhost()) {
+            painter.setPen(QColor(255, 120, 120));
+            painter.drawText(hudColX, hudY + 20, QString("HOST: %1 %2").arg(getRoleIcon(hostRole), getRoleDisplayName(hostRole)));
+            hudColX += int(width() * 0.14);
         }
 
         // Team Total Score
@@ -976,12 +999,15 @@ void MainWindow::drawGameScreen(QPainter &painter)
                 "HERO: [🟡 Yellow Pacman]  |  [Arrows] or [WASD] Move  |  [Tab] Switch to Pink  |  [F] Fog Peek (1.0s, 3x/lvl + Fruits)  |  [M] Saga Map  |  [F11] Fullscreen");
         }
     } else {
-        if (arrowPlayer == 2) {
+        QString roleDisplay = QString("%1 %2").arg(getRoleIcon(hostRole), getRoleDisplayName(hostRole));
+        if (isHostGhost()) {
             painter.drawText(20, hudY + 62,
-                "ARROWS STEER: [🎀 Pink P2]  |  WASD: [🟡 Yellow P1]  |  [Tab] Swap Arrows to Yellow!  |  [F] Fog Peek (1.0s, 3x/lvl + Fruits)  |  [M] Saga Map");
+                QString("HOST ROLE: [%1]  |  [Arrows/WASD] Move Ghost  |  [F] Ghost Sonar  |  [Tab] Switch Character  |  [H] Lobby  |  [M] Saga Map")
+                .arg(roleDisplay));
         } else {
             painter.drawText(20, hudY + 62,
-                "ARROWS STEER: [🟡 Yellow P1]  |  WASD: [🎀 Pink P2]  |  [Tab] Swap Arrows to Pink!  |  [F] Fog Peek (1.0s, 3x/lvl + Fruits)  |  [M] Saga Map");
+                QString("HOST ROLE: [%1]  |  [Arrows/WASD] Move Hero  |  [F] Fog Peek (%2 left)  |  [Tab] Switch Character  |  [H] Lobby  |  [M] Saga Map")
+                .arg(roleDisplay).arg(p1FogPeeks));
         }
     }
 
@@ -1172,29 +1198,106 @@ void MainWindow::drawMultiplayerLobby(QPainter &painter)
     painter.setPen(QColor(150, 170, 200));
     painter.drawText(col1X + 15, cardY + 36, colW - 30, 18, Qt::AlignLeft, "Team up & share lantern vision in the dark maze!");
 
-    auto drawSlot = [&](int x, int y, const QString &icon, const QString &roleName, const QString &playerName, QColor color, bool isOccupied) {
-        QRect slotR(x, y, colW - 30, 52);
-        painter.setBrush(isOccupied ? QColor(26, 35, 68) : QColor(12, 15, 30));
-        painter.setPen(QPen(isOccupied ? color : QColor(50, 60, 95), 1.2));
+    auto drawRoleSlot = [&](const QString &role, const QString &icon, const QString &roleName, QColor roleColor) {
+        QRect slotR = getLobbyRoleRect(role);
+        bool isHost = (hostRole == role);
+        bool isConnectedPlayer = false;
+        QString pName;
+
+        if (role == "p1") {
+            if (p1ClientId != -1) { isConnectedPlayer = true; pName = p1PlayerName.isEmpty() ? "Classmate" : p1PlayerName; }
+        } else if (role == "p2") {
+            if (p2ClientId != -1) { isConnectedPlayer = true; pName = p2PlayerName.isEmpty() ? "Classmate" : p2PlayerName; }
+        } else if (role == "p3") {
+            if (hero3.clientId != -1) { isConnectedPlayer = true; pName = hero3.playerName.isEmpty() ? "Classmate" : hero3.playerName; }
+        } else if (role == "p4") {
+            if (hero4.clientId != -1) { isConnectedPlayer = true; pName = hero4.playerName.isEmpty() ? "Classmate" : hero4.playerName; }
+        } else if (role == "blinky") {
+            if (ghosts.size() > 0 && ghosts[0].clientId >= 0) { isConnectedPlayer = true; pName = ghosts[0].playerName; }
+        } else if (role == "pinky") {
+            if (ghosts.size() > 1 && ghosts[1].clientId >= 0) { isConnectedPlayer = true; pName = ghosts[1].playerName; }
+        } else if (role == "inky") {
+            if (ghosts.size() > 2 && ghosts[2].clientId >= 0) { isConnectedPlayer = true; pName = ghosts[2].playerName; }
+        } else if (role == "clyde") {
+            if (ghosts.size() > 3 && ghosts[3].clientId >= 0) { isConnectedPlayer = true; pName = ghosts[3].playerName; }
+        }
+
+        bool isHovered = slotR.contains(mapFromGlobal(QCursor::pos()));
+
+        // Background & border
+        if (isHost) {
+            // Glowing Gold for host
+            painter.setBrush(QColor(50, 42, 10, 240));
+            painter.setPen(QPen(QColor(255, 220, 0), 2.2));
+        } else if (isConnectedPlayer) {
+            // Connected classmate
+            painter.setBrush(QColor(22, 32, 60, 220));
+            painter.setPen(QPen(roleColor, 1.5));
+        } else if (isHovered) {
+            // Hover over available slot
+            painter.setBrush(QColor(28, 38, 70, 230));
+            painter.setPen(QPen(QColor(0, 255, 240), 1.8));
+        } else {
+            // Open available slot
+            painter.setBrush(QColor(12, 16, 32, 200));
+            painter.setPen(QPen(QColor(50, 65, 95), 1.0));
+        }
         painter.drawRoundedRect(slotR, 10, 10);
 
+        // Icon
         painter.setFont(QFont("Arial", 16));
-        painter.drawText(x + 10, y + 6, 35, 40, Qt::AlignCenter, icon);
+        painter.drawText(slotR.left() + 8, slotR.top() + 6, 38, 44, Qt::AlignCenter, icon);
 
+        // Role title
         painter.setFont(QFont("Arial", 12, QFont::Bold));
-        painter.setPen(color);
-        painter.drawText(x + 50, y + 8, 180, 18, Qt::AlignLeft, roleName);
+        painter.setPen(isHost ? QColor(255, 230, 0) : roleColor);
+        painter.drawText(slotR.left() + 50, slotR.top() + 10, slotR.width() - 170, 20, Qt::AlignLeft, roleName);
 
-        painter.setFont(QFont("Arial", 10));
-        painter.setPen(isOccupied ? QColor(255, 255, 255) : QColor(100, 120, 150));
-        QString status = isOccupied ? QString("● Connected: %1").arg(playerName) : "○ Open (Join via link)";
-        painter.drawText(x + 50, y + 28, 200, 16, Qt::AlignLeft, status);
+        // Host badge or selection button
+        if (isHost) {
+            QRect badgeRect(slotR.right() - 115, slotR.top() + 14, 105, 28);
+            painter.setBrush(QColor(255, 200, 0));
+            painter.setPen(Qt::NoPen);
+            painter.drawRoundedRect(badgeRect, 6, 6);
+            painter.setFont(QFont("Arial", 9, QFont::Bold));
+            painter.setPen(QColor(20, 20, 20));
+            painter.drawText(badgeRect, Qt::AlignCenter, "★ HOST (YOU)");
+        } else if (!isConnectedPlayer) {
+            QRect clickRect(slotR.right() - 115, slotR.top() + 14, 105, 28);
+            painter.setBrush(isHovered ? QColor(0, 180, 255, 80) : QColor(255, 255, 255, 20));
+            painter.setPen(QPen(isHovered ? QColor(0, 255, 240) : QColor(100, 140, 180), 1.0));
+            painter.drawRoundedRect(clickRect, 6, 6);
+            painter.setFont(QFont("Arial", 8, QFont::Bold));
+            painter.setPen(isHovered ? QColor(0, 255, 240) : QColor(160, 180, 210));
+            painter.drawText(clickRect, Qt::AlignCenter, "⚡ PLAY THIS");
+        }
+
+        // Subtitle / Status
+        painter.setFont(QFont("Arial", 9));
+        if (isHost) {
+            painter.setPen(QColor(255, 240, 160));
+            painter.drawText(slotR.left() + 50, slotR.top() + 32, slotR.width() - 170, 18, Qt::AlignLeft,
+                             "Controlled via Host Keyboard [Arrows / WASD]");
+        } else if (isConnectedPlayer) {
+            painter.setPen(QColor(200, 240, 255));
+            painter.drawText(slotR.left() + 50, slotR.top() + 32, slotR.width() - 170, 18, Qt::AlignLeft,
+                             QString("● Connected: %1").arg(pName));
+        } else {
+            painter.setPen(QColor(110, 130, 160));
+            if (role.startsWith("p")) {
+                painter.drawText(slotR.left() + 50, slotR.top() + 32, slotR.width() - 170, 18, Qt::AlignLeft,
+                                 "○ Open (Click to play or invite classmate)");
+            } else {
+                painter.drawText(slotR.left() + 50, slotR.top() + 32, slotR.width() - 170, 18, Qt::AlignLeft,
+                                 "🤖 AI Ghost (Click to play as this ghost)");
+            }
+        }
     };
 
-    drawSlot(col1X + 15, cardY + 65, "🟡", "Pac-Man (Host)", "Local Player (Projector)", QColor(255, 230, 0), true);
-    drawSlot(col1X + 15, cardY + 125, "🎀", "Ms. Pac-Man", p2PlayerName.isEmpty() ? "Classmate" : p2PlayerName, QColor(255, 105, 180), p2ClientId != -1);
-    drawSlot(col1X + 15, cardY + 185, "🧢", "Jr. Pac-Man", hero3.playerName.isEmpty() ? "Classmate" : hero3.playerName, QColor(0, 229, 255), hero3.clientId != -1);
-    drawSlot(col1X + 15, cardY + 245, "🟢", "Miracle Pac-Man", hero4.playerName.isEmpty() ? "Classmate" : hero4.playerName, QColor(0, 255, 100), hero4.clientId != -1);
+    drawRoleSlot("p1", "🟡", "Pac-Man (Yellow)", QColor(255, 230, 0));
+    drawRoleSlot("p2", "🎀", "Ms. Pac-Man (Pink)", QColor(255, 105, 180));
+    drawRoleSlot("p3", "🧢", "Jr. Pac-Man (Cyan)", QColor(0, 229, 255));
+    drawRoleSlot("p4", "🟢", "Miracle Pac-Man", QColor(0, 255, 100));
 
     // Right Column: Playable Ghosts (Mode B)
     painter.setBrush(QColor(16, 20, 42));
@@ -1207,40 +1310,16 @@ void MainWindow::drawMultiplayerLobby(QPainter &painter)
 
     painter.setFont(QFont("Arial", 10));
     painter.setPen(QColor(150, 170, 200));
-    painter.drawText(col2X + 15, cardY + 36, colW - 30, 18, Qt::AlignLeft, "Control ghosts from your phone to hunt Pac-Man!");
+    painter.drawText(col2X + 15, cardY + 36, colW - 30, 18, Qt::AlignLeft, "Control ghosts to hunt Pac-Man!");
 
-    QString bName = (ghosts.size() > 0 && ghosts[0].clientId >= 0) ? ghosts[0].playerName : "";
-    QString pName = (ghosts.size() > 1 && ghosts[1].clientId >= 0) ? ghosts[1].playerName : "";
-    QString iName = (ghosts.size() > 2 && ghosts[2].clientId >= 0) ? ghosts[2].playerName : "";
-    QString cName = (ghosts.size() > 3 && ghosts[3].clientId >= 0) ? ghosts[3].playerName : "";
-
-    auto drawGhostSlot = [&](int x, int y, const QString &icon, const QString &ghostRole, const QString &pName, QColor color, bool isHuman) {
-        QRect slotR(x, y, colW - 30, 52);
-        painter.setBrush(isHuman ? QColor(40, 20, 30) : QColor(12, 15, 30));
-        painter.setPen(QPen(isHuman ? color : QColor(50, 60, 95), 1.2));
-        painter.drawRoundedRect(slotR, 10, 10);
-
-        painter.setFont(QFont("Arial", 16));
-        painter.drawText(x + 10, y + 6, 35, 40, Qt::AlignCenter, icon);
-
-        painter.setFont(QFont("Arial", 12, QFont::Bold));
-        painter.setPen(color);
-        painter.drawText(x + 50, y + 8, 180, 18, Qt::AlignLeft, ghostRole);
-
-        painter.setFont(QFont("Arial", 10));
-        painter.setPen(isHuman ? QColor(255, 220, 220) : QColor(110, 130, 160));
-        QString status = isHuman ? QString("● Player: %1").arg(pName) : "🤖 Controlled by Smart AI";
-        painter.drawText(x + 50, y + 28, 200, 16, Qt::AlignLeft, status);
-    };
-
-    drawGhostSlot(col2X + 15, cardY + 65, "🔴", "Blinky (Red)", bName, QColor(255, 70, 70), !bName.isEmpty());
-    drawGhostSlot(col2X + 15, cardY + 125, "🌸", "Pinky (Pink)", pName, QColor(255, 150, 200), !pName.isEmpty());
-    drawGhostSlot(col2X + 15, cardY + 185, "🩵", "Inky (Cyan)", iName, QColor(0, 220, 255), !iName.isEmpty());
-    drawGhostSlot(col2X + 15, cardY + 245, "🟠", "Clyde (Orange)", cName, QColor(255, 160, 50), !cName.isEmpty());
+    drawRoleSlot("blinky", "🔴", "Blinky (Red Ghost)", QColor(255, 70, 70));
+    drawRoleSlot("pinky",  "🌸", "Pinky (Pink Ghost)", QColor(255, 150, 200));
+    drawRoleSlot("inky",   "🩵", "Inky (Cyan Ghost)", QColor(0, 220, 255));
+    drawRoleSlot("clyde",  "🟠", "Clyde (Orange Ghost)", QColor(255, 160, 50));
 
     // Footer banner
     painter.setPen(QColor(140, 170, 220));
     painter.setFont(QFont("Arial", 11, QFont::Bold));
     painter.drawText(modalX, modalY + modalH - 26, modalW, 20, Qt::AlignCenter,
-                     "Click [COPY LINK] or press [C] to copy link  •  Press [H], [Esc], or [✕] to close");
+                     "Click any character above to play as them  •  [Tab] Switch Character  •  [C] Copy Link  •  [H]/[Esc] Close");
 }
