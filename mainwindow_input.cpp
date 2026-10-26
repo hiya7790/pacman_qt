@@ -38,6 +38,11 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             update();
             return;
         }
+        if (event->key() == Qt::Key_C ||
+            ((event->modifiers() & (Qt::ControlModifier | Qt::MetaModifier)) && event->key() == Qt::Key_C)) {
+            copyRoomLinkToClipboard();
+            return;
+        }
     }
 
     // Home Map Key Handling
@@ -305,8 +310,16 @@ void MainWindow::wheelEvent(QWheelEvent *event)
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
     if (showMultiplayerLobby) {
-        showMultiplayerLobby = false;
-        update();
+        QPoint pos = event->pos();
+        if (getCopyLinkButtonRect().contains(pos) || getLobbyUrlBoxRect().contains(pos)) {
+            copyRoomLinkToClipboard();
+            return;
+        }
+        if (getLobbyCloseButtonRect().contains(pos) || !getLobbyModalRect().contains(pos)) {
+            showMultiplayerLobby = false;
+            update();
+            return;
+        }
         return;
     }
 

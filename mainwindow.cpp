@@ -3,6 +3,8 @@
 #include <QPainter>
 #include <QRandomGenerator>
 #include <QJsonObject>
+#include <QGuiApplication>
+#include <QClipboard>
 #include <cmath>
 #include <algorithm>
 
@@ -67,6 +69,7 @@ MainWindow::MainWindow(QWidget *parent)
 
     // Multiplayer Server & Extra Heroes (Mode A: 4P Co-op, Mode B: Ghost Hunters)
     showMultiplayerLobby = false;
+    linkCopiedFeedback = false;
     p2ClientId = -1;
     p2PlayerName = "";
     hero3.clientId = -1;
@@ -599,6 +602,17 @@ void MainWindow::onPlayerPeek(int clientId)
         peekToastTimer.start();
         update();
     }
+}
+
+void MainWindow::copyRoomLinkToClipboard()
+{
+    QString roomUrl = gameServer ? gameServer->getServerUrl() : "http://127.0.0.1:8080";
+    QGuiApplication::clipboard()->setText(roomUrl);
+    linkCopiedFeedback = true;
+    linkCopiedTimer.start();
+    peekToastMessage = QString("📋 ROOM LINK COPIED! Paste to friends: %1").arg(roomUrl);
+    peekToastTimer.start();
+    update();
 }
 
 void MainWindow::paintEvent(QPaintEvent *)

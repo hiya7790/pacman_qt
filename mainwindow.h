@@ -112,6 +112,11 @@ private:
     void drawMultiplayerBadge(QPainter &painter);
     void drawMultiplayerLobby(QPainter &painter);
     QRect getMultiplayerButtonRect() const;
+    QRect getCopyLinkButtonRect() const;
+    QRect getLobbyCloseButtonRect() const;
+    QRect getLobbyModalRect() const;
+    QRect getLobbyUrlBoxRect() const;
+    void copyRoomLinkToClipboard();
 
     struct WorldPalette {
         QColor top;
@@ -175,6 +180,8 @@ private:
     // Embedded Classroom Web Server & Extra Heroes
     GameServer *gameServer;
     bool showMultiplayerLobby;
+    bool linkCopiedFeedback;
+    QElapsedTimer linkCopiedTimer;
     int p2ClientId;
     QString p2PlayerName;
     ExtraHero hero3; // Jr. Pac-Man (Cyan)

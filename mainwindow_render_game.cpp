@@ -1024,6 +1024,33 @@ QRect MainWindow::getMultiplayerButtonRect() const
     return QRect(width() - 250, 14, 235, 36);
 }
 
+QRect MainWindow::getLobbyModalRect() const
+{
+    int modalW = std::min(780, width() - 40);
+    int modalH = std::min(590, height() - 50);
+    int modalX = (width() - modalW) / 2;
+    int modalY = (height() - modalH) / 2;
+    return QRect(modalX, modalY, modalW, modalH);
+}
+
+QRect MainWindow::getLobbyCloseButtonRect() const
+{
+    QRect m = getLobbyModalRect();
+    return QRect(m.right() - 44, m.top() + 14, 30, 30);
+}
+
+QRect MainWindow::getLobbyUrlBoxRect() const
+{
+    QRect m = getLobbyModalRect();
+    return QRect(m.left() + 35, m.top() + 78, m.width() - 230, 48);
+}
+
+QRect MainWindow::getCopyLinkButtonRect() const
+{
+    QRect m = getLobbyModalRect();
+    return QRect(m.left() + m.width() - 180, m.top() + 78, 145, 48);
+}
+
 void MainWindow::drawMultiplayerBadge(QPainter &painter)
 {
     QRect btn = getMultiplayerButtonRect();
@@ -1045,12 +1072,11 @@ void MainWindow::drawMultiplayerLobby(QPainter &painter)
     // Semi-transparent backdrop scrim
     painter.fillRect(rect(), QColor(5, 7, 18, 225));
 
-    int modalW = std::min(780, width() - 40);
-    int modalH = std::min(590, height() - 50);
-    int modalX = (width() - modalW) / 2;
-    int modalY = (height() - modalH) / 2;
-
-    QRect modalRect(modalX, modalY, modalW, modalH);
+    QRect modalRect = getLobbyModalRect();
+    int modalX = modalRect.x();
+    int modalY = modalRect.y();
+    int modalW = modalRect.width();
+    int modalH = modalRect.height();
 
     // Glowing modal background
     QLinearGradient bgGrad(modalX, modalY, modalX, modalY + modalH);
@@ -1065,29 +1091,69 @@ void MainWindow::drawMultiplayerLobby(QPainter &painter)
     painter.setFont(QFont("Arial", 20, QFont::Bold));
     painter.drawText(modalX, modalY + 18, modalW, 32, Qt::AlignCenter, "🌐 CLASSROOM MULTIPLAYER ROOM");
 
+    // Close button (X)
+    QRect closeBtn = getLobbyCloseButtonRect();
+    bool closeHovered = closeBtn.contains(mapFromGlobal(QCursor::pos()));
+    painter.setBrush(closeHovered ? QColor(255, 60, 80, 220) : QColor(30, 36, 68));
+    painter.setPen(QPen(closeHovered ? Qt::white : QColor(120, 140, 180), 1.5));
+    painter.drawEllipse(closeBtn);
+    painter.setFont(QFont("Arial", 14, QFont::Bold));
+    painter.setPen(closeHovered ? Qt::white : QColor(200, 210, 235));
+    painter.drawText(closeBtn, Qt::AlignCenter, "✕");
+
     // Subtitle
     painter.setPen(QColor(180, 200, 240));
     painter.setFont(QFont("Arial", 12));
     painter.drawText(modalX, modalY + 52, modalW, 20, Qt::AlignCenter,
                      "Connect instantly from your phone or laptop browser — no download needed!");
 
-    // BIG HIGHLIGHTED URL BOX FOR CLASSROOM PROJECTOR
+    // BIG HIGHLIGHTED URL BOX
     QString roomUrl = gameServer ? gameServer->getServerUrl() : "http://127.0.0.1:8080";
-    QRect urlBox(modalX + 40, modalY + 80, modalW - 80, 48);
-    painter.setBrush(QColor(12, 16, 36));
-    painter.setPen(QPen(QColor(0, 255, 200), 2));
+    QRect urlBox = getLobbyUrlBoxRect();
+    bool urlHovered = urlBox.contains(mapFromGlobal(QCursor::pos()));
+    painter.setBrush(urlHovered ? QColor(16, 22, 48) : QColor(12, 16, 36));
+    painter.setPen(QPen(urlHovered ? QColor(0, 255, 255) : QColor(0, 255, 200), 1.8));
     painter.drawRoundedRect(urlBox, 12, 12);
 
     painter.setPen(QColor(0, 255, 220));
-    painter.setFont(QFont("Courier New", 18, QFont::Bold));
-    painter.drawText(urlBox, Qt::AlignCenter, QString("👉 JOIN AT:  %1").arg(roomUrl));
+    painter.setFont(QFont("Courier New", 17, QFont::Bold));
+    painter.drawText(urlBox, Qt::AlignCenter, QString("👉 %1").arg(roomUrl));
+
+    // COPY LINK BUTTON
+    QRect copyBtn = getCopyLinkButtonRect();
+    bool copyHovered = copyBtn.contains(mapFromGlobal(QCursor::pos()));
+    bool isCopiedRecently = linkCopiedFeedback && linkCopiedTimer.elapsed() < 3000;
+
+    QLinearGradient copyGrad(copyBtn.left(), copyBtn.top(), copyBtn.left(), copyBtn.bottom());
+    if (isCopiedRecently) {
+        copyGrad.setColorAt(0, QColor(0, 230, 120));
+        copyGrad.setColorAt(1, QColor(0, 160, 70));
+    } else if (copyHovered) {
+        copyGrad.setColorAt(0, QColor(0, 220, 255));
+        copyGrad.setColorAt(1, QColor(0, 130, 255));
+    } else {
+        copyGrad.setColorAt(0, QColor(0, 160, 255));
+        copyGrad.setColorAt(1, QColor(0, 90, 210));
+    }
+
+    painter.setBrush(copyGrad);
+    painter.setPen(QPen(isCopiedRecently ? QColor(255, 255, 255) : (copyHovered ? QColor(200, 255, 255) : QColor(0, 220, 255)), 1.5));
+    painter.drawRoundedRect(copyBtn, 12, 12);
+
+    painter.setFont(QFont("Arial", 12, QFont::Bold));
+    painter.setPen(Qt::white);
+    if (isCopiedRecently) {
+        painter.drawText(copyBtn, Qt::AlignCenter, "✅ COPIED!");
+    } else {
+        painter.drawText(copyBtn, Qt::AlignCenter, "📋 COPY LINK");
+    }
 
     // Two Columns: Pac-Heroes vs Ghost Hunters
     int colW = (modalW - 70) / 2;
     int col1X = modalX + 25;
     int col2X = modalX + 45 + colW;
-    int cardY = modalY + 142;
-    int cardH = 370;
+    int cardY = modalY + 138;
+    int cardH = 375;
 
     // Left Column: Pac-Family Co-op (Mode A)
     painter.setBrush(QColor(16, 20, 42));
@@ -1168,9 +1234,9 @@ void MainWindow::drawMultiplayerLobby(QPainter &painter)
     drawGhostSlot(col2X + 15, cardY + 185, "🩵", "Inky (Cyan)", iName, QColor(0, 220, 255), !iName.isEmpty());
     drawGhostSlot(col2X + 15, cardY + 245, "🟠", "Clyde (Orange)", cName, QColor(255, 160, 50), !cName.isEmpty());
 
-    // Close button / instruction banner
-    painter.setPen(QColor(160, 180, 220));
-    painter.setFont(QFont("Arial", 12, QFont::Bold));
-    painter.drawText(modalX, modalY + modalH - 28, modalW, 20, Qt::AlignCenter,
-                     "Press [H] or click anywhere to close lobby and play!");
+    // Footer banner
+    painter.setPen(QColor(140, 170, 220));
+    painter.setFont(QFont("Arial", 11, QFont::Bold));
+    painter.drawText(modalX, modalY + modalH - 26, modalW, 20, Qt::AlignCenter,
+                     "Click [COPY LINK] or press [C] to copy link  •  Press [H], [Esc], or [✕] to close");
 }
