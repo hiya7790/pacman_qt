@@ -29,6 +29,8 @@ MainWindow::MainWindow(QWidget *parent)
     setStyleSheet("background-color: black;");
     setWindowTitle("Pacman: Labyrinth Saga");
     setMouseTracking(true);
+    setFocusPolicy(Qt::StrongFocus);
+    setFocus();
 
     currentScreen = SCREEN_HOME_MAP;
     highestUnlockedLevel = 1;
@@ -152,7 +154,11 @@ void MainWindow::startLevel(int lvl)
     currentScreen = SCREEN_PLAYING;
     gameOver = false;
     levelComplete = false;
+    if (!isAnyMultiplayer()) {
+        hostRole = "p1";
+    }
     initLevel();
+    setFocus();
     broadcastCurrentGameState();
     update();
 }
@@ -937,8 +943,6 @@ void MainWindow::paintEvent(QPaintEvent *)
 
 void MainWindow::switchHostRole(const QString &newRole)
 {
-    if (newRole == hostRole) return;
-
     // Check if role is taken by an online client
     if (gameServer) {
         for (ConnectedClient *c : gameServer->getActiveClients()) {
@@ -955,15 +959,20 @@ void MainWindow::switchHostRole(const QString &newRole)
 
     if (hostRole == "p1") {
         p1Alive = true;
+        p1RespawnTicks = 0;
+        if (p1Lives <= 0) p1Lives = INITIAL_LIVES;
     } else if (hostRole == "p2") {
         p2Alive = true;
         p2RespawnTicks = 0;
+        if (p2Lives <= 0) p2Lives = INITIAL_LIVES;
     } else if (hostRole == "p3") {
         hero3.alive = true;
         hero3.respawnTicks = 0;
+        if (hero3.lives <= 0) hero3.lives = INITIAL_LIVES;
     } else if (hostRole == "p4") {
         hero4.alive = true;
         hero4.respawnTicks = 0;
+        if (hero4.lives <= 0) hero4.lives = INITIAL_LIVES;
     }
 
     if (gameServer) {
@@ -996,6 +1005,40 @@ void MainWindow::cycleNextHostRole()
             return;
         }
     }
+}
+
+bool MainWindow::isOnlineMultiplayer() const
+{
+    return (p1ClientId >= 0) || (p2ClientId >= 0) || (hero3.clientId != -1) || (hero4.clientId != -1) ||
+           (gameServer && gameServer->getConnectedClientCount() > 0);
+}
+
+bool MainWindow::isP1Active() const
+{
+    return (hostRole == "p1") || (p1ClientId >= 0) || !isAnyMultiplayer();
+}
+
+bool MainWindow::isP2Active() const
+{
+    if (isOnlineMultiplayer()) {
+        return (hostRole == "p2") || (p2ClientId >= 0);
+    }
+    return (hostRole == "p2") || (p2ClientId >= 0) || isMultiplayer;
+}
+
+bool MainWindow::isP3Active() const
+{
+    return (hostRole == "p3") || (hero3.clientId != -1);
+}
+
+bool MainWindow::isP4Active() const
+{
+    return (hostRole == "p4") || (hero4.clientId != -1);
+}
+
+bool MainWindow::isAnyMultiplayer() const
+{
+    return isMultiplayer || isOnlineMultiplayer() || isHostGhost() || (hostRole != "p1");
 }
 
 QString MainWindow::getRoleDisplayName(const QString &role) const

@@ -235,11 +235,12 @@ private:
     QRect getLobbyRoleRect(const QString &role) const;
     void moveHostGhost(int ghostIdx, Direction d);
 
-    bool isP1Active() const { return (hostRole == "p1") || (p1ClientId >= 0) || !isAnyMultiplayer(); }
-    bool isP2Active() const { return (hostRole == "p2") || (p2ClientId >= 0) || (isMultiplayer && p2ClientId == -1); }
-    bool isP3Active() const { return (hostRole == "p3") || (hero3.clientId != -1); }
-    bool isP4Active() const { return (hostRole == "p4") || (hero4.clientId != -1); }
-    bool isAnyMultiplayer() const { return isMultiplayer || (p1ClientId >= 0) || (p2ClientId >= 0) || (hero3.clientId != -1) || (hero4.clientId != -1) || isHostGhost(); }
+    bool isOnlineMultiplayer() const;
+    bool isP1Active() const;
+    bool isP2Active() const;
+    bool isP3Active() const;
+    bool isP4Active() const;
+    bool isAnyMultiplayer() const;
 
     static constexpr int ROWS = 21;
     static constexpr int COLS = 21;

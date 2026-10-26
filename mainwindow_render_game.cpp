@@ -943,10 +943,13 @@ void MainWindow::drawGameScreen(QPainter &painter)
             hudColX += int(width() * 0.12);
         }
 
-        if (isHostGhost()) {
-            painter.setPen(QColor(255, 120, 120));
-            painter.drawText(hudColX, hudY + 20, QString("HOST: %1 %2").arg(getRoleIcon(hostRole), getRoleDisplayName(hostRole)));
-            hudColX += int(width() * 0.14);
+        if (isAnyMultiplayer()) {
+            painter.setPen(isHostGhost() ? QColor(255, 120, 120) : QColor(255, 230, 80));
+            painter.drawText(hudColX, hudY + 14, QString("★ HOST: %1 %2").arg(getRoleIcon(hostRole), getRoleDisplayName(hostRole)));
+            painter.setPen(QColor(160, 190, 220));
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 5)));
+            painter.drawText(hudColX, hudY + 27, "[Tab] Switch • [Arrows/WASD]");
+            hudColX += int(width() * 0.15);
         }
 
         // Team Total Score

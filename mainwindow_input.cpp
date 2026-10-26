@@ -209,10 +209,18 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
-    // In-Game Switch Active Host Character: [Tab] or [C] (Pac-Heroes or Ghosts!)
-    if (event->key() == Qt::Key_Tab || event->key() == Qt::Key_C) {
+    // In-Game Switch Active Host Character: [Tab] (Pac-Heroes or Ghosts!)
+    if (event->key() == Qt::Key_Tab) {
         cycleNextHostRole();
         return;
+    }
+
+    // Direct role selection with number keys [1]-[4] in multiplayer
+    if (isAnyMultiplayer() && !event->modifiers()) {
+        if (event->key() == Qt::Key_1) { switchHostRole("p1"); return; }
+        if (event->key() == Qt::Key_2) { switchHostRole("p2"); return; }
+        if (event->key() == Qt::Key_3) { switchHostRole("p3"); return; }
+        if (event->key() == Qt::Key_4) { switchHostRole("p4"); return; }
     }
 
     // Toggle 2-Player Co-op drop-in on the fly with [2]
@@ -253,13 +261,19 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
 
     Direction moveCmd = (arrowAttempt != STOP) ? arrowAttempt : wasdAttempt;
 
-    // 2-Player Local Keyboard Co-op support (WASD steers Player 2)
-    if (isMultiplayer && (p2ClientId < 0)) {
+    // Local 2-Player Split-Keyboard Co-op (ONLY if strictly offline, 2P local co-op active, P2 alive, no online clients)
+    bool isLocalOfflineCoop = isMultiplayer && !isOnlineMultiplayer() && (p2ClientId < 0) && p2Alive && (hostRole == "p1");
+    if (isLocalOfflineCoop) {
         Direction p1Cmd = (arrowPlayer == 1) ? arrowAttempt : wasdAttempt;
         Direction p2Cmd = (arrowPlayer == 2) ? arrowAttempt : wasdAttempt;
         if (p2Cmd != STOP && p2Alive) {
             p2NextDir = p2Cmd;
-            movePlayer2();
+            if (canMove(p2X, p2Y, p2Cmd)) {
+                p2Dir = p2Cmd;
+                movePlayer2();
+            } else {
+                p2Dir = p2Cmd;
+            }
             moveCount++;
             checkFruitPickup();
             checkGhostCollisions();
@@ -272,59 +286,91 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     }
 
     if (moveCmd != STOP) {
-        if (hostRole == "p1" && p1Alive) {
-            pacmanNextDir = moveCmd;
-            movePacman();
-            moveCount++;
-            checkFruitPickup();
-            checkGhostCollisions();
-            checkLevelExit();
-            updateFogOfWar();
-            broadcastCurrentGameState();
-            update();
-        } else if (hostRole == "p2" && p2Alive) {
-            p2NextDir = moveCmd;
-            movePlayer2();
-            moveCount++;
-            checkFruitPickup();
-            checkGhostCollisions();
-            checkLevelExit();
-            updateFogOfWar();
-            broadcastCurrentGameState();
-            update();
-        } else if (hostRole == "p3" && hero3.alive) {
-            hero3.nextDir = moveCmd;
-            if (canMove(hero3.x, hero3.y, moveCmd)) {
-                hero3.dir = moveCmd;
-                moveHero(hero3, 3);
+        // Host controls Player 1 (Yellow Pac-Man) in Single Player OR when hostRole == "p1"
+        bool hostControlsP1 = (!isAnyMultiplayer()) || (hostRole == "p1");
+        if (hostControlsP1) {
+            if (p1Lives > 0 && !p1Alive && p1RespawnTicks == 0) {
+                p1Alive = true;
+            }
+            if (p1Alive) {
+                pacmanNextDir = moveCmd;
+                if (canMove(pacmanX, pacmanY, moveCmd)) {
+                    pacmanDir = moveCmd;
+                    movePacman();
+                } else {
+                    pacmanDir = moveCmd; // Turn mouth towards pressed direction for instant feedback
+                }
                 moveCount++;
                 checkFruitPickup();
                 checkGhostCollisions();
                 checkLevelExit();
                 updateFogOfWar();
-            } else {
-                hero3.dir = moveCmd;
+                broadcastCurrentGameState();
+                update();
             }
-            broadcastCurrentGameState();
-            update();
-        } else if (hostRole == "p4" && hero4.alive) {
-            hero4.nextDir = moveCmd;
-            if (canMove(hero4.x, hero4.y, moveCmd)) {
-                hero4.dir = moveCmd;
-                moveHero(hero4, 4);
+        } else if (hostRole == "p2") {
+            if (p2Lives > 0 && !p2Alive && p2RespawnTicks == 0) {
+                p2Alive = true;
+            }
+            if (p2Alive) {
+                p2NextDir = moveCmd;
+                if (canMove(p2X, p2Y, moveCmd)) {
+                    p2Dir = moveCmd;
+                    movePlayer2();
+                } else {
+                    p2Dir = moveCmd;
+                }
                 moveCount++;
                 checkFruitPickup();
                 checkGhostCollisions();
                 checkLevelExit();
                 updateFogOfWar();
-            } else {
-                hero4.dir = moveCmd;
+                broadcastCurrentGameState();
+                update();
             }
-            broadcastCurrentGameState();
-            update();
+        } else if (hostRole == "p3") {
+            if (hero3.lives > 0 && !hero3.alive && hero3.respawnTicks == 0) {
+                hero3.alive = true;
+            }
+            if (hero3.alive) {
+                hero3.nextDir = moveCmd;
+                if (canMove(hero3.x, hero3.y, moveCmd)) {
+                    hero3.dir = moveCmd;
+                    moveHero(hero3, 3);
+                } else {
+                    hero3.dir = moveCmd;
+                }
+                moveCount++;
+                checkFruitPickup();
+                checkGhostCollisions();
+                checkLevelExit();
+                updateFogOfWar();
+                broadcastCurrentGameState();
+                update();
+            }
+        } else if (hostRole == "p4") {
+            if (hero4.lives > 0 && !hero4.alive && hero4.respawnTicks == 0) {
+                hero4.alive = true;
+            }
+            if (hero4.alive) {
+                hero4.nextDir = moveCmd;
+                if (canMove(hero4.x, hero4.y, moveCmd)) {
+                    hero4.dir = moveCmd;
+                    moveHero(hero4, 4);
+                } else {
+                    hero4.dir = moveCmd;
+                }
+                moveCount++;
+                checkFruitPickup();
+                checkGhostCollisions();
+                checkLevelExit();
+                updateFogOfWar();
+                broadcastCurrentGameState();
+                update();
+            }
         } else if (isHostGhost()) {
             int gIdx = getHostGhostIndex();
-            if (gIdx >= 0 && gIdx < ghosts.size()) {
+            if (gIdx >= 0 && gIdx < (int)ghosts.size()) {
                 moveHostGhost(gIdx, moveCmd);
                 moveCount++;
                 update();
@@ -351,6 +397,7 @@ void MainWindow::wheelEvent(QWheelEvent *event)
 
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
+    setFocus();
     if (showMultiplayerLobby) {
         QPoint pos = event->pos();
         if (getCopyLinkButtonRect().contains(pos) || getLobbyUrlBoxRect().contains(pos)) {
