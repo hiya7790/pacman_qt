@@ -203,6 +203,9 @@ void GameServer::handleHttpRequest(ConnectedClient *client, const QByteArray &da
     QByteArray resp;
     resp.append("HTTP/1.1 200 OK\r\n");
     resp.append("Content-Type: text/html; charset=utf-8\r\n");
+    resp.append("Cache-Control: no-cache, no-store, must-revalidate\r\n");
+    resp.append("Pragma: no-cache\r\n");
+    resp.append("Expires: 0\r\n");
     resp.append("Content-Length: " + QByteArray::number(html.size()) + "\r\n");
     resp.append("Access-Control-Allow-Origin: *\r\n");
     resp.append("Connection: close\r\n\r\n");

@@ -134,6 +134,7 @@ void MainWindow::startLevel(int lvl)
     gameOver = false;
     levelComplete = false;
     initLevel();
+    broadcastCurrentGameState();
     update();
 }
 
