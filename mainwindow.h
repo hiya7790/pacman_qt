@@ -27,7 +27,24 @@ struct Ghost {
     int x, y;
     Direction dir;
     int colorIndex;
+    int clientId = -1;       // -1 = AI, >= 0 = controlled by human
+    QString playerName = ""; // Name of human controlling this ghost
 };
+
+struct ExtraHero {
+    int x = 9, y = 19;
+    Direction dir = STOP;
+    Direction nextDir = STOP;
+    int mouthAngle = 45;
+    bool mouthOpening = false;
+    bool alive = false;
+    int respawnTicks = 0;
+    int score = 0;
+    int clientId = -1;       // -1 if not connected
+    QString playerName = "";
+};
+
+class GameServer;
 
 // Bonus fruit types
 enum FruitType {
@@ -62,6 +79,10 @@ protected:
 
 private slots:
     void gameLoop();
+    void onPlayerJoined(int clientId, const QString &role, const QString &name);
+    void onPlayerLeft(int clientId, const QString &role, const QString &name);
+    void onPlayerMoved(int clientId, const QString &role, int dir);
+    void onPlayerPeek(int clientId);
 
 private:
     void initGame();
@@ -84,6 +105,13 @@ private:
     void drawStrawberry(QPainter &painter, int cx, int cy, int s);
     void drawOrangeFruit(QPainter &painter, int cx, int cy, int s);
     void drawGameScreen(QPainter &painter);
+
+    // Connected Multiplayer & Classroom Lobby
+    void moveHero(ExtraHero &hero, int heroId);
+    void broadcastCurrentGameState();
+    void drawMultiplayerBadge(QPainter &painter);
+    void drawMultiplayerLobby(QPainter &painter);
+    QRect getMultiplayerButtonRect() const;
 
     struct WorldPalette {
         QColor top;
@@ -143,6 +171,14 @@ private:
     bool p2Alive;
     int p1RespawnTicks;
     int p2RespawnTicks;
+
+    // Embedded Classroom Web Server & Extra Heroes
+    GameServer *gameServer;
+    bool showMultiplayerLobby;
+    int p2ClientId;
+    QString p2PlayerName;
+    ExtraHero hero3; // Jr. Pac-Man (Cyan)
+    ExtraHero hero4; // Miracle Pac-Man (Green)
 
     static constexpr int ROWS = 21;
     static constexpr int COLS = 21;

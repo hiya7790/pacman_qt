@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "gameserver.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QRadialGradient>
@@ -254,6 +255,64 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         }
     }
 
+    // Draw Hero 3 (Jr. Pac-Man - Cyan with cap) (if connected and in this sector)
+    if (hero3.clientId != -1 && isCurrent && (hero3.alive || (hero3.respawnTicks > 0 && hero3.respawnTicks % 4 < 2))) {
+        int px = originX + hero3.x * cellSize;
+        int py = originY + hero3.y * cellSize;
+
+        painter.setBrush(hero3.alive ? QColor(0, 229, 255) : QColor(100, 240, 255, 110));
+        painter.setPen(Qt::NoPen);
+        int startAngle = 0;
+        if (hero3.dir == RIGHT) startAngle = hero3.mouthAngle;
+        else if (hero3.dir == DOWN) startAngle = 270 + hero3.mouthAngle;
+        else if (hero3.dir == LEFT) startAngle = 180 + hero3.mouthAngle;
+        else if (hero3.dir == UP) startAngle = 90 + hero3.mouthAngle;
+
+        int spanAngle = 360 - 2 * hero3.mouthAngle;
+        painter.drawPie(px + 2, py + 2, cellSize - 4, cellSize - 4, startAngle * 16, spanAngle * 16);
+
+        // Blue Propeller Beanie Cap
+        painter.setBrush(QColor(0, 100, 255));
+        painter.drawEllipse(px + cellSize / 4, py + 1, cellSize / 2, cellSize / 4);
+        painter.setPen(QPen(QColor(255, 50, 50), 2));
+        painter.drawLine(px + cellSize / 2, py + 2, px + cellSize / 2, py - 3);
+        painter.drawLine(px + cellSize / 2 - 4, py - 3, px + cellSize / 2 + 4, py - 3);
+        painter.setPen(Qt::NoPen);
+
+        // Name tag
+        painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
+        painter.setPen(QColor(0, 255, 255));
+        QString tag = hero3.playerName.isEmpty() ? "P3 (Jr. Pac)" : hero3.playerName;
+        painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, tag);
+    }
+
+    // Draw Hero 4 (Miracle Pac-Man - Emerald Green) (if connected and in this sector)
+    if (hero4.clientId != -1 && isCurrent && (hero4.alive || (hero4.respawnTicks > 0 && hero4.respawnTicks % 4 < 2))) {
+        int px = originX + hero4.x * cellSize;
+        int py = originY + hero4.y * cellSize;
+
+        painter.setBrush(hero4.alive ? QColor(0, 255, 100) : QColor(100, 255, 150, 110));
+        painter.setPen(Qt::NoPen);
+        int startAngle = 0;
+        if (hero4.dir == RIGHT) startAngle = hero4.mouthAngle;
+        else if (hero4.dir == DOWN) startAngle = 270 + hero4.mouthAngle;
+        else if (hero4.dir == LEFT) startAngle = 180 + hero4.mouthAngle;
+        else if (hero4.dir == UP) startAngle = 90 + hero4.mouthAngle;
+
+        int spanAngle = 360 - 2 * hero4.mouthAngle;
+        painter.drawPie(px + 2, py + 2, cellSize - 4, cellSize - 4, startAngle * 16, spanAngle * 16);
+
+        // Superhero headband
+        painter.setBrush(QColor(0, 160, 50));
+        painter.drawRect(px + 2, py + cellSize / 4, cellSize - 4, std::max(2, cellSize / 8));
+
+        // Name tag
+        painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
+        painter.setPen(QColor(50, 255, 120));
+        QString tag = hero4.playerName.isEmpty() ? "P4 (Miracle)" : hero4.playerName;
+        painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, tag);
+    }
+
     // 6. Draw Ghosts in this sector
     QColor ghostNormalColors[] = {
         QColor(255, 50, 50),   // Blinky (Red)
@@ -316,6 +375,13 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
             painter.drawEllipse(gx + cellSize * 8 / 30, gy + cellSize * 10 / 30, pupilSize, pupilSize);
             painter.drawEllipse(gx + cellSize * 18 / 30, gy + cellSize * 10 / 30, pupilSize, pupilSize);
         }
+
+        // Mode B: Show player name tag if controlled by classmate
+        if (g.clientId >= 0 && !g.playerName.isEmpty()) {
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+            painter.setPen(ghostNormalColors[g.colorIndex]);
+            painter.drawText(gx - 20, gy - 6, cellSize + 40, cellSize / 2, Qt::AlignCenter, QString("[%1]").arg(g.playerName));
+        }
     }
 
     // 5. Lantern Light Spotlight (only for current sector)
@@ -343,6 +409,30 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
             lantern2.setColorAt(1.0, QColor(0, 0, 0, 220));
 
             painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern2);
+        }
+        if (hero3.clientId != -1 && hero3.alive) {
+            int p3xCenter = originX + hero3.x * cellSize + cellSize / 2;
+            int p3yCenter = originY + hero3.y * cellSize + cellSize / 2;
+
+            QRadialGradient lantern3(p3xCenter, p3yCenter, (currentVisionRadius + 0.6) * cellSize);
+            lantern3.setColorAt(0.0, QColor(100, 240, 255, 25));
+            lantern3.setColorAt(0.45, QColor(0, 200, 255, 10));
+            lantern3.setColorAt(0.75, QColor(0, 0, 0, 60));
+            lantern3.setColorAt(1.0, QColor(0, 0, 0, 220));
+
+            painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern3);
+        }
+        if (hero4.clientId != -1 && hero4.alive) {
+            int p4xCenter = originX + hero4.x * cellSize + cellSize / 2;
+            int p4yCenter = originY + hero4.y * cellSize + cellSize / 2;
+
+            QRadialGradient lantern4(p4xCenter, p4yCenter, (currentVisionRadius + 0.6) * cellSize);
+            lantern4.setColorAt(0.0, QColor(150, 255, 180, 25));
+            lantern4.setColorAt(0.45, QColor(0, 255, 100, 10));
+            lantern4.setColorAt(0.75, QColor(0, 0, 0, 60));
+            lantern4.setColorAt(1.0, QColor(0, 0, 0, 220));
+
+            painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern4);
         }
     }
 
@@ -919,4 +1009,168 @@ void MainWindow::drawGameScreen(QPainter &painter)
         painter.drawText(0, height() / 2 + 16, width(), 25, Qt::AlignCenter,
                          "Press [Space] for Next Level  |  Press [M] for Saga Map");
     }
+
+    // Top-Right Multiplayer Badge
+    drawMultiplayerBadge(painter);
+
+    // Classroom Multiplayer Lobby Overlay
+    if (showMultiplayerLobby) {
+        drawMultiplayerLobby(painter);
+    }
+}
+
+QRect MainWindow::getMultiplayerButtonRect() const
+{
+    return QRect(width() - 250, 14, 235, 36);
+}
+
+void MainWindow::drawMultiplayerBadge(QPainter &painter)
+{
+    QRect btn = getMultiplayerButtonRect();
+    bool hovered = btn.contains(mapFromGlobal(QCursor::pos()));
+
+    int count = gameServer ? gameServer->getConnectedClientCount() : 0;
+    painter.setBrush(hovered ? QColor(30, 55, 110, 230) : QColor(14, 25, 55, 200));
+    painter.setPen(QPen(hovered ? QColor(0, 255, 240) : QColor(0, 180, 255), 1.5));
+    painter.drawRoundedRect(btn, 8, 8);
+
+    painter.setFont(QFont("Arial", 10, QFont::Bold));
+    painter.setPen(count > 0 ? QColor(0, 255, 180) : QColor(120, 220, 255));
+    QString text = count > 0 ? QString("🌐 ROOM: %1 ONLINE [H]").arg(count) : "🌐 HOST ROOM [H]";
+    painter.drawText(btn, Qt::AlignCenter, text);
+}
+
+void MainWindow::drawMultiplayerLobby(QPainter &painter)
+{
+    // Semi-transparent backdrop scrim
+    painter.fillRect(rect(), QColor(5, 7, 18, 225));
+
+    int modalW = std::min(780, width() - 40);
+    int modalH = std::min(590, height() - 50);
+    int modalX = (width() - modalW) / 2;
+    int modalY = (height() - modalH) / 2;
+
+    QRect modalRect(modalX, modalY, modalW, modalH);
+
+    // Glowing modal background
+    QLinearGradient bgGrad(modalX, modalY, modalX, modalY + modalH);
+    bgGrad.setColorAt(0, QColor(20, 26, 52));
+    bgGrad.setColorAt(1, QColor(10, 13, 28));
+    painter.setBrush(bgGrad);
+    painter.setPen(QPen(QColor(0, 229, 255), 2.5));
+    painter.drawRoundedRect(modalRect, 20, 20);
+
+    // Title Header
+    painter.setPen(QColor(255, 230, 0));
+    painter.setFont(QFont("Arial", 20, QFont::Bold));
+    painter.drawText(modalX, modalY + 18, modalW, 32, Qt::AlignCenter, "🌐 CLASSROOM MULTIPLAYER ROOM");
+
+    // Subtitle
+    painter.setPen(QColor(180, 200, 240));
+    painter.setFont(QFont("Arial", 12));
+    painter.drawText(modalX, modalY + 52, modalW, 20, Qt::AlignCenter,
+                     "Connect instantly from your phone or laptop browser — no download needed!");
+
+    // BIG HIGHLIGHTED URL BOX FOR CLASSROOM PROJECTOR
+    QString roomUrl = gameServer ? gameServer->getServerUrl() : "http://127.0.0.1:8080";
+    QRect urlBox(modalX + 40, modalY + 80, modalW - 80, 48);
+    painter.setBrush(QColor(12, 16, 36));
+    painter.setPen(QPen(QColor(0, 255, 200), 2));
+    painter.drawRoundedRect(urlBox, 12, 12);
+
+    painter.setPen(QColor(0, 255, 220));
+    painter.setFont(QFont("Courier New", 18, QFont::Bold));
+    painter.drawText(urlBox, Qt::AlignCenter, QString("👉 JOIN AT:  %1").arg(roomUrl));
+
+    // Two Columns: Pac-Heroes vs Ghost Hunters
+    int colW = (modalW - 70) / 2;
+    int col1X = modalX + 25;
+    int col2X = modalX + 45 + colW;
+    int cardY = modalY + 142;
+    int cardH = 370;
+
+    // Left Column: Pac-Family Co-op (Mode A)
+    painter.setBrush(QColor(16, 20, 42));
+    painter.setPen(QPen(QColor(255, 105, 180), 1.5));
+    painter.drawRoundedRect(col1X, cardY, colW, cardH, 14, 14);
+
+    painter.setPen(QColor(255, 180, 220));
+    painter.setFont(QFont("Arial", 13, QFont::Bold));
+    painter.drawText(col1X + 15, cardY + 14, colW - 30, 24, Qt::AlignLeft, "🟡 PAC-FAMILY CO-OP (Mode A)");
+
+    painter.setFont(QFont("Arial", 10));
+    painter.setPen(QColor(150, 170, 200));
+    painter.drawText(col1X + 15, cardY + 36, colW - 30, 18, Qt::AlignLeft, "Team up & share lantern vision in the dark maze!");
+
+    auto drawSlot = [&](int x, int y, const QString &icon, const QString &roleName, const QString &playerName, QColor color, bool isOccupied) {
+        QRect slotR(x, y, colW - 30, 52);
+        painter.setBrush(isOccupied ? QColor(26, 35, 68) : QColor(12, 15, 30));
+        painter.setPen(QPen(isOccupied ? color : QColor(50, 60, 95), 1.2));
+        painter.drawRoundedRect(slotR, 10, 10);
+
+        painter.setFont(QFont("Arial", 16));
+        painter.drawText(x + 10, y + 6, 35, 40, Qt::AlignCenter, icon);
+
+        painter.setFont(QFont("Arial", 12, QFont::Bold));
+        painter.setPen(color);
+        painter.drawText(x + 50, y + 8, 180, 18, Qt::AlignLeft, roleName);
+
+        painter.setFont(QFont("Arial", 10));
+        painter.setPen(isOccupied ? QColor(255, 255, 255) : QColor(100, 120, 150));
+        QString status = isOccupied ? QString("● Connected: %1").arg(playerName) : "○ Open (Join via link)";
+        painter.drawText(x + 50, y + 28, 200, 16, Qt::AlignLeft, status);
+    };
+
+    drawSlot(col1X + 15, cardY + 65, "🟡", "Pac-Man (Host)", "Local Player (Projector)", QColor(255, 230, 0), true);
+    drawSlot(col1X + 15, cardY + 125, "🎀", "Ms. Pac-Man", p2PlayerName.isEmpty() ? "Classmate" : p2PlayerName, QColor(255, 105, 180), p2ClientId != -1);
+    drawSlot(col1X + 15, cardY + 185, "🧢", "Jr. Pac-Man", hero3.playerName.isEmpty() ? "Classmate" : hero3.playerName, QColor(0, 229, 255), hero3.clientId != -1);
+    drawSlot(col1X + 15, cardY + 245, "🟢", "Miracle Pac-Man", hero4.playerName.isEmpty() ? "Classmate" : hero4.playerName, QColor(0, 255, 100), hero4.clientId != -1);
+
+    // Right Column: Playable Ghosts (Mode B)
+    painter.setBrush(QColor(16, 20, 42));
+    painter.setPen(QPen(QColor(255, 70, 70), 1.5));
+    painter.drawRoundedRect(col2X, cardY, colW, cardH, 14, 14);
+
+    painter.setPen(QColor(255, 120, 120));
+    painter.setFont(QFont("Arial", 13, QFont::Bold));
+    painter.drawText(col2X + 15, cardY + 14, colW - 30, 24, Qt::AlignLeft, "👻 GHOST HUNTERS (Mode B)");
+
+    painter.setFont(QFont("Arial", 10));
+    painter.setPen(QColor(150, 170, 200));
+    painter.drawText(col2X + 15, cardY + 36, colW - 30, 18, Qt::AlignLeft, "Control ghosts from your phone to hunt Pac-Man!");
+
+    QString bName = (ghosts.size() > 0 && ghosts[0].clientId >= 0) ? ghosts[0].playerName : "";
+    QString pName = (ghosts.size() > 1 && ghosts[1].clientId >= 0) ? ghosts[1].playerName : "";
+    QString iName = (ghosts.size() > 2 && ghosts[2].clientId >= 0) ? ghosts[2].playerName : "";
+    QString cName = (ghosts.size() > 3 && ghosts[3].clientId >= 0) ? ghosts[3].playerName : "";
+
+    auto drawGhostSlot = [&](int x, int y, const QString &icon, const QString &ghostRole, const QString &pName, QColor color, bool isHuman) {
+        QRect slotR(x, y, colW - 30, 52);
+        painter.setBrush(isHuman ? QColor(40, 20, 30) : QColor(12, 15, 30));
+        painter.setPen(QPen(isHuman ? color : QColor(50, 60, 95), 1.2));
+        painter.drawRoundedRect(slotR, 10, 10);
+
+        painter.setFont(QFont("Arial", 16));
+        painter.drawText(x + 10, y + 6, 35, 40, Qt::AlignCenter, icon);
+
+        painter.setFont(QFont("Arial", 12, QFont::Bold));
+        painter.setPen(color);
+        painter.drawText(x + 50, y + 8, 180, 18, Qt::AlignLeft, ghostRole);
+
+        painter.setFont(QFont("Arial", 10));
+        painter.setPen(isHuman ? QColor(255, 220, 220) : QColor(110, 130, 160));
+        QString status = isHuman ? QString("● Player: %1").arg(pName) : "🤖 Controlled by Smart AI";
+        painter.drawText(x + 50, y + 28, 200, 16, Qt::AlignLeft, status);
+    };
+
+    drawGhostSlot(col2X + 15, cardY + 65, "🔴", "Blinky (Red)", bName, QColor(255, 70, 70), !bName.isEmpty());
+    drawGhostSlot(col2X + 15, cardY + 125, "🌸", "Pinky (Pink)", pName, QColor(255, 150, 200), !pName.isEmpty());
+    drawGhostSlot(col2X + 15, cardY + 185, "🩵", "Inky (Cyan)", iName, QColor(0, 220, 255), !iName.isEmpty());
+    drawGhostSlot(col2X + 15, cardY + 245, "🟠", "Clyde (Orange)", cName, QColor(255, 160, 50), !cName.isEmpty());
+
+    // Close button / instruction banner
+    painter.setPen(QColor(160, 180, 220));
+    painter.setFont(QFont("Arial", 12, QFont::Bold));
+    painter.drawText(modalX, modalY + modalH - 28, modalW, 20, Qt::AlignCenter,
+                     "Press [H] or click anywhere to close lobby and play!");
 }

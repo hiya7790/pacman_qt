@@ -155,19 +155,22 @@ void MainWindow::checkLevelExit()
 {
     bool p1Won = p1Alive && (pacmanX == exitX && pacmanY == exitY);
     bool p2Won = isMultiplayer && p2Alive && (p2X == exitX && p2Y == exitY);
+    bool p3Won = (hero3.clientId != -1 && hero3.alive && hero3.x == exitX && hero3.y == exitY);
+    bool p4Won = (hero4.clientId != -1 && hero4.alive && hero4.x == exitX && hero4.y == exitY);
 
-    if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && (p1Won || p2Won)) {
+    if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && (p1Won || p2Won || p3Won || p4Won)) {
         levelComplete = true;
         int clearBonus = (300 + currentLevel * 100) * (sectorCols * sectorRows);
-        if (p1Won && p2Won) {
-            scoreP1 += clearBonus / 2;
-            scoreP2 += clearBonus / 2;
-        } else if (p1Won) {
-            scoreP1 += clearBonus;
-        } else {
-            scoreP2 += clearBonus;
-        }
-        score = scoreP1 + scoreP2;
+        int winners = (p1Won ? 1 : 0) + (p2Won ? 1 : 0) + (p3Won ? 1 : 0) + (p4Won ? 1 : 0);
+        if (winners == 0) winners = 1;
+        int perHeroBonus = clearBonus / winners;
+
+        if (p1Won) scoreP1 += perHeroBonus;
+        if (p2Won) scoreP2 += perHeroBonus;
+        if (p3Won) hero3.score += perHeroBonus;
+        if (p4Won) hero4.score += perHeroBonus;
+
+        score = scoreP1 + scoreP2 + hero3.score + hero4.score;
         if (currentLevel >= highestUnlockedLevel) {
             highestUnlockedLevel = currentLevel + 1;
         }

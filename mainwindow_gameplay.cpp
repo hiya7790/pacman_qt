@@ -12,7 +12,10 @@ void MainWindow::updateFogOfWar()
         for (int c = 0; c < COLS; ++c) {
             double dist1 = (p1Alive ? std::hypot(c - pacmanX, r - pacmanY) : 999.0);
             double dist2 = (isMultiplayer && p2Alive ? std::hypot(c - p2X, r - p2Y) : 999.0);
-            if (dist1 <= currentVisionRadius || dist2 <= currentVisionRadius) {
+            double dist3 = (hero3.clientId != -1 && hero3.alive ? std::hypot(c - hero3.x, r - hero3.y) : 999.0);
+            double dist4 = (hero4.clientId != -1 && hero4.alive ? std::hypot(c - hero4.x, r - hero4.y) : 999.0);
+            if (dist1 <= currentVisionRadius || dist2 <= currentVisionRadius ||
+                dist3 <= currentVisionRadius || dist4 <= currentVisionRadius) {
                 explored[currentSectorY][currentSectorX][r][c] = true;
             }
         }
@@ -25,7 +28,10 @@ bool MainWindow::isCellVisible(int sx, int sy, int x, int y) const
     if (sx != currentSectorX || sy != currentSectorY) return false;
     double dist1 = (p1Alive ? std::hypot(x - pacmanX, y - pacmanY) : 999.0);
     double dist2 = (isMultiplayer && p2Alive ? std::hypot(x - p2X, y - p2Y) : 999.0);
-    return (dist1 <= currentVisionRadius || dist2 <= currentVisionRadius);
+    double dist3 = (hero3.clientId != -1 && hero3.alive ? std::hypot(x - hero3.x, y - hero3.y) : 999.0);
+    double dist4 = (hero4.clientId != -1 && hero4.alive ? std::hypot(x - hero4.x, y - hero4.y) : 999.0);
+    return (dist1 <= currentVisionRadius || dist2 <= currentVisionRadius ||
+            dist3 <= currentVisionRadius || dist4 <= currentVisionRadius);
 }
 
 void MainWindow::movePacman()
@@ -51,9 +57,10 @@ void MainWindow::movePacman()
             currentSectorX = toSectorX;
             pacmanX = 0;
             if (isMultiplayer) {
-                p2X = 0;
-                p2Y = (pacmanY == 9 ? 10 : 9);
+                p2X = 0; p2Y = (pacmanY == 9 ? 10 : 9);
             }
+            if (hero3.clientId != -1) { hero3.x = 0; hero3.y = 8; }
+            if (hero4.clientId != -1) { hero4.x = 0; hero4.y = 11; }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -68,9 +75,10 @@ void MainWindow::movePacman()
             currentSectorX = toSectorX;
             pacmanX = COLS - 1;
             if (isMultiplayer) {
-                p2X = COLS - 1;
-                p2Y = (pacmanY == 9 ? 10 : 9);
+                p2X = COLS - 1; p2Y = (pacmanY == 9 ? 10 : 9);
             }
+            if (hero3.clientId != -1) { hero3.x = COLS - 1; hero3.y = 8; }
+            if (hero4.clientId != -1) { hero4.x = COLS - 1; hero4.y = 11; }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -85,9 +93,10 @@ void MainWindow::movePacman()
             currentSectorY = toSectorY;
             pacmanY = 0;
             if (isMultiplayer) {
-                p2Y = 0;
-                p2X = (pacmanX == 9 ? 10 : 9);
+                p2Y = 0; p2X = (pacmanX == 9 ? 10 : 9);
             }
+            if (hero3.clientId != -1) { hero3.y = 0; hero3.x = 8; }
+            if (hero4.clientId != -1) { hero4.y = 0; hero4.x = 11; }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -102,9 +111,10 @@ void MainWindow::movePacman()
             currentSectorY = toSectorY;
             pacmanY = ROWS - 1;
             if (isMultiplayer) {
-                p2Y = ROWS - 1;
-                p2X = (pacmanX == 9 ? 10 : 9);
+                p2Y = ROWS - 1; p2X = (pacmanX == 9 ? 10 : 9);
             }
+            if (hero3.clientId != -1) { hero3.y = ROWS - 1; hero3.x = 8; }
+            if (hero4.clientId != -1) { hero4.y = ROWS - 1; hero4.x = 11; }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -123,7 +133,7 @@ void MainWindow::movePacman()
         if (board[currentSectorY][currentSectorX][pacmanY][pacmanX] == 2) {
             board[currentSectorY][currentSectorX][pacmanY][pacmanX] = 0;
             scoreP1 += 10 + (currentLevel - 1) * 2;
-            score = scoreP1 + scoreP2;
+            score = scoreP1 + scoreP2 + hero3.score + hero4.score;
         }
 
         // Mouth animation
@@ -152,15 +162,14 @@ void MainWindow::movePlayer2()
         else if (p2Dir == LEFT) nextX--;
         else if (p2Dir == RIGHT) nextX++;
 
-        // Check if crossing into an adjacent window
         if (nextX >= COLS) {
             fromSectorX = currentSectorX; fromSectorY = currentSectorY;
             toSectorX = currentSectorX + 1; toSectorY = currentSectorY;
             transitionDirX = 1; transitionDirY = 0;
             currentSectorX = toSectorX;
-            p2X = 0;
-            pacmanX = 0;
-            pacmanY = (p2Y == 9 ? 10 : 9);
+            p2X = 0; pacmanX = 0; pacmanY = (p2Y == 9 ? 10 : 9);
+            if (hero3.clientId != -1) { hero3.x = 0; hero3.y = 8; }
+            if (hero4.clientId != -1) { hero4.x = 0; hero4.y = 11; }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -173,9 +182,9 @@ void MainWindow::movePlayer2()
             toSectorX = currentSectorX - 1; toSectorY = currentSectorY;
             transitionDirX = -1; transitionDirY = 0;
             currentSectorX = toSectorX;
-            p2X = COLS - 1;
-            pacmanX = COLS - 1;
-            pacmanY = (p2Y == 9 ? 10 : 9);
+            p2X = COLS - 1; pacmanX = COLS - 1; pacmanY = (p2Y == 9 ? 10 : 9);
+            if (hero3.clientId != -1) { hero3.x = COLS - 1; hero3.y = 8; }
+            if (hero4.clientId != -1) { hero4.x = COLS - 1; hero4.y = 11; }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -188,9 +197,9 @@ void MainWindow::movePlayer2()
             toSectorX = currentSectorX; toSectorY = currentSectorY + 1;
             transitionDirX = 0; transitionDirY = 1;
             currentSectorY = toSectorY;
-            p2Y = 0;
-            pacmanY = 0;
-            pacmanX = (p2X == 9 ? 10 : 9);
+            p2Y = 0; pacmanY = 0; pacmanX = (p2X == 9 ? 10 : 9);
+            if (hero3.clientId != -1) { hero3.y = 0; hero3.x = 8; }
+            if (hero4.clientId != -1) { hero4.y = 0; hero4.x = 11; }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -203,9 +212,9 @@ void MainWindow::movePlayer2()
             toSectorX = currentSectorX; toSectorY = currentSectorY - 1;
             transitionDirX = 0; transitionDirY = -1;
             currentSectorY = toSectorY;
-            p2Y = ROWS - 1;
-            pacmanY = ROWS - 1;
-            pacmanX = (p2X == 9 ? 10 : 9);
+            p2Y = ROWS - 1; pacmanY = ROWS - 1; pacmanX = (p2X == 9 ? 10 : 9);
+            if (hero3.clientId != -1) { hero3.y = ROWS - 1; hero3.x = 8; }
+            if (hero4.clientId != -1) { hero4.y = ROWS - 1; hero4.x = 11; }
             isTransitioning = true;
             transitionTimer.start();
             if (!sectorDiscovered[currentSectorY][currentSectorX]) {
@@ -224,7 +233,7 @@ void MainWindow::movePlayer2()
         if (board[currentSectorY][currentSectorX][p2Y][p2X] == 2) {
             board[currentSectorY][currentSectorX][p2Y][p2X] = 0;
             scoreP2 += 10 + (currentLevel - 1) * 2;
-            score = scoreP1 + scoreP2;
+            score = scoreP1 + scoreP2 + hero3.score + hero4.score;
         }
 
         // Mouth animation
@@ -238,6 +247,99 @@ void MainWindow::movePlayer2()
     }
 }
 
+void MainWindow::moveHero(ExtraHero &hero, int heroId)
+{
+    Q_UNUSED(heroId);
+    if (!hero.alive || hero.clientId == -1) return;
+
+    if (canMove(hero.x, hero.y, hero.nextDir)) {
+        hero.dir = hero.nextDir;
+    }
+
+    if (canMove(hero.x, hero.y, hero.dir)) {
+        int nextX = hero.x, nextY = hero.y;
+        if (hero.dir == UP) nextY--;
+        else if (hero.dir == DOWN) nextY++;
+        else if (hero.dir == LEFT) nextX--;
+        else if (hero.dir == RIGHT) nextX++;
+
+        if (nextX >= COLS) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX + 1; toSectorY = currentSectorY;
+            transitionDirX = 1; transitionDirY = 0;
+            currentSectorX = toSectorX;
+            hero.x = 0; pacmanX = 0; p2X = 0;
+            isTransitioning = true;
+            transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else if (nextX < 0) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX - 1; toSectorY = currentSectorY;
+            transitionDirX = -1; transitionDirY = 0;
+            currentSectorX = toSectorX;
+            hero.x = COLS - 1; pacmanX = COLS - 1; p2X = COLS - 1;
+            isTransitioning = true;
+            transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else if (nextY >= ROWS) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX; toSectorY = currentSectorY + 1;
+            transitionDirX = 0; transitionDirY = 1;
+            currentSectorY = toSectorY;
+            hero.y = 0; pacmanY = 0; p2Y = 0;
+            isTransitioning = true;
+            transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else if (nextY < 0) {
+            fromSectorX = currentSectorX; fromSectorY = currentSectorY;
+            toSectorX = currentSectorX; toSectorY = currentSectorY - 1;
+            transitionDirX = 0; transitionDirY = -1;
+            currentSectorY = toSectorY;
+            hero.y = ROWS - 1; pacmanY = ROWS - 1; p2Y = ROWS - 1;
+            isTransitioning = true;
+            transitionTimer.start();
+            if (!sectorDiscovered[currentSectorY][currentSectorX]) {
+                newSectorJustDiscovered = true;
+                newSectorTimer.start();
+            }
+            sectorDiscovered[currentSectorY][currentSectorX] = true;
+        } else {
+            hero.x = nextX;
+            hero.y = nextY;
+        }
+
+        updateFogOfWar();
+
+        // Eat dot
+        if (board[currentSectorY][currentSectorX][hero.y][hero.x] == 2) {
+            board[currentSectorY][currentSectorX][hero.y][hero.x] = 0;
+            hero.score += 10 + (currentLevel - 1) * 2;
+            score = scoreP1 + scoreP2 + hero3.score + hero4.score;
+        }
+
+        // Mouth animation
+        if (hero.mouthOpening) {
+            hero.mouthAngle += 15;
+            if (hero.mouthAngle >= 45) hero.mouthOpening = false;
+        } else {
+            hero.mouthAngle -= 15;
+            if (hero.mouthAngle <= 0) hero.mouthOpening = true;
+        }
+    }
+}
+
 void MainWindow::moveGhosts()
 {
     for (Ghost &g : ghosts) {
@@ -245,6 +347,24 @@ void MainWindow::moveGhosts()
             continue;
         }
 
+        // Mode B: Ghost controlled by human player via phone/laptop
+        if (g.clientId >= 0) {
+            int nx = g.x, ny = g.y;
+            if (g.dir == UP) ny--;
+            else if (g.dir == DOWN) ny++;
+            else if (g.dir == LEFT) nx--;
+            else if (g.dir == RIGHT) nx++;
+
+            if (nx >= 1 && nx < COLS - 1 && ny >= 1 && ny < ROWS - 1) {
+                if (board[g.sectorY][g.sectorX][ny][nx] != 1) {
+                    g.x = nx;
+                    g.y = ny;
+                }
+            }
+            continue;
+        }
+
+        // Mode A / AI: Ghost controlled by smart navigation algorithm
         QVector<Direction> possibleDirs;
         Direction dirs[] = {UP, DOWN, LEFT, RIGHT};
 
@@ -271,22 +391,27 @@ void MainWindow::moveGhosts()
         if (possibleDirs.isEmpty()) {
             g.dir = reverseDir;
         } else {
-            // Target nearest living player
+            // Target nearest living hero
             int targetX = pacmanX;
             int targetY = pacmanY;
-            if (isMultiplayer) {
-                if (!p1Alive && p2Alive) {
-                    targetX = p2X; targetY = p2Y;
-                } else if (p1Alive && p2Alive) {
-                    int d1 = std::abs(g.x - pacmanX) + std::abs(g.y - pacmanY);
-                    int d2 = std::abs(g.x - p2X) + std::abs(g.y - p2Y);
-                    if (d2 < d1) {
-                        targetX = p2X; targetY = p2Y;
+            int bestDistToHero = 9999;
+
+            auto checkHeroDist = [&](bool alive, int hx, int hy) {
+                if (alive) {
+                    int d = std::abs(g.x - hx) + std::abs(g.y - hy);
+                    if (d < bestDistToHero) {
+                        bestDistToHero = d;
+                        targetX = hx;
+                        targetY = hy;
                     }
                 }
-            }
+            };
 
-            // If in the same sector as target, actively hunt
+            checkHeroDist(p1Alive, pacmanX, pacmanY);
+            checkHeroDist(isMultiplayer && p2Alive, p2X, p2Y);
+            checkHeroDist(hero3.clientId != -1 && hero3.alive, hero3.x, hero3.y);
+            checkHeroDist(hero4.clientId != -1 && hero4.alive, hero4.x, hero4.y);
+
             if (g.sectorX == currentSectorX && g.sectorY == currentSectorY && !ghostsFrightened) {
                 int bestDist = 999;
                 Direction bestDir = possibleDirs[0];
@@ -304,7 +429,6 @@ void MainWindow::moveGhosts()
                 }
                 g.dir = bestDir;
             } else if (g.sectorX == currentSectorX && g.sectorY == currentSectorY && ghostsFrightened) {
-                // Frightened: run away from target
                 int bestDist = -1;
                 Direction bestDir = possibleDirs[0];
                 for (Direction d : possibleDirs) {
@@ -331,7 +455,6 @@ void MainWindow::moveGhosts()
         else if (g.dir == LEFT) g.x--;
         else if (g.dir == RIGHT) g.x++;
 
-        // Keep ghost safely in bounds of its sector
         if (g.x < 1) g.x = 1;
         if (g.x >= COLS - 1) g.x = COLS - 2;
         if (g.y < 1) g.y = 1;
@@ -344,45 +467,71 @@ void MainWindow::checkGhostCollisions()
     for (Ghost &g : ghosts) {
         if (g.sectorX != currentSectorX || g.sectorY != currentSectorY) continue;
 
-        // Player 1 collision
+        // Player 1 (Yellow Pac-Man)
         if (p1Alive && g.x == pacmanX && g.y == pacmanY) {
             if (ghostsFrightened) {
                 scoreP1 += 200;
-                score = scoreP1 + scoreP2;
+                score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 respawnGhostFarAway(g);
             } else {
-                if (!isMultiplayer) {
-                    gameOver = true;
-                } else {
-                    p1Alive = false;
-                    p1RespawnTicks = 30; // ~3.9 seconds
-                    if (!p2Alive) {
-                        gameOver = true;
-                    }
-                }
+                p1Alive = false;
+                p1RespawnTicks = 30;
             }
         }
 
-        // Player 2 collision (Multiplayer)
+        // Player 2 (Ms. Pac-Man)
         if (isMultiplayer && p2Alive && g.x == p2X && g.y == p2Y) {
             if (ghostsFrightened) {
                 scoreP2 += 200;
-                score = scoreP1 + scoreP2;
+                score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 respawnGhostFarAway(g);
             } else {
                 p2Alive = false;
-                p2RespawnTicks = 30; // ~3.9 seconds
-                if (!p1Alive) {
-                    gameOver = true;
-                }
+                p2RespawnTicks = 30;
             }
         }
+
+        // Hero 3 (Jr. Pac-Man)
+        if (hero3.clientId != -1 && hero3.alive && g.x == hero3.x && g.y == hero3.y) {
+            if (ghostsFrightened) {
+                hero3.score += 200;
+                score = scoreP1 + scoreP2 + hero3.score + hero4.score;
+                respawnGhostFarAway(g);
+            } else {
+                hero3.alive = false;
+                hero3.respawnTicks = 30;
+            }
+        }
+
+        // Hero 4 (Miracle Pac-Man)
+        if (hero4.clientId != -1 && hero4.alive && g.x == hero4.x && g.y == hero4.y) {
+            if (ghostsFrightened) {
+                hero4.score += 200;
+                score = scoreP1 + scoreP2 + hero3.score + hero4.score;
+                respawnGhostFarAway(g);
+            } else {
+                hero4.alive = false;
+                hero4.respawnTicks = 30;
+            }
+        }
+    }
+
+    // Check if entire team has been defeated
+    bool anyHeroAlive = p1Alive || (isMultiplayer && p2Alive) ||
+                        (hero3.clientId != -1 && hero3.alive) ||
+                        (hero4.clientId != -1 && hero4.alive);
+
+    bool anyHeroSpawning = (p1RespawnTicks > 0) || (isMultiplayer && p2RespawnTicks > 0) ||
+                           (hero3.clientId != -1 && hero3.respawnTicks > 0) ||
+                           (hero4.clientId != -1 && hero4.respawnTicks > 0);
+
+    if (!anyHeroAlive && !anyHeroSpawning) {
+        gameOver = true;
     }
 }
 
 void MainWindow::respawnGhostFarAway(Ghost &g)
 {
-    // Respawn ghost in a distant sector if available
     int bestDist = -1;
     int bestSx = currentSectorX, bestSy = currentSectorY;
 
@@ -404,10 +553,6 @@ void MainWindow::respawnGhostFarAway(Ghost &g)
     g.dir = UP;
 }
 
-// ========================================================
-// Bonus Fruit System
-// ========================================================
-
 void MainWindow::trySpawnFruit()
 {
     fruitSpawnCounter--;
@@ -416,7 +561,6 @@ void MainWindow::trySpawnFruit()
     fruitSpawnCounter = QRandomGenerator::global()->bounded(20, 50);
     if (activeFruits.size() >= MAX_FRUITS) return;
 
-    // Pick any discovered sector to spawn fruit
     QVector<QPair<int,int>> discSectors;
     for (int sy = 0; sy < sectorRows; ++sy) {
         for (int sx = 0; sx < sectorCols; ++sx) {
@@ -455,16 +599,21 @@ void MainWindow::checkFruitPickup()
         if (activeFruits[i].sectorX == currentSectorX && activeFruits[i].sectorY == currentSectorY) {
             bool p1Picked = p1Alive && (activeFruits[i].x == pacmanX && activeFruits[i].y == pacmanY);
             bool p2Picked = isMultiplayer && p2Alive && (activeFruits[i].x == p2X && activeFruits[i].y == p2Y);
-            if (p1Picked || p2Picked) {
+            bool p3Picked = (hero3.clientId != -1 && hero3.alive && activeFruits[i].x == hero3.x && activeFruits[i].y == hero3.y);
+            bool p4Picked = (hero4.clientId != -1 && hero4.alive && activeFruits[i].x == hero4.x && activeFruits[i].y == hero4.y);
+
+            if (p1Picked || p2Picked || p3Picked || p4Picked) {
                 if (p1Picked) scoreP1 += 100;
                 if (p2Picked) scoreP2 += 100;
-                score = scoreP1 + scoreP2;
+                if (p3Picked) hero3.score += 100;
+                if (p4Picked) hero4.score += 100;
+
+                score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 activeFruits.removeAt(i);
 
                 ghostsFrightened = true;
                 frightenedTicksLeft = currentFrightenDuration;
 
-                // Eating fruit grants +1 Fog Peek Charge!
                 fogPeeksRemaining++;
                 peekToastMessage = QString("🍒 FRUIT EATEN! +1 FOG PEEK EARNED! (Charges: %1 👁️)").arg(fogPeeksRemaining);
                 peekToastTimer.start();
@@ -472,4 +621,3 @@ void MainWindow::checkFruitPickup()
         }
     }
 }
-

@@ -1,6 +1,8 @@
 #include "mainwindow.h"
+#include "gameserver.h"
 #include <QPainter>
 #include <QRandomGenerator>
+#include <QJsonObject>
 #include <cmath>
 #include <algorithm>
 
@@ -44,7 +46,6 @@ MainWindow::MainWindow(QWidget *parent)
     fogPeekActive = false;
     fogPeeksRemaining = INITIAL_FOG_PEEKS;
     peekToastMessage.clear();
-    fogPeeksRemaining = INITIAL_FOG_PEEKS;
     isTransitioning = false;
     newSectorJustDiscovered = false;
 
@@ -64,6 +65,26 @@ MainWindow::MainWindow(QWidget *parent)
     p2MouthAngle = 45;
     p2MouthOpening = false;
 
+    // Multiplayer Server & Extra Heroes (Mode A: 4P Co-op, Mode B: Ghost Hunters)
+    showMultiplayerLobby = false;
+    p2ClientId = -1;
+    p2PlayerName = "";
+    hero3.clientId = -1;
+    hero3.playerName = "";
+    hero3.alive = false;
+    hero3.score = 0;
+    hero4.clientId = -1;
+    hero4.playerName = "";
+    hero4.alive = false;
+    hero4.score = 0;
+
+    gameServer = new GameServer(this);
+    connect(gameServer, &GameServer::playerJoined, this, &MainWindow::onPlayerJoined);
+    connect(gameServer, &GameServer::playerLeft, this, &MainWindow::onPlayerLeft);
+    connect(gameServer, &GameServer::playerMoved, this, &MainWindow::onPlayerMoved);
+    connect(gameServer, &GameServer::playerTriggeredPeek, this, &MainWindow::onPlayerPeek);
+    gameServer->startServer(8080);
+
     initGame();
     scrollToLevel(1, true);
 
@@ -76,6 +97,9 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    if (gameServer) {
+        gameServer->stopServer();
+    }
 }
 
 void MainWindow::initGame()
@@ -83,6 +107,8 @@ void MainWindow::initGame()
     score = 0;
     scoreP1 = 0;
     scoreP2 = 0;
+    hero3.score = 0;
+    hero4.score = 0;
     moveCount = 0;
     gameOver = false;
     levelComplete = false;
@@ -90,6 +116,8 @@ void MainWindow::initGame()
     p2Alive = true;
     p1RespawnTicks = 0;
     p2RespawnTicks = 0;
+    hero3.respawnTicks = 0;
+    hero4.respawnTicks = 0;
     currentScreen = SCREEN_HOME_MAP;
 }
 
@@ -134,28 +162,25 @@ void MainWindow::initLevel()
         for (int sx = 0; sx < sectorCols; ++sx) {
             // East-West doorway connection at rows 9 and 10
             if (sx < sectorCols - 1) {
-                // Carve a clear 2-tile wide highway from center room (col 9) to East border in sx
                 for (int c = 9; c < COLS; ++c) {
                     board[sy][sx][9][c] = 0;
                     board[sy][sx][10][c] = 0;
                     if (c > 11 && c < COLS - 1) {
-                        board[sy][sx][9][c] = 2; // Breadcrumb dots
+                        board[sy][sx][9][c] = 2;
                         board[sy][sx][10][c] = 2;
                     }
                 }
-                // Carve a clear 2-tile wide highway from West border to center room (col 11) in sx+1
                 for (int c = 0; c <= 11; ++c) {
                     board[sy][sx+1][9][c] = 0;
                     board[sy][sx+1][10][c] = 0;
                     if (c > 0 && c < 9) {
-                        board[sy][sx+1][9][c] = 2; // Breadcrumb dots
+                        board[sy][sx+1][9][c] = 2;
                         board[sy][sx+1][10][c] = 2;
                     }
                 }
             }
             // North-South doorway connection at cols 9 and 10
             if (sy < sectorRows - 1) {
-                // Carve from center room (row 9) to South border in sy
                 for (int r = 9; r < ROWS; ++r) {
                     board[sy][sx][r][9] = 0;
                     board[sy][sx][r][10] = 0;
@@ -164,7 +189,6 @@ void MainWindow::initLevel()
                         board[sy][sx][r][10] = 2;
                     }
                 }
-                // Carve from North border to center room (row 11) in sy+1
                 for (int r = 0; r <= 11; ++r) {
                     board[sy+1][sx][r][9] = 0;
                     board[sy+1][sx][r][10] = 0;
@@ -178,19 +202,17 @@ void MainWindow::initLevel()
     }
 
     // 3. Set Start Sector and Exit Sector
-    // Start at bottom-left sector
     currentSectorX = 0;
     currentSectorY = std::clamp(sectorRows - 1, 0, MAX_SECTORS_Y - 1);
     sectorDiscovered[currentSectorY][currentSectorX] = true;
 
-    // Exit at top-right sector (furthest from start!)
     exitSectorX = std::clamp(sectorCols - 1, 0, MAX_SECTORS_X - 1);
     exitSectorY = 0;
     exitX = 1;
     exitY = 1;
     board[exitSectorY][exitSectorX][exitY][exitX] = 0;
 
-    // 4. Place Pacman in the start sector with guaranteed clear avenue up to center room
+    // 4. Place Pacman & Heroes in the start sector
     pacmanX = 10;
     pacmanY = ROWS - 2;
     for (int r = 11; r <= ROWS - 2; ++r) {
@@ -212,7 +234,7 @@ void MainWindow::initLevel()
     p1Alive = true;
     p1RespawnTicks = 0;
 
-    // Player 2 starts beside Player 1 in the start room
+    // Player 2 (Ms. Pac-Man)
     p2X = 9;
     p2Y = ROWS - 2;
     p2Dir = RIGHT;
@@ -222,6 +244,28 @@ void MainWindow::initLevel()
     p2Alive = true;
     p2RespawnTicks = 0;
 
+    // Extra Heroes (Jr. Pac-Man & Miracle Pac-Man)
+    hero3.x = 9;
+    hero3.y = ROWS - 3;
+    hero3.dir = RIGHT;
+    hero3.nextDir = RIGHT;
+    hero3.mouthAngle = 45;
+    hero3.mouthOpening = false;
+    hero3.alive = (hero3.clientId != -1);
+    hero3.respawnTicks = 0;
+
+    hero4.x = 10;
+    hero4.y = ROWS - 3;
+    hero4.dir = LEFT;
+    hero4.nextDir = LEFT;
+    hero4.mouthAngle = 45;
+    hero4.mouthOpening = false;
+    hero4.alive = (hero4.clientId != -1);
+    hero4.respawnTicks = 0;
+
+    board[currentSectorY][currentSectorX][ROWS - 3][9] = 0;
+    board[currentSectorY][currentSectorX][ROWS - 3][10] = 0;
+
     levelComplete = false;
     gameOver = false;
     isTransitioning = false;
@@ -229,39 +273,49 @@ void MainWindow::initLevel()
 
     // 5. Spawn Ghosts across sectors dynamically based on level
     ghosts.clear();
-    // Always 2 ghosts in starting window
-    ghosts.push_back({currentSectorX, currentSectorY, 10, 9, UP, 0});     // Blinky (Red)
-    ghosts.push_back({currentSectorX, currentSectorY, 9, 10, LEFT, 1});   // Pinky (Pink)
+    ghosts.push_back({currentSectorX, currentSectorY, 10, 9, UP, 0, -1, ""});     // Blinky (Red)
+    ghosts.push_back({currentSectorX, currentSectorY, 9, 10, LEFT, 1, -1, ""});   // Pinky (Pink)
 
-    // 1 ghost guarding the Exit window
     if (exitSectorX != currentSectorX || exitSectorY != currentSectorY) {
-        ghosts.push_back({exitSectorX, exitSectorY, 10, 10, RIGHT, 2}); // Inky (Cyan)
+        ghosts.push_back({exitSectorX, exitSectorY, 10, 10, RIGHT, 2, -1, ""}); // Inky (Cyan)
     }
 
-    // Ghost count scales progressively across stages (up to 12 ghosts!)
     int targetGhostCount = std::clamp(2 + currentLevel / 2, 2, 12);
-    int colorCycle = 3; // Clyde (Orange = 3)
+    int colorCycle = 3;
 
-    // Spread roaming ghosts evenly across other sectors
     for (int sy = 0; sy < sectorRows && (int)ghosts.size() < targetGhostCount; ++sy) {
         for (int sx = 0; sx < sectorCols && (int)ghosts.size() < targetGhostCount; ++sx) {
             if (sx == currentSectorX && sy == currentSectorY) continue;
             if (sx == exitSectorX && sy == exitSectorY && currentLevel < 6) continue;
 
             Direction initDir = static_cast<Direction>(colorCycle % 4);
-            ghosts.push_back({sx, sy, 10, 10, initDir, colorCycle % 4});
+            ghosts.push_back({sx, sy, 10, 10, initDir, colorCycle % 4, -1, ""});
             colorCycle++;
         }
     }
 
-    // If still have ghost slots, add sentries in sectors
     while ((int)ghosts.size() < targetGhostCount) {
         int randSx = QRandomGenerator::global()->bounded(sectorCols);
         int randSy = QRandomGenerator::global()->bounded(sectorRows);
         int gx = 9 + QRandomGenerator::global()->bounded(3);
         int gy = 9 + QRandomGenerator::global()->bounded(3);
-        ghosts.push_back({randSx, randSy, gx, gy, UP, colorCycle % 4});
+        ghosts.push_back({randSx, randSy, gx, gy, UP, colorCycle % 4, -1, ""});
         colorCycle++;
+    }
+
+    // Re-link human controlled ghosts if clients are already joined
+    if (gameServer) {
+        for (ConnectedClient *c : gameServer->getActiveClients()) {
+            if (c->role == "blinky" && ghosts.size() > 0) {
+                ghosts[0].clientId = c->id; ghosts[0].playerName = c->playerName;
+            } else if (c->role == "pinky" && ghosts.size() > 1) {
+                ghosts[1].clientId = c->id; ghosts[1].playerName = c->playerName;
+            } else if (c->role == "inky" && ghosts.size() > 2) {
+                ghosts[2].clientId = c->id; ghosts[2].playerName = c->playerName;
+            } else if (c->role == "clyde" && ghosts.size() > 3) {
+                ghosts[3].clientId = c->id; ghosts[3].playerName = c->playerName;
+            }
+        }
     }
 
     ghostsFrightened = false;
@@ -303,7 +357,7 @@ void MainWindow::gameLoop()
         return;
     }
 
-    // Check 1.5-second fog peek timer
+    // Check 1.0-second fog peek timer
     if (fogPeekActive) {
         if (fogPeekTimer.elapsed() >= FOG_PEEK_DURATION_MS) {
             fogOfWarEnabled = true;
@@ -318,14 +372,13 @@ void MainWindow::gameLoop()
         }
     }
 
-    // Multiplayer respawn timer
+    // Multiplayer heroes respawn timer
     if (isMultiplayer) {
         if (!p1Alive && p1RespawnTicks > 0) {
             p1RespawnTicks--;
             if (p1RespawnTicks == 0) {
                 p1Alive = true;
-                pacmanX = p2X;
-                pacmanY = p2Y;
+                pacmanX = p2X; pacmanY = p2Y;
                 updateFogOfWar();
             }
         }
@@ -333,11 +386,34 @@ void MainWindow::gameLoop()
             p2RespawnTicks--;
             if (p2RespawnTicks == 0) {
                 p2Alive = true;
-                p2X = pacmanX;
-                p2Y = pacmanY;
+                p2X = pacmanX; p2Y = pacmanY;
                 updateFogOfWar();
             }
         }
+    }
+    if (hero3.clientId != -1 && !hero3.alive && hero3.respawnTicks > 0) {
+        hero3.respawnTicks--;
+        if (hero3.respawnTicks == 0) {
+            hero3.alive = true;
+            hero3.x = pacmanX; hero3.y = pacmanY;
+            updateFogOfWar();
+        }
+    }
+    if (hero4.clientId != -1 && !hero4.alive && hero4.respawnTicks > 0) {
+        hero4.respawnTicks--;
+        if (hero4.respawnTicks == 0) {
+            hero4.alive = true;
+            hero4.x = pacmanX; hero4.y = pacmanY;
+            updateFogOfWar();
+        }
+    }
+
+    // Move extra heroes if active
+    if (hero3.clientId != -1 && hero3.alive) {
+        moveHero(hero3, 3);
+    }
+    if (hero4.clientId != -1 && hero4.alive) {
+        moveHero(hero4, 4);
     }
 
     ghostTickCounter++;
@@ -363,9 +439,167 @@ void MainWindow::gameLoop()
         }
     }
 
+    broadcastCurrentGameState();
     update();
 }
 
+void MainWindow::broadcastCurrentGameState()
+{
+    if (!gameServer || !gameServer->isRunning()) return;
+
+    static int broadcastCounter = 0;
+    broadcastCounter++;
+    if (broadcastCounter % 3 != 0 && !levelComplete && !gameOver) return;
+
+    QJsonObject state;
+    state["type"] = "gameState";
+    state["level"] = currentLevel;
+    state["world"] = (currentLevel - 1) / LEVELS_PER_WORLD + 1;
+    state["stage"] = (currentLevel - 1) % LEVELS_PER_WORLD + 1;
+    state["score"] = score;
+    state["frightened"] = ghostsFrightened;
+    state["fogPeeks"] = fogPeeksRemaining;
+    state["p1Alive"] = p1Alive;
+    state["p2Alive"] = p2Alive;
+    state["hero3Alive"] = hero3.alive;
+    state["hero4Alive"] = hero4.alive;
+    state["gameOver"] = gameOver;
+    state["levelComplete"] = levelComplete;
+
+    gameServer->broadcastGameState(state);
+}
+
+void MainWindow::onPlayerJoined(int clientId, const QString &role, const QString &name)
+{
+    if (role == "p2") {
+        isMultiplayer = true;
+        p2ClientId = clientId;
+        p2PlayerName = name;
+        p2Alive = true;
+        p2X = pacmanX;
+        p2Y = pacmanY;
+        peekToastMessage = QString("🎀 %1 joined as Ms. Pac-Man!").arg(name);
+        peekToastTimer.start();
+    } else if (role == "p3") {
+        hero3.clientId = clientId;
+        hero3.playerName = name;
+        hero3.alive = true;
+        hero3.x = pacmanX;
+        hero3.y = pacmanY;
+        peekToastMessage = QString("🧢 %1 joined as Jr. Pac-Man!").arg(name);
+        peekToastTimer.start();
+    } else if (role == "p4") {
+        hero4.clientId = clientId;
+        hero4.playerName = name;
+        hero4.alive = true;
+        hero4.x = pacmanX;
+        hero4.y = pacmanY;
+        peekToastMessage = QString("🟢 %1 joined as Miracle Pac-Man!").arg(name);
+        peekToastTimer.start();
+    } else if (role == "blinky") {
+        if (!ghosts.isEmpty()) {
+            ghosts[0].clientId = clientId;
+            ghosts[0].playerName = name;
+        }
+        peekToastMessage = QString("🔴 %1 joined as Blinky!").arg(name);
+        peekToastTimer.start();
+    } else if (role == "pinky") {
+        if (ghosts.size() > 1) {
+            ghosts[1].clientId = clientId;
+            ghosts[1].playerName = name;
+        }
+        peekToastMessage = QString("🌸 %1 joined as Pinky!").arg(name);
+        peekToastTimer.start();
+    } else if (role == "inky") {
+        if (ghosts.size() > 2) {
+            ghosts[2].clientId = clientId;
+            ghosts[2].playerName = name;
+        }
+        peekToastMessage = QString("🩵 %1 joined as Inky!").arg(name);
+        peekToastTimer.start();
+    } else if (role == "clyde") {
+        if (ghosts.size() > 3) {
+            ghosts[3].clientId = clientId;
+            ghosts[3].playerName = name;
+        }
+        peekToastMessage = QString("🟠 %1 joined as Clyde!").arg(name);
+        peekToastTimer.start();
+    }
+    updateFogOfWar();
+    update();
+}
+
+void MainWindow::onPlayerLeft(int clientId, const QString &role, const QString &name)
+{
+    if (role == "p2" && p2ClientId == clientId) {
+        p2ClientId = -1;
+        p2PlayerName.clear();
+        peekToastMessage = QString("👋 %1 left (Ms. Pac-Man)").arg(name);
+        peekToastTimer.start();
+    } else if (role == "p3" && hero3.clientId == clientId) {
+        hero3.clientId = -1;
+        hero3.playerName.clear();
+        hero3.alive = false;
+        peekToastMessage = QString("👋 %1 left (Jr. Pac-Man)").arg(name);
+        peekToastTimer.start();
+    } else if (role == "p4" && hero4.clientId == clientId) {
+        hero4.clientId = -1;
+        hero4.playerName.clear();
+        hero4.alive = false;
+        peekToastMessage = QString("👋 %1 left (Miracle Pac-Man)").arg(name);
+        peekToastTimer.start();
+    } else {
+        for (Ghost &g : ghosts) {
+            if (g.clientId == clientId) {
+                g.clientId = -1;
+                g.playerName.clear();
+                peekToastMessage = QString("👋 %1 left (Ghost returned to AI)").arg(name);
+                peekToastTimer.start();
+                break;
+            }
+        }
+    }
+    update();
+}
+
+void MainWindow::onPlayerMoved(int clientId, const QString &role, int dirInt)
+{
+    Direction d = STOP;
+    if (dirInt == 0) d = UP;
+    else if (dirInt == 1) d = DOWN;
+    else if (dirInt == 2) d = LEFT;
+    else if (dirInt == 3) d = RIGHT;
+
+    if (role == "p2" && p2ClientId == clientId) {
+        p2NextDir = d;
+    } else if (role == "p3" && hero3.clientId == clientId) {
+        hero3.nextDir = d;
+    } else if (role == "p4" && hero4.clientId == clientId) {
+        hero4.nextDir = d;
+    } else if (role == "blinky" && !ghosts.isEmpty() && ghosts[0].clientId == clientId) {
+        ghosts[0].dir = d;
+    } else if (role == "pinky" && ghosts.size() > 1 && ghosts[1].clientId == clientId) {
+        ghosts[1].dir = d;
+    } else if (role == "inky" && ghosts.size() > 2 && ghosts[2].clientId == clientId) {
+        ghosts[2].dir = d;
+    } else if (role == "clyde" && ghosts.size() > 3 && ghosts[3].clientId == clientId) {
+        ghosts[3].dir = d;
+    }
+}
+
+void MainWindow::onPlayerPeek(int clientId)
+{
+    Q_UNUSED(clientId);
+    if (fogPeeksRemaining > 0 && !fogPeekActive) {
+        fogPeeksRemaining--;
+        fogOfWarEnabled = false;
+        fogPeekActive = true;
+        fogPeekTimer.start();
+        peekToastMessage = QString("👁️ FOG PEEK TRIGGERED BY TEAM! (Charges: %1 left)").arg(fogPeeksRemaining);
+        peekToastTimer.start();
+        update();
+    }
+}
 
 void MainWindow::paintEvent(QPaintEvent *)
 {

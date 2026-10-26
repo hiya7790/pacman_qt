@@ -866,4 +866,12 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.setFont(QFont("Arial", std::max(8, btnRect.height() / 4)));
     painter.setPen(QColor(230, 215, 245));
     painter.drawText(0, btnRect.bottom() + 3, w, 16, Qt::AlignCenter, subText);
+
+    // Top-Right Multiplayer Badge
+    drawMultiplayerBadge(painter);
+
+    // Classroom Multiplayer Lobby Overlay
+    if (showMultiplayerLobby) {
+        drawMultiplayerLobby(painter);
+    }
 }

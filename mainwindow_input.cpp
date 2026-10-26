@@ -25,6 +25,21 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
+    // Toggle Multiplayer Classroom Lobby with [H]
+    if (event->key() == Qt::Key_H) {
+        showMultiplayerLobby = !showMultiplayerLobby;
+        update();
+        return;
+    }
+
+    if (showMultiplayerLobby) {
+        if (event->key() == Qt::Key_Escape) {
+            showMultiplayerLobby = false;
+            update();
+            return;
+        }
+    }
+
     // Home Map Key Handling
     if (currentScreen == SCREEN_HOME_MAP) {
         if (event->key() == Qt::Key_Space || event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
@@ -289,6 +304,18 @@ void MainWindow::wheelEvent(QWheelEvent *event)
 
 void MainWindow::mousePressEvent(QMouseEvent *event)
 {
+    if (showMultiplayerLobby) {
+        showMultiplayerLobby = false;
+        update();
+        return;
+    }
+
+    if (getMultiplayerButtonRect().contains(event->pos())) {
+        showMultiplayerLobby = !showMultiplayerLobby;
+        update();
+        return;
+    }
+
     if (currentScreen == SCREEN_HOME_MAP) {
         QPoint pos = event->pos();
 

@@ -61,6 +61,24 @@ An innovative, feature-packed C++ game built with **Qt 6**, blending classic **P
 
 ---
 
+### 🌐 6. Embedded Classroom Multiplayer Server (Direct Link Web Controller)
+- **Zero-Install Link Sharing:** The C++ Qt application embeds its own lightweight HTTP & RFC 6455 WebSocket server (`QTcpServer` + `QtNetwork`). No external tools required!
+- **Classroom Demo Lobby:** Press **`[H]`** or click **`[ 🌐 HOST ROOM ]`** anytime on the map or in-game to show the join URL (e.g., `http://192.168.1.17:8080`) on the projector screen.
+- **Mode A: 4-Player Pac-Family Co-op:**
+  - 🟡 **Player 1 (Host on Projector):** Classic Yellow Pac-Man
+  - 🎀 **Player 2 (Phone/Laptop):** Pink Ms. Pac-Man (Red Ribbon Bow & Eyelashes)
+  - 🧢 **Player 3 (Phone/Laptop):** Cyan Jr. Pac-Man (Propeller Beanie Cap)
+  - 🟢 **Player 4 (Phone/Laptop):** Emerald Green Miracle Pac-Man
+  - *All 4 heroes cast simultaneous lantern circles in the Fog of War to illuminate the labyrinth together!*
+- **Mode B: Playable Ghost Hunters (Pac-Man vs. Classmates):**
+  - Classmates join from their phones and take control of **Blinky 🔴, Pinky 🌸, Inky 🩵, and Clyde 🟠** to hunt Pac-Man!
+  - Above each human-controlled ghost, their real name tag (e.g. `[Arjun]`) floats on the big screen.
+  - When Pac-Man eats a power fruit, ghosts turn dark blue (Frightened Mode) and classmates must scramble away!
+  - Any ghost not controlled by a human seamlessly falls back to the smart AI.
+- **Mobile Touch Controller:** Instant touch D-Pad, swipe gestures, haptic rumble feedback, Fog Peek action button, and live status updates on mobile Safari & Chrome.
+
+---
+
 ## 🎮 Controls
 
 ### Home Map Controls
@@ -72,6 +90,7 @@ An innovative, feature-packed C++ game built with **Qt 6**, blending classic **P
 | **Jump to Level 1 / Base** | `Home` |
 | **Jump to Current Hero / Summit** | `End` or click **`[ 📍 MY HERO ]`** |
 | **Toggle Game Mode (Yellow / Pink / Co-op)** | `Tab`, `1`, `2`, `3`, or click the Mode buttons |
+| **Classroom Multiplayer Lobby / Link** | `H` or click top-right **`[ 🌐 HOST ROOM ]`** |
 
 ### In-Game Playing Controls
 | Action | Key / Mouse |
@@ -80,6 +99,7 @@ An innovative, feature-packed C++ game built with **Qt 6**, blending classic **P
 | **Player 2 Movement (Co-op)** | `WASD` (or `Arrow Keys` when swapped) |
 | **Swap Arrow Control (Co-op)** | `Tab` or click directly on Pac-Man / Ms. Pac-Man |
 | **Fog Peek (1.0s glimpse)** | `F` (3 charges per level; eat fruits for +1) |
+| **Classroom Multiplayer Lobby / Link** | `H` or click top-right **`[ 🌐 HOST ROOM ]`** |
 | **Return to Saga Map** | `M` key or click the top-left **[ 🗺️ SAGA MAP ]** button |
 | **Retry Current Stage (on Game Over)** | `R` or `Space` |
 | **Toggle Fullscreen Mode** | `F11` (or `Esc` to exit fullscreen) |
@@ -131,6 +151,8 @@ pacman_qt/
 ├── mainwindow_render_game.cpp # In-game labyrinth renderer, minimap radar, HUD & overlays
 ├── mainwindow_map.cpp         # Serpentine Candy Crush Saga world map, avatars & gateways
 ├── mainwindow_input.cpp       # Keyboard controls, mouse dragging, scrolling & click events
+├── gameserver.h               # Embedded HTTP & RFC 6455 WebSocket multiplayer server header
+├── gameserver.cpp             # Zero-dependency web server & mobile controller HTML5 generator
 ├── mazesolver.h               # Maze pathfinding & BFS exploration utilities
 └── README.md                  # Project documentation & gameplay guide
 ```
