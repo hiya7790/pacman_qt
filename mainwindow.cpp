@@ -244,16 +244,13 @@ void MainWindow::initLevel()
     p1RespawnTicks = 0;
 
     // Player 2 (Ms. Pac-Man)
-    if (p2ClientId >= 0 || hero3.clientId != -1 || hero4.clientId != -1) {
-        isMultiplayer = true;
-    }
     p2X = 9;
     p2Y = ROWS - 2;
     p2Dir = RIGHT;
     p2NextDir = RIGHT;
     p2MouthAngle = 45;
     p2MouthOpening = false;
-    p2Alive = (isMultiplayer || p2ClientId >= 0);
+    p2Alive = isP2Active();
     p2RespawnTicks = 0;
 
     // Extra Heroes (Jr. Pac-Man & Miracle Pac-Man)
@@ -398,30 +395,28 @@ void MainWindow::gameLoop()
         }
     }
 
-    // Multiplayer heroes respawn timer
-    if (isMultiplayer) {
-        if (!p1Alive && p1RespawnTicks > 0) {
-            p1RespawnTicks--;
-            if (p1RespawnTicks == 0) {
-                p1Alive = true;
-                pacmanX = p2X; pacmanY = p2Y;
-                updateFogOfWar();
-            }
+    // Heroes respawn timers
+    if (!p1Alive && p1RespawnTicks > 0) {
+        p1RespawnTicks--;
+        if (p1RespawnTicks == 0) {
+            p1Alive = true;
+            pacmanX = 10; pacmanY = ROWS - 2;
+            updateFogOfWar();
         }
-        if (!p2Alive && p2RespawnTicks > 0) {
-            p2RespawnTicks--;
-            if (p2RespawnTicks == 0) {
-                p2Alive = true;
-                p2X = pacmanX; p2Y = pacmanY;
-                updateFogOfWar();
-            }
+    }
+    if (isP2Active() && !p2Alive && p2RespawnTicks > 0) {
+        p2RespawnTicks--;
+        if (p2RespawnTicks == 0) {
+            p2Alive = true;
+            p2X = 9; p2Y = ROWS - 2;
+            updateFogOfWar();
         }
     }
     if (hero3.clientId != -1 && !hero3.alive && hero3.respawnTicks > 0) {
         hero3.respawnTicks--;
         if (hero3.respawnTicks == 0) {
             hero3.alive = true;
-            hero3.x = pacmanX; hero3.y = pacmanY;
+            hero3.x = 9; hero3.y = ROWS - 3;
             updateFogOfWar();
         }
     }
@@ -429,7 +424,7 @@ void MainWindow::gameLoop()
         hero4.respawnTicks--;
         if (hero4.respawnTicks == 0) {
             hero4.alive = true;
-            hero4.x = pacmanX; hero4.y = pacmanY;
+            hero4.x = 10; hero4.y = ROWS - 3;
             updateFogOfWar();
         }
     }
@@ -507,24 +502,28 @@ void MainWindow::broadcastCurrentGameState()
         QJsonObject h1;
         h1["x"] = pacmanX; h1["y"] = pacmanY; h1["dir"] = (int)pacmanDir;
         h1["mouth"] = pacmanMouthAngle; h1["alive"] = p1Alive; h1["score"] = scoreP1; h1["active"] = true;
+        h1["respawnTicks"] = p1RespawnTicks;
         state["p1"] = h1;
 
         QJsonObject h2;
         h2["x"] = p2X; h2["y"] = p2Y; h2["dir"] = (int)p2Dir;
-        h2["mouth"] = p2MouthAngle; h2["alive"] = p2Alive; h2["score"] = scoreP2;
-        h2["name"] = p2PlayerName; h2["active"] = (isMultiplayer || p2ClientId >= 0);
+        h2["mouth"] = p2MouthAngle; h2["alive"] = (isP2Active() && p2Alive); h2["score"] = scoreP2;
+        h2["name"] = p2PlayerName; h2["active"] = isP2Active();
+        h2["respawnTicks"] = p2RespawnTicks;
         state["p2"] = h2;
 
         QJsonObject h3;
         h3["x"] = hero3.x; h3["y"] = hero3.y; h3["dir"] = (int)hero3.dir;
         h3["mouth"] = hero3.mouthAngle; h3["alive"] = hero3.alive; h3["score"] = hero3.score;
         h3["name"] = hero3.playerName; h3["active"] = (hero3.clientId != -1);
+        h3["respawnTicks"] = hero3.respawnTicks;
         state["p3"] = h3;
 
         QJsonObject h4;
         h4["x"] = hero4.x; h4["y"] = hero4.y; h4["dir"] = (int)hero4.dir;
         h4["mouth"] = hero4.mouthAngle; h4["alive"] = hero4.alive; h4["score"] = hero4.score;
         h4["name"] = hero4.playerName; h4["active"] = (hero4.clientId != -1);
+        h4["respawnTicks"] = hero4.respawnTicks;
         state["p4"] = h4;
 
         // Exit portal
@@ -568,28 +567,30 @@ void MainWindow::broadcastCurrentGameState()
 void MainWindow::onPlayerJoined(int clientId, const QString &role, const QString &name)
 {
     if (role == "p2") {
-        isMultiplayer = true;
         p2ClientId = clientId;
         p2PlayerName = name;
         p2Alive = true;
-        p2X = pacmanX;
-        p2Y = pacmanY;
+        p2RespawnTicks = 0;
+        p2X = 9;
+        p2Y = ROWS - 2;
         peekToastMessage = QString("🎀 %1 joined as Ms. Pac-Man!").arg(name);
         peekToastTimer.start();
     } else if (role == "p3") {
         hero3.clientId = clientId;
         hero3.playerName = name;
         hero3.alive = true;
-        hero3.x = pacmanX;
-        hero3.y = pacmanY;
+        hero3.respawnTicks = 0;
+        hero3.x = 9;
+        hero3.y = ROWS - 3;
         peekToastMessage = QString("🧢 %1 joined as Jr. Pac-Man!").arg(name);
         peekToastTimer.start();
     } else if (role == "p4") {
         hero4.clientId = clientId;
         hero4.playerName = name;
         hero4.alive = true;
-        hero4.x = pacmanX;
-        hero4.y = pacmanY;
+        hero4.respawnTicks = 0;
+        hero4.x = 10;
+        hero4.y = ROWS - 3;
         peekToastMessage = QString("🟢 %1 joined as Miracle Pac-Man!").arg(name);
         peekToastTimer.start();
     } else if (role == "blinky") {
@@ -631,6 +632,7 @@ void MainWindow::onPlayerLeft(int clientId, const QString &role, const QString &
     if (role == "p2" && p2ClientId == clientId) {
         p2ClientId = -1;
         p2PlayerName.clear();
+        p2Alive = isMultiplayer; // only keep alive if host is in local co-op
         peekToastMessage = QString("👋 %1 left (Ms. Pac-Man)").arg(name);
         peekToastTimer.start();
     } else if (role == "p3" && hero3.clientId == clientId) {

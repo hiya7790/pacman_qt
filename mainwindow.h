@@ -186,6 +186,8 @@ private:
     QString p2PlayerName;
     ExtraHero hero3; // Jr. Pac-Man (Cyan)
     ExtraHero hero4; // Miracle Pac-Man (Green)
+    bool isP2Active() const { return (p2ClientId >= 0) || (isMultiplayer && p2ClientId == -1); }
+    bool isAnyMultiplayer() const { return isMultiplayer || (p2ClientId >= 0) || (hero3.clientId != -1) || (hero4.clientId != -1); }
 
     static constexpr int ROWS = 21;
     static constexpr int COLS = 21;

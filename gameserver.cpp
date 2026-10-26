@@ -1459,25 +1459,28 @@ QByteArray GameServer::getControllerHtml() const
   // Draw ONLY active players who have actually joined!
   function drawHeroes(state) {
     // P1 (Host - Yellow Pac-Man)
-    if (state.p1 && state.p1.alive) {
+    if (state.p1 && (state.p1.alive || (state.p1.respawnTicks > 0 && Math.floor(animTick / 4) % 2 === 0))) {
       drawPacHero(state.p1, "#ffe600", "p1", false, false, false, "P1 (Host)");
     }
     // P2 (Ms. Pac-Man) - only if active!
-    if (state.p2 && state.p2.alive && state.p2.active) {
+    if (state.p2 && state.p2.active && (state.p2.alive || (state.p2.respawnTicks > 0 && Math.floor(animTick / 4) % 2 === 0))) {
       drawPacHero(state.p2, "#ff69b4", "p2", true, false, false, state.p2.name || "Ms. Pac");
     }
     // P3 (Jr. Pac-Man) - only if active!
-    if (state.p3 && state.p3.alive && state.p3.active) {
+    if (state.p3 && state.p3.active && (state.p3.alive || (state.p3.respawnTicks > 0 && Math.floor(animTick / 4) % 2 === 0))) {
       drawPacHero(state.p3, "#00e5ff", "p3", false, true, false, state.p3.name || "Jr. Pac");
     }
     // P4 (Miracle Pac-Man) - only if active!
-    if (state.p4 && state.p4.alive && state.p4.active) {
+    if (state.p4 && state.p4.active && (state.p4.alive || (state.p4.respawnTicks > 0 && Math.floor(animTick / 4) % 2 === 0))) {
       drawPacHero(state.p4, "#00ff66", "p4", false, false, true, state.p4.name || "Miracle");
     }
   }
 
   function drawPacHero(h, color, roleKey, bow, cap, headband, defaultTag) {
-    if (!h || !h.alive) return;
+    if (!h) return;
+    const isRespawning = (!h.alive && h.respawnTicks > 0);
+    if (!h.alive && !isRespawning) return;
+
     const hx = h.x * C_SIZE + 15;
     const hy = h.y * C_SIZE + 15;
     const dir = h.dir; // 0=UP, 1=DOWN, 2=LEFT, 3=RIGHT
@@ -1492,6 +1495,9 @@ QByteArray GameServer::getControllerHtml() const
     const mouthRad = (mouthDeg * Math.PI) / 180;
 
     ctx.save();
+    if (isRespawning) {
+      ctx.globalAlpha = 0.55;
+    }
     ctx.translate(hx, hy);
     ctx.rotate(angle);
 
@@ -1505,6 +1511,10 @@ QByteArray GameServer::getControllerHtml() const
     ctx.restore();
 
     // Accessories
+    ctx.save();
+    if (isRespawning) {
+      ctx.globalAlpha = 0.55;
+    }
     if (bow) {
       ctx.fillStyle = "#ff1744";
       ctx.beginPath();
@@ -1528,12 +1538,17 @@ QByteArray GameServer::getControllerHtml() const
       ctx.fillStyle = "#00a833";
       ctx.fillRect(hx - 9, hy - 6, 18, 3);
     }
+    ctx.restore();
 
     // Role Indicator Tag
     const isMe = (currentRole === roleKey);
     ctx.font = "bold 11px sans-serif";
     ctx.textAlign = "center";
-    if (isMe) {
+    if (isRespawning) {
+      ctx.fillStyle = "#ffb300";
+      const sLeft = Math.ceil((h.respawnTicks || 30) * 0.13);
+      ctx.fillText("⏳ RESPAWN (" + sLeft + "s)", hx, hy - 15);
+    } else if (isMe) {
       ctx.fillStyle = "#00f0ff";
       ctx.fillText("▼ YOU", hx, hy - 15);
     } else {
@@ -1633,10 +1648,10 @@ QByteArray GameServer::getControllerHtml() const
     // Carve out illuminated spotlights for alive & active heroes using destination-out
     fogCtx.globalCompositeOperation = 'destination-out';
     const heroes = [];
-    if (state.p1 && state.p1.alive) heroes.push(state.p1);
-    if (state.p2 && state.p2.alive && state.p2.active) heroes.push(state.p2);
-    if (state.p3 && state.p3.alive && state.p3.active) heroes.push(state.p3);
-    if (state.p4 && state.p4.alive && state.p4.active) heroes.push(state.p4);
+    if (state.p1 && (state.p1.alive || state.p1.respawnTicks > 0)) heroes.push(state.p1);
+    if (state.p2 && state.p2.active && (state.p2.alive || state.p2.respawnTicks > 0)) heroes.push(state.p2);
+    if (state.p3 && state.p3.active && (state.p3.alive || state.p3.respawnTicks > 0)) heroes.push(state.p3);
+    if (state.p4 && state.p4.active && (state.p4.alive || state.p4.respawnTicks > 0)) heroes.push(state.p4);
 
     const rPx = (state.radius || 3.5) * C_SIZE;
 

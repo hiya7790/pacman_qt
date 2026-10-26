@@ -167,7 +167,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         int px = originX + pacmanX * cellSize;
         int py = originY + pacmanY * cellSize;
 
-        bool isPinkSolo = (!isMultiplayer && p2ClientId < 0 && singlePlayerHero == 2);
+        bool isPinkSolo = (!isAnyMultiplayer() && singlePlayerHero == 2);
 
         if (isPinkSolo) {
             // Drawn as Pink Ms. Pacman in solo mode
@@ -203,7 +203,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
         // Active control indicator badge
         painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
-        if (isMultiplayer) {
+        if (isAnyMultiplayer()) {
             if (arrowPlayer == 1) {
                 painter.setPen(QColor(255, 240, 0));
                 painter.drawText(px - 10, py - 4, cellSize + 20, cellSize / 2, Qt::AlignCenter, "P1 [ARROWS]");
@@ -214,8 +214,8 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         }
     }
 
-    // Draw Player 2 (Ms. Pacman - Pink with bow) (if multiplayer and in this sector)
-    if ((isMultiplayer || p2ClientId >= 0) && isCurrent && (p2Alive || (p2RespawnTicks > 0 && p2RespawnTicks % 4 < 2))) {
+    // Draw Player 2 (Ms. Pacman - Pink with bow) (if active and in this sector)
+    if (isP2Active() && isCurrent && (p2Alive || (p2RespawnTicks > 0 && p2RespawnTicks % 4 < 2))) {
         int px = originX + p2X * cellSize;
         int py = originY + p2Y * cellSize;
 
@@ -407,7 +407,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         if (p1Alive) {
             carveLight(pacmanX, pacmanY, currentVisionRadius);
         }
-        if ((isMultiplayer || p2ClientId >= 0) && p2Alive) {
+        if (isP2Active() && p2Alive) {
             carveLight(p2X, p2Y, currentVisionRadius);
         }
         if (hero3.clientId != -1 && hero3.alive) {
@@ -822,7 +822,7 @@ void MainWindow::drawGameScreen(QPainter &painter)
     painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
     int worldNum = (currentLevel - 1) / LEVELS_PER_WORLD + 1;
     int stageNum = (currentLevel - 1) % LEVELS_PER_WORLD + 1;
-    if (!isMultiplayer) {
+    if (!isAnyMultiplayer()) {
         painter.setPen(Qt::white);
         painter.drawText(20, hudY + 20, QString("SCORE: %1").arg(score));
 
@@ -846,18 +846,37 @@ void MainWindow::drawGameScreen(QPainter &painter)
                                 : QString("P1: RESPAWN (%1s)").arg((p1RespawnTicks * 130 + 999) / 1000);
         painter.drawText(20, hudY + 20, p1Str);
 
-        // P2 Status (Pink)
-        painter.setPen(p2Alive ? QColor(255, 120, 190) : QColor(160, 80, 120));
-        QString p2Str = p2Alive ? QString("P2 (🎀): %1").arg(scoreP2)
-                                : QString("P2: RESPAWN (%1s)").arg((p2RespawnTicks * 130 + 999) / 1000);
-        painter.drawText(width() * 0.18, hudY + 20, p2Str);
+        int hudColX = int(width() * 0.15);
+        if (isP2Active()) {
+            painter.setPen(p2Alive ? QColor(255, 120, 190) : QColor(160, 80, 120));
+            QString p2Str = p2Alive ? QString("P2 (🎀): %1").arg(scoreP2)
+                                    : QString("P2: RESPAWN (%1s)").arg((p2RespawnTicks * 130 + 999) / 1000);
+            painter.drawText(hudColX, hudY + 20, p2Str);
+            hudColX += int(width() * 0.11);
+        }
+
+        if (hero3.clientId != -1) {
+            painter.setPen(hero3.alive ? QColor(0, 229, 255) : QColor(80, 160, 180));
+            QString p3Str = hero3.alive ? QString("P3 (🧢): %1").arg(hero3.score)
+                                        : QString("P3: RESPAWN (%1s)").arg((hero3.respawnTicks * 130 + 999) / 1000);
+            painter.drawText(hudColX, hudY + 20, p3Str);
+            hudColX += int(width() * 0.11);
+        }
+
+        if (hero4.clientId != -1) {
+            painter.setPen(hero4.alive ? QColor(0, 255, 100) : QColor(80, 180, 100));
+            QString p4Str = hero4.alive ? QString("P4 (🟢): %1").arg(hero4.score)
+                                        : QString("P4: RESPAWN (%1s)").arg((hero4.respawnTicks * 130 + 999) / 1000);
+            painter.drawText(hudColX, hudY + 20, p4Str);
+            hudColX += int(width() * 0.11);
+        }
 
         // Team Total Score
         painter.setPen(Qt::white);
-        painter.drawText(width() * 0.36, hudY + 20, QString("TEAM: %1").arg(score));
+        painter.drawText(hudColX, hudY + 20, QString("TEAM: %1").arg(score));
 
         painter.setPen(QColor(0, 230, 160));
-        painter.drawText(width() * 0.48, hudY + 20, QString("W%1-S%2 (LVL %3)").arg(worldNum).arg(stageNum).arg(currentLevel));
+        painter.drawText(width() * 0.49, hudY + 20, QString("W%1-S%2 (LVL %3)").arg(worldNum).arg(stageNum).arg(currentLevel));
 
         painter.setPen(QColor(0, 210, 255));
         painter.drawText(width() * 0.58, hudY + 20,
@@ -948,7 +967,7 @@ void MainWindow::drawGameScreen(QPainter &painter)
     // Line 3: Controls (hudY + 62)
     painter.setFont(QFont("Arial", baseFont2));
     painter.setPen(QColor(140, 160, 190));
-    if (!isMultiplayer) {
+    if (!isAnyMultiplayer()) {
         if (singlePlayerHero == 2) {
             painter.drawText(20, hudY + 62,
                 "HERO: [🎀 Pink Ms. Pacman]  |  [Arrows] or [WASD] Move  |  [Tab] Switch to Yellow  |  [F] Fog Peek (1.0s, 3x/lvl + Fruits)  |  [M] Saga Map  |  [F11] Fullscreen");
@@ -971,8 +990,8 @@ void MainWindow::drawGameScreen(QPainter &painter)
         painter.fillRect(0, height() / 2 - 45, width(), 95, QColor(0, 0, 0, 235));
         painter.setPen(QColor(255, 60, 60));
         painter.setFont(QFont("Arial", std::max(18, width() / 50), QFont::Bold));
-        QString goMsg = isMultiplayer
-            ? QString("GAME OVER! Both Players Defeated (Stage %1/20 • %2)").arg(curStage).arg(getWorldName(curWorld))
+        QString goMsg = isAnyMultiplayer()
+            ? QString("GAME OVER! Team Defeated (Stage %1/20 • %2)").arg(curStage).arg(getWorldName(curWorld))
             : QString("GAME OVER! (Stage %1/20 • %2)").arg(curStage).arg(getWorldName(curWorld));
         painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter, goMsg);
 
@@ -984,7 +1003,7 @@ void MainWindow::drawGameScreen(QPainter &painter)
         painter.fillRect(0, height() / 2 - 50, width(), 100, QColor(0, 0, 0, 235));
         painter.setPen(QColor(60, 255, 120));
         painter.setFont(QFont("Arial", std::max(16, width() / 55), QFont::Bold));
-        QString levelMsg = isMultiplayer
+        QString levelMsg = isAnyMultiplayer()
             ? QString("STAGE %1/20 COMPLETE!  (%2) • Team Escaped!").arg(curStage).arg(getWorldName(curWorld))
             : QString("STAGE %1/20 COMPLETE!  (%2) • Labyrinth Escaped!").arg(curStage).arg(getWorldName(curWorld));
         painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter, levelMsg);

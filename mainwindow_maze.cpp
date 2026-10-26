@@ -154,7 +154,7 @@ void MainWindow::generateSectorMaze(int sx, int sy)
 void MainWindow::checkLevelExit()
 {
     bool p1Won = p1Alive && (pacmanX == exitX && pacmanY == exitY);
-    bool p2Won = (isMultiplayer || p2ClientId >= 0) && p2Alive && (p2X == exitX && p2Y == exitY);
+    bool p2Won = isP2Active() && p2Alive && (p2X == exitX && p2Y == exitY);
     bool p3Won = (hero3.clientId != -1 && hero3.alive && hero3.x == exitX && hero3.y == exitY);
     bool p4Won = (hero4.clientId != -1 && hero4.alive && hero4.x == exitX && hero4.y == exitY);
 
