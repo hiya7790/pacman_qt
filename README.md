@@ -42,6 +42,7 @@ An innovative, feature-packed C++ game built with **Qt 6**, blending classic **P
 - **Atmospheric Darkness:** Unexplored sectors are cloaked in mystery until illuminated by your hero's lantern.
 - **Dynamic Vision Radius:** Your lantern radius subtly narrows on higher stages, intensifying the thrill of exploration.
 - **Breadcrumb Pathfinding:** Dots eaten along corridors illuminate paths, leaving breadcrumbs to help you navigate back.
+- **Fog Peek Ability (`[F]`):** Need a quick glimpse of the labyrinth? Press `[F]` to temporarily unveil the maze for **1.0 second**. Each level provides **3 peek charges**; eating bonus fruits grants additional charges!
 
 ---
 
@@ -55,7 +56,7 @@ An innovative, feature-packed C++ game built with **Qt 6**, blending classic **P
 
 ### 👻 5. Smart Ghosts & Bonus Fruit Collectibles
 - **Dynamic Ghost Spawning:** Red (Blinky), Pink (Pinky), Cyan (Inky), and Orange (Clyde) roam sectors, scale in speed and count, and patrol gateways.
-- **Bonus Fruit Spawns:** Cherries, Strawberries, Apples, and Oranges spawn periodically for big bonus points.
+- **Bonus Fruit Spawns:** Cherries, Strawberries, Apples, and Oranges spawn periodically for big bonus points and **+1 extra Fog Peek charge** each!
 - **Checkpoint Resumes:** When you lose a round, the game resumes directly from your current stage instead of resetting to Stage 1!
 
 ---
@@ -78,6 +79,7 @@ An innovative, feature-packed C++ game built with **Qt 6**, blending classic **P
 | **Player 1 Movement** | `Arrow Keys` (or `WASD` in single-player) |
 | **Player 2 Movement (Co-op)** | `WASD` (or `Arrow Keys` when swapped) |
 | **Swap Arrow Control (Co-op)** | `Tab` or click directly on Pac-Man / Ms. Pac-Man |
+| **Fog Peek (1.0s glimpse)** | `F` (3 charges per level; eat fruits for +1) |
 | **Return to Saga Map** | `M` key or click the top-left **[ 🗺️ SAGA MAP ]** button |
 | **Retry Current Stage (on Game Over)** | `R` or `Space` |
 | **Toggle Fullscreen Mode** | `F11` (or `Esc` to exit fullscreen) |

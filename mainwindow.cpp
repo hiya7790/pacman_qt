@@ -16,6 +16,7 @@ constexpr int MainWindow::MAX_SECTORS_X;
 constexpr int MainWindow::MAX_SECTORS_Y;
 constexpr double MainWindow::DEFAULT_VISION_RADIUS;
 constexpr int MainWindow::FOG_PEEK_DURATION_MS;
+constexpr int MainWindow::INITIAL_FOG_PEEKS;
 constexpr int MainWindow::TRANSITION_DURATION_MS;
 constexpr int MainWindow::FRIGHTEN_DURATION;
 constexpr int MainWindow::MAX_FRUITS;
@@ -45,6 +46,9 @@ MainWindow::MainWindow(QWidget *parent)
     currentFrightenDuration = FRIGHTEN_DURATION;
     fogOfWarEnabled = true;
     fogPeekActive = false;
+    fogPeeksRemaining = INITIAL_FOG_PEEKS;
+    peekToastMessage.clear();
+    fogPeeksRemaining = INITIAL_FOG_PEEKS;
     isTransitioning = false;
     newSectorJustDiscovered = false;
 
@@ -419,6 +423,8 @@ void MainWindow::initLevel()
 
     fogOfWarEnabled = true;
     fogPeekActive = false;
+    fogPeeksRemaining = INITIAL_FOG_PEEKS;
+    peekToastMessage.clear();
 
     updateFogOfWar();
     elapsedTimer.start();
@@ -598,15 +604,22 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         return;
     }
 
-    // Toggle Fog of War: 1.5-second temporary peek
+    // Fog Peek: 1.0-second temporary glimpse (limited to 3 times per level + extra by eating fruits!)
     if (event->key() == Qt::Key_F) {
-        if (fogOfWarEnabled) {
+        if (fogPeekActive) {
+            // Already peeking
+            return;
+        }
+        if (fogPeeksRemaining > 0) {
+            fogPeeksRemaining--;
             fogOfWarEnabled = false;
             fogPeekActive = true;
             fogPeekTimer.start();
+            peekToastMessage = QString("💡 FOG PEEK ACTIVE! (1.0s) • %1 Left").arg(fogPeeksRemaining);
+            peekToastTimer.start();
         } else {
-            fogOfWarEnabled = true;
-            fogPeekActive = false;
+            peekToastMessage = "⚠️ NO FOG PEEKS LEFT! Eat bonus fruits 🍒 to earn more!";
+            peekToastTimer.start();
         }
         update();
         return;
@@ -1210,6 +1223,11 @@ void MainWindow::checkFruitPickup()
 
                 ghostsFrightened = true;
                 frightenedTicksLeft = currentFrightenDuration;
+
+                // Eating fruit grants +1 Fog Peek Charge!
+                fogPeeksRemaining++;
+                peekToastMessage = QString("🍒 FRUIT EATEN! +1 FOG PEEK EARNED! (Charges: %1 👁️)").arg(fogPeeksRemaining);
+                peekToastTimer.start();
             }
         }
     }
@@ -2090,19 +2108,44 @@ void MainWindow::paintEvent(QPaintEvent *)
     if (fogPeekActive) {
         int msLeft = std::max(0, FOG_PEEK_DURATION_MS - (int)fogPeekTimer.elapsed());
         double secLeft = msLeft / 1000.0;
-        painter.setPen(QColor(255, 215, 0));
-        painter.drawText(width() * 0.77, hudY + 20, QString("[PEEK: %1s ☀️]").arg(secLeft, 0, 'f', 1));
-    } else if (fogOfWarEnabled) {
-        painter.setPen(QColor(120, 220, 255));
-        painter.drawText(width() * 0.77, hudY + 20, "[FOG: ON 🌑 (F)]");
+        painter.setPen(QColor(255, 225, 50));
+        painter.drawText(width() * 0.74, hudY + 20, QString("[PEEKING: %1s 💡 (%2 left)]").arg(secLeft, 0, 'f', 1).arg(fogPeeksRemaining));
+    } else if (fogPeeksRemaining > 0) {
+        painter.setPen(QColor(100, 230, 255));
+        painter.drawText(width() * 0.74, hudY + 20, QString("[PEEK (F): %1 left 👁️]").arg(fogPeeksRemaining));
     } else {
-        painter.setPen(QColor(150, 150, 160));
-        painter.drawText(width() * 0.77, hudY + 20, "[FOG: OFF ☀️]");
+        painter.setPen(QColor(255, 110, 110));
+        painter.drawText(width() * 0.74, hudY + 20, "[PEEK: 0 left 🍒 (Eat Fruit!)]");
     }
 
     if (ghostsFrightened) {
         painter.setPen(QColor(255, 100, 140));
         painter.drawText(width() * 0.89, hudY + 20, QString("⚡ POWER! %1").arg(frightenedTicksLeft));
+    }
+
+    // Floating Notification / Toast Banner (Fog Peek activation, Out of peeks warning, Fruit bonus)
+    if (peekToastTimer.isValid() && peekToastTimer.elapsed() < 2400) {
+        painter.save();
+        int tW = std::clamp(int(width() * 0.46), 340, 520);
+        int tH = 34;
+        int tX = (width() - tW) / 2;
+        int tY = hudY - 44;
+
+        // Shadow
+        painter.setBrush(QColor(0, 0, 0, 160));
+        painter.setPen(Qt::NoPen);
+        painter.drawRoundedRect(tX + 2, tY + 2, tW, tH, 10, 10);
+
+        // Body
+        painter.setBrush(QColor(12, 16, 32, 230));
+        QColor borderCol = (fogPeeksRemaining > 0 ? QColor(80, 240, 140) : QColor(255, 110, 110));
+        painter.setPen(QPen(borderCol, 2));
+        painter.drawRoundedRect(tX, tY, tW, tH, 10, 10);
+
+        painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
+        painter.setPen(borderCol);
+        painter.drawText(tX, tY, tW, tH, Qt::AlignCenter, peekToastMessage);
+        painter.restore();
     }
 
     // Line 2: Prominent Mission Objective Guidance (hudY + 42)
@@ -2131,18 +2174,18 @@ void MainWindow::paintEvent(QPaintEvent *)
     if (!isMultiplayer) {
         if (singlePlayerHero == 2) {
             painter.drawText(20, hudY + 62,
-                "HERO: [🎀 Pink Ms. Pacman]  |  [Arrows] or [WASD] Move  |  [Tab] Switch to Yellow  |  [F] Fog Peek  |  [M] Saga Map  |  [F11] Fullscreen");
+                "HERO: [🎀 Pink Ms. Pacman]  |  [Arrows] or [WASD] Move  |  [Tab] Switch to Yellow  |  [F] Fog Peek (1.0s, 3x/lvl + Fruits)  |  [M] Saga Map  |  [F11] Fullscreen");
         } else {
             painter.drawText(20, hudY + 62,
-                "HERO: [🟡 Yellow Pacman]  |  [Arrows] or [WASD] Move  |  [Tab] Switch to Pink  |  [F] Fog Peek  |  [M] Saga Map  |  [F11] Fullscreen");
+                "HERO: [🟡 Yellow Pacman]  |  [Arrows] or [WASD] Move  |  [Tab] Switch to Pink  |  [F] Fog Peek (1.0s, 3x/lvl + Fruits)  |  [M] Saga Map  |  [F11] Fullscreen");
         }
     } else {
         if (arrowPlayer == 2) {
             painter.drawText(20, hudY + 62,
-                "ARROWS STEER: [🎀 Pink P2]  |  WASD: [🟡 Yellow P1]  |  [Tab] Swap Arrows to Yellow!  |  [F] Fog Peek  |  [M] Saga Map");
+                "ARROWS STEER: [🎀 Pink P2]  |  WASD: [🟡 Yellow P1]  |  [Tab] Swap Arrows to Yellow!  |  [F] Fog Peek (1.0s, 3x/lvl + Fruits)  |  [M] Saga Map");
         } else {
             painter.drawText(20, hudY + 62,
-                "ARROWS STEER: [🟡 Yellow P1]  |  WASD: [🎀 Pink P2]  |  [Tab] Swap Arrows to Pink!  |  [F] Fog Peek  |  [M] Saga Map");
+                "ARROWS STEER: [🟡 Yellow P1]  |  WASD: [🎀 Pink P2]  |  [Tab] Swap Arrows to Pink!  |  [F] Fog Peek (1.0s, 3x/lvl + Fruits)  |  [M] Saga Map");
         }
     }
 

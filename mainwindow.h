@@ -150,7 +150,8 @@ private:
     static constexpr double DEFAULT_VISION_RADIUS = 3.8;
     double currentVisionRadius;
     int currentFrightenDuration;
-    static constexpr int FOG_PEEK_DURATION_MS = 1500; // 1.5 seconds temporary peek
+    static constexpr int FOG_PEEK_DURATION_MS = 1000; // 1.0 second temporary peek
+    static constexpr int INITIAL_FOG_PEEKS = 3;       // 3 peeks per level by default
     static constexpr int TRANSITION_DURATION_MS = 240; // 240ms smooth camera slide
 
     // Multi-Window Sector Grid
@@ -198,6 +199,9 @@ private:
     bool fogOfWarEnabled;
     bool fogPeekActive;
     QElapsedTimer fogPeekTimer;
+    int fogPeeksRemaining;
+    QString peekToastMessage;
+    QElapsedTimer peekToastTimer;
 
     // Level system
     int currentLevel;
