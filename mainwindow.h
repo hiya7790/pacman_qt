@@ -84,18 +84,29 @@ private:
     void drawStrawberry(QPainter &painter, int cx, int cy, int s);
     void drawOrangeFruit(QPainter &painter, int cx, int cy, int s);
 
-    // Candy Crush Saga Map Home Page (50 Stages Per World!)
+    struct WorldPalette {
+        QColor top;
+        QColor mid1;
+        QColor mid2;
+        QColor bot;
+    };
+
+    // Candy Crush Saga Map Home Page (Continuous Snake Map Across All Worlds!)
     void drawCandyCrushMap(QPainter &painter);
     void drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int radius);
+    void drawWorldGateway(QPainter &painter, int boundaryLvl, int w, int h);
     void drawPacmanAvatar(QPainter &painter, int cx, int cy, int size);
     void drawMsPacmanAvatar(QPainter &painter, int cx, int cy, int size);
     QPoint getLevelNodePos(int lvl, int mapW, int mapH) const;
     int getVirtualMapHeight() const;
     float getNodeSpacingY() const;
+    int getTotalMappedLevels() const;
+    int getCurrentVisibleWorld() const;
+    WorldPalette getWorldPalette(int world) const;
     void scrollToLevel(int lvl, bool immediate = false);
     QRect getPlayButtonRect() const;
-    QRect getPrevWorldButtonRect() const;
-    QRect getNextWorldButtonRect() const;
+    QRect getMyLevelButtonRect() const;
+    QRect getRecordBadgeRect() const;
     QRect getMapButtonRect() const;
     QRect getModeSelectorRect() const;
     QRect getModeYellowRect() const;
