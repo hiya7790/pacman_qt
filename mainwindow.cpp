@@ -2032,23 +2032,25 @@ void MainWindow::paintEvent(QPaintEvent *)
 
     // Line 1: Stats & Window location (hudY + 20)
     painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
+    int worldNum = (currentLevel - 1) / LEVELS_PER_WORLD + 1;
+    int stageNum = (currentLevel - 1) % LEVELS_PER_WORLD + 1;
     if (!isMultiplayer) {
         painter.setPen(Qt::white);
         painter.drawText(20, hudY + 20, QString("SCORE: %1").arg(score));
 
         painter.setPen(QColor(0, 230, 160));
-        painter.drawText(width() * 0.16, hudY + 20, QString("LEVEL: %1").arg(currentLevel));
+        painter.drawText(width() * 0.16, hudY + 20, QString("W%1-S%2 (LVL %3)").arg(worldNum).arg(stageNum).arg(currentLevel));
 
         painter.setPen(QColor(0, 210, 255));
-        painter.drawText(width() * 0.28, hudY + 20,
+        painter.drawText(width() * 0.30, hudY + 20,
                          QString("SECTOR: (%1, %2)").arg(currentSectorX + 1).arg(currentSectorY + 1));
 
         painter.setPen(QColor(255, 180, 0));
-        painter.drawText(width() * 0.42, hudY + 20,
+        painter.drawText(width() * 0.44, hudY + 20,
                          QString("EXPLORED: %1").arg(discCount));
 
         painter.setPen(QColor(180, 200, 255));
-        painter.drawText(width() * 0.54, hudY + 20, QString("MOVES: %1").arg(moveCount));
+        painter.drawText(width() * 0.56, hudY + 20, QString("MOVES: %1").arg(moveCount));
     } else {
         // P1 Status (Yellow)
         painter.setPen(p1Alive ? QColor(255, 230, 30) : QColor(160, 160, 80));
@@ -2067,7 +2069,7 @@ void MainWindow::paintEvent(QPaintEvent *)
         painter.drawText(width() * 0.36, hudY + 20, QString("TEAM: %1").arg(score));
 
         painter.setPen(QColor(0, 230, 160));
-        painter.drawText(width() * 0.48, hudY + 20, QString("LEVEL: %1").arg(currentLevel));
+        painter.drawText(width() * 0.48, hudY + 20, QString("W%1-S%2 (LVL %3)").arg(worldNum).arg(stageNum).arg(currentLevel));
 
         painter.setPen(QColor(0, 210, 255));
         painter.drawText(width() * 0.58, hudY + 20,
@@ -2101,9 +2103,11 @@ void MainWindow::paintEvent(QPaintEvent *)
     }
 
     // Line 2: Prominent Mission Objective Guidance (hudY + 42)
+    int curWorld = (currentLevel - 1) / LEVELS_PER_WORLD + 1;
+    int curStage = (currentLevel - 1) % LEVELS_PER_WORLD + 1;
     QString objectiveText;
     if (currentSectorX == exitSectorX && currentSectorY == exitSectorY) {
-        objectiveText = QString("🏁 OBJECTIVE: Find and enter the green [EXIT] portal in this window to complete Level %1!").arg(currentLevel);
+        objectiveText = QString("🏁 OBJECTIVE: Find and enter the green [EXIT] portal to clear Stage %1/20 (%2)!").arg(curStage).arg(getWorldName(curWorld));
         painter.setPen(QColor(60, 255, 140));
     } else {
         QString dirStr;
@@ -2112,7 +2116,7 @@ void MainWindow::paintEvent(QPaintEvent *)
         else if (currentSectorY < exitSectorY) dirStr = "BOTTOM wall [▼ GATEWAY]";
         else if (currentSectorY > exitSectorY) dirStr = "TOP wall [▲ GATEWAY]";
 
-        objectiveText = QString("🧭 OBJECTIVE: Venture through the glowing %1 into uncharted territory!").arg(dirStr);
+        objectiveText = QString("🧭 OBJECTIVE: Venture through the glowing %1 into uncharted territory! (%2)").arg(dirStr).arg(getWorldName(curWorld));
         painter.setPen(QColor(255, 220, 80));
     }
     painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
@@ -2145,21 +2149,21 @@ void MainWindow::paintEvent(QPaintEvent *)
         painter.setPen(QColor(255, 60, 60));
         painter.setFont(QFont("Arial", std::max(18, width() / 50), QFont::Bold));
         QString goMsg = isMultiplayer
-            ? QString("GAME OVER! Both Players Defeated (Level %1)").arg(currentLevel)
-            : QString("GAME OVER! (Level %1)").arg(currentLevel);
+            ? QString("GAME OVER! Both Players Defeated (Stage %1/20 • %2)").arg(curStage).arg(getWorldName(curWorld))
+            : QString("GAME OVER! (Stage %1/20 • %2)").arg(curStage).arg(getWorldName(curWorld));
         painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter, goMsg);
 
         painter.setPen(QColor(255, 220, 100));
         painter.setFont(QFont("Arial", std::max(12, width() / 70)));
         painter.drawText(0, height() / 2 + 16, width(), 25, Qt::AlignCenter,
-                         QString("Press [R] or [Space] to Retry Level %1  |  Press [M] for Saga Map").arg(currentLevel));
+                         QString("Press [R] or [Space] to Retry Stage %1  |  Press [M] for Saga Map").arg(curStage));
     } else if (levelComplete) {
         painter.fillRect(0, height() / 2 - 50, width(), 100, QColor(0, 0, 0, 235));
         painter.setPen(QColor(60, 255, 120));
         painter.setFont(QFont("Arial", std::max(16, width() / 55), QFont::Bold));
         QString levelMsg = isMultiplayer
-            ? QString("LEVEL %1 COMPLETE! Team Escaped the Labyrinth!").arg(currentLevel)
-            : QString("LEVEL %1 COMPLETE! Labyrinth Escaped!").arg(currentLevel);
+            ? QString("STAGE %1/20 COMPLETE!  (%2) • Team Escaped!").arg(curStage).arg(getWorldName(curWorld))
+            : QString("STAGE %1/20 COMPLETE!  (%2) • Labyrinth Escaped!").arg(curStage).arg(getWorldName(curWorld));
         painter.drawText(0, height() / 2 - 18, width(), 30, Qt::AlignCenter, levelMsg);
 
         painter.setPen(QColor(255, 220, 100));
@@ -2308,7 +2312,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
     if (currentScreen == SCREEN_HOME_MAP) {
         QPoint pos = event->pos();
 
-        // 1. Clicked Prev / Next World buttons
+        // 1. Clicked Prev / Next World buttons (Browse all worlds freely!)
         if (getPrevWorldButtonRect().contains(pos) && viewedMapWorld > 1) {
             viewedMapWorld--;
             selectedMapLevel = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
@@ -2316,10 +2320,9 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
             update();
             return;
         }
-        int maxUnlockedWorld = (highestUnlockedLevel - 1) / LEVELS_PER_WORLD + 1;
-        if (getNextWorldButtonRect().contains(pos) && viewedMapWorld < maxUnlockedWorld + 1) {
+        if (getNextWorldButtonRect().contains(pos) && viewedMapWorld < 10) {
             viewedMapWorld++;
-            selectedMapLevel = std::min(highestUnlockedLevel, (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1);
+            selectedMapLevel = (viewedMapWorld - 1) * LEVELS_PER_WORLD + 1;
             scrollToLevel(selectedMapLevel, false);
             update();
             return;
@@ -2348,7 +2351,11 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
 
         // 3. Clicked Play button
         if (getPlayButtonRect().contains(pos)) {
-            startLevel(selectedMapLevel);
+            if (selectedMapLevel <= highestUnlockedLevel) {
+                startLevel(selectedMapLevel);
+            } else {
+                startLevel(highestUnlockedLevel);
+            }
             return;
         }
 
@@ -2475,9 +2482,8 @@ void MainWindow::mouseMoveEvent(QMouseEvent *event)
             }
         }
 
-        int maxUnlockedWorld = (highestUnlockedLevel - 1) / LEVELS_PER_WORLD + 1;
         bool onPrev = (getPrevWorldButtonRect().contains(pos) && viewedMapWorld > 1);
-        bool onNext = (getNextWorldButtonRect().contains(pos) && viewedMapWorld < maxUnlockedWorld + 1);
+        bool onNext = (getNextWorldButtonRect().contains(pos) && viewedMapWorld < 10);
         bool onMode = getModeSelectorRect().contains(pos);
         if ((hoveredMapLevel != 0 && hoveredMapLevel <= highestUnlockedLevel) ||
             getPlayButtonRect().contains(pos) || onMode || onPrev || onNext) {
@@ -2903,10 +2909,9 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     dockGrad.setColorAt(1.0, QColor(10, 5, 20, 250));
     painter.fillRect(0, getModeSelectorRect().top() - 14, w, h - getModeSelectorRect().top() + 14, dockGrad);
 
-    // 5. World Navigation Buttons: [ ◀ WORLD %1 ] and [ WORLD %1 ▶ ]
-    int maxUnlockedWorld = (highestUnlockedLevel - 1) / LEVELS_PER_WORLD + 1;
+    // 5. World Navigation Buttons: [ ◀ WORLD %1 ] and [ WORLD %1 ▶ ] (Explore all worlds!)
     bool hasPrevWorld = (viewedMapWorld > 1);
-    bool hasNextWorld = (viewedMapWorld < maxUnlockedWorld + 1);
+    bool hasNextWorld = (viewedMapWorld < 10);
 
     QRect prevBtn = getPrevWorldButtonRect();
     QRect nextBtn = getNextWorldButtonRect();
