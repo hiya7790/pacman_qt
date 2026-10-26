@@ -1583,130 +1583,149 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
     // East Gateway (Connects to sector sx + 1)
     if (sx < sectorCols - 1 && board[sy][sx][9][COLS - 1] == 0) {
-        int gx = originX + (COLS - 1) * cellSize;
-        int gy = originY + 9 * cellSize;
-        int gw = cellSize;
-        int gh = 2 * cellSize;
+        bool showGate = (!fogOfWarEnabled) ||
+                        isCellVisible(sx, sy, COLS - 1, 9) ||
+                        isCellVisible(sx, sy, COLS - 1, 10);
+        if (showGate) {
+            int gx = originX + (COLS - 1) * cellSize;
+            int gy = originY + 9 * cellSize;
+            int gw = cellSize;
+            int gh = 2 * cellSize;
 
-        // Ambient cyan aura radiating into corridor
-        QRadialGradient aura(gx + gw, gy + gh / 2, cellSize * 2.8);
-        aura.setColorAt(0.0, QColor(0, 240, 255, 110));
-        aura.setColorAt(0.4, QColor(0, 180, 255, 40));
-        aura.setColorAt(1.0, QColor(0, 0, 0, 0));
-        painter.fillRect(gx - cellSize * 2, gy - cellSize / 2, cellSize * 3, gh + cellSize, aura);
+            // Ambient cyan aura radiating into corridor
+            QRadialGradient aura(gx + gw, gy + gh / 2, cellSize * 2.8);
+            aura.setColorAt(0.0, QColor(0, 240, 255, 110));
+            aura.setColorAt(0.4, QColor(0, 180, 255, 40));
+            aura.setColorAt(1.0, QColor(0, 0, 0, 0));
+            painter.fillRect(gx - cellSize * 2, gy - cellSize / 2, cellSize * 3, gh + cellSize, aura);
 
-        // Pulsing neon portal border
-        painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
-        painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
-        painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
+            // Pulsing neon portal border
+            painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
+            painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
+            painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
 
-        // Animated Chevrons
-        painter.setPen(QColor(255, 255, 255, gateAlpha));
-        painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
-        painter.drawText(gx + cellSize * 0.12, gy + cellSize * 0.72, "▶");
-        painter.drawText(gx + cellSize * 0.12, gy + cellSize * 1.62, "▶");
+            // Animated Chevrons
+            painter.setPen(QColor(255, 255, 255, gateAlpha));
+            painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
+            painter.drawText(gx + cellSize * 0.12, gy + cellSize * 0.72, "▶");
+            painter.drawText(gx + cellSize * 0.12, gy + cellSize * 1.62, "▶");
 
-        // Glowing badge label
-        painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
-        painter.setPen(QColor(0, 255, 240));
-        bool isEastDiscovered = (sx + 1 < sectorCols && sectorDiscovered[sy][sx + 1]);
-        QString eastLabel = isEastDiscovered ? QString("SECTOR (%1,%2) ▶").arg(sx + 2).arg(sy + 1) : "EXPLORE ▶";
-        painter.drawText(gx - cellSize * 3 - 6, gy + cellSize * 1.1, eastLabel);
+            // Glowing badge label
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+            painter.setPen(QColor(0, 255, 240));
+            bool isEastDiscovered = (sx + 1 < sectorCols && sectorDiscovered[sy][sx + 1]);
+            QString eastLabel = isEastDiscovered ? QString("SECTOR (%1,%2) ▶").arg(sx + 2).arg(sy + 1) : "EXPLORE ▶";
+            painter.drawText(gx - cellSize * 3 - 6, gy + cellSize * 1.1, eastLabel);
+        }
     }
 
     // West Gateway (Connects to sector sx - 1)
     if (sx > 0 && board[sy][sx][9][0] == 0) {
-        int gx = originX;
-        int gy = originY + 9 * cellSize;
-        int gw = cellSize;
-        int gh = 2 * cellSize;
+        bool showGate = (!fogOfWarEnabled) ||
+                        isCellVisible(sx, sy, 0, 9) ||
+                        isCellVisible(sx, sy, 0, 10);
+        if (showGate) {
+            int gx = originX;
+            int gy = originY + 9 * cellSize;
+            int gw = cellSize;
+            int gh = 2 * cellSize;
 
-        QRadialGradient aura(gx, gy + gh / 2, cellSize * 2.8);
-        aura.setColorAt(0.0, QColor(0, 240, 255, 110));
-        aura.setColorAt(0.4, QColor(0, 180, 255, 40));
-        aura.setColorAt(1.0, QColor(0, 0, 0, 0));
-        painter.fillRect(gx, gy - cellSize / 2, cellSize * 3, gh + cellSize, aura);
+            QRadialGradient aura(gx, gy + gh / 2, cellSize * 2.8);
+            aura.setColorAt(0.0, QColor(0, 240, 255, 110));
+            aura.setColorAt(0.4, QColor(0, 180, 255, 40));
+            aura.setColorAt(1.0, QColor(0, 0, 0, 0));
+            painter.fillRect(gx, gy - cellSize / 2, cellSize * 3, gh + cellSize, aura);
 
-        painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
-        painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
-        painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
+            painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
+            painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
+            painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
 
-        painter.setPen(QColor(255, 255, 255, gateAlpha));
-        painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
-        painter.drawText(gx + cellSize * 0.12, gy + cellSize * 0.72, "◀");
-        painter.drawText(gx + cellSize * 0.12, gy + cellSize * 1.62, "◀");
+            painter.setPen(QColor(255, 255, 255, gateAlpha));
+            painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
+            painter.drawText(gx + cellSize * 0.12, gy + cellSize * 0.72, "◀");
+            painter.drawText(gx + cellSize * 0.12, gy + cellSize * 1.62, "◀");
 
-        painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
-        painter.setPen(QColor(0, 255, 240));
-        bool isWestDiscovered = (sx - 1 >= 0 && sectorDiscovered[sy][sx - 1]);
-        QString westLabel = isWestDiscovered ? QString("◀ SECTOR (%1,%2)").arg(sx).arg(sy + 1) : "◀ EXPLORE";
-        painter.drawText(gx + gw + 4, gy + cellSize * 1.1, westLabel);
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+            painter.setPen(QColor(0, 255, 240));
+            bool isWestDiscovered = (sx - 1 >= 0 && sectorDiscovered[sy][sx - 1]);
+            QString westLabel = isWestDiscovered ? QString("◀ SECTOR (%1,%2)").arg(sx).arg(sy + 1) : "◀ EXPLORE";
+            painter.drawText(gx + gw + 4, gy + cellSize * 1.1, westLabel);
+        }
     }
 
     // South Gateway (Connects to sector sy + 1)
     if (sy < sectorRows - 1 && board[sy][sx][ROWS - 1][9] == 0) {
-        int gx = originX + 9 * cellSize;
-        int gy = originY + (ROWS - 1) * cellSize;
-        int gw = 2 * cellSize;
-        int gh = cellSize;
+        bool showGate = (!fogOfWarEnabled) ||
+                        isCellVisible(sx, sy, 9, ROWS - 1) ||
+                        isCellVisible(sx, sy, 10, ROWS - 1);
+        if (showGate) {
+            int gx = originX + 9 * cellSize;
+            int gy = originY + (ROWS - 1) * cellSize;
+            int gw = 2 * cellSize;
+            int gh = cellSize;
 
-        QRadialGradient aura(gx + gw / 2, gy + gh, cellSize * 2.8);
-        aura.setColorAt(0.0, QColor(0, 240, 255, 110));
-        aura.setColorAt(0.4, QColor(0, 180, 255, 40));
-        aura.setColorAt(1.0, QColor(0, 0, 0, 0));
-        painter.fillRect(gx - cellSize / 2, gy - cellSize * 2, gw + cellSize, cellSize * 3, aura);
+            QRadialGradient aura(gx + gw / 2, gy + gh, cellSize * 2.8);
+            aura.setColorAt(0.0, QColor(0, 240, 255, 110));
+            aura.setColorAt(0.4, QColor(0, 180, 255, 40));
+            aura.setColorAt(1.0, QColor(0, 0, 0, 0));
+            painter.fillRect(gx - cellSize / 2, gy - cellSize * 2, gw + cellSize, cellSize * 3, aura);
 
-        painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
-        painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
-        painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
+            painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
+            painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
+            painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
 
-        painter.setPen(QColor(255, 255, 255, gateAlpha));
-        painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
-        painter.drawText(gx + cellSize * 0.35, gy + cellSize * 0.75, "▼");
-        painter.drawText(gx + cellSize * 1.35, gy + cellSize * 0.75, "▼");
+            painter.setPen(QColor(255, 255, 255, gateAlpha));
+            painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
+            painter.drawText(gx + cellSize * 0.35, gy + cellSize * 0.75, "▼");
+            painter.drawText(gx + cellSize * 1.35, gy + cellSize * 0.75, "▼");
 
-        painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
-        painter.setPen(QColor(0, 255, 240));
-        bool isSouthDiscovered = (sy + 1 < sectorRows && sectorDiscovered[sy + 1][sx]);
-        QString southLabel = isSouthDiscovered ? QString("▼ SECTOR (%1,%2) ▼").arg(sx + 1).arg(sy + 2) : "▼ EXPLORE ▼";
-        painter.drawText(gx - 4, gy - 6, southLabel);
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+            painter.setPen(QColor(0, 255, 240));
+            bool isSouthDiscovered = (sy + 1 < sectorRows && sectorDiscovered[sy + 1][sx]);
+            QString southLabel = isSouthDiscovered ? QString("▼ SECTOR (%1,%2) ▼").arg(sx + 1).arg(sy + 2) : "▼ EXPLORE ▼";
+            painter.drawText(gx - 4, gy - 6, southLabel);
+        }
     }
 
     // North Gateway (Connects to sector sy - 1)
     if (sy > 0 && board[sy][sx][0][9] == 0) {
-        int gx = originX + 9 * cellSize;
-        int gy = originY;
-        int gw = 2 * cellSize;
-        int gh = cellSize;
+        bool showGate = (!fogOfWarEnabled) ||
+                        isCellVisible(sx, sy, 9, 0) ||
+                        isCellVisible(sx, sy, 10, 0);
+        if (showGate) {
+            int gx = originX + 9 * cellSize;
+            int gy = originY;
+            int gw = 2 * cellSize;
+            int gh = cellSize;
 
-        QRadialGradient aura(gx + gw / 2, gy, cellSize * 2.8);
-        aura.setColorAt(0.0, QColor(0, 240, 255, 110));
-        aura.setColorAt(0.4, QColor(0, 180, 255, 40));
-        aura.setColorAt(1.0, QColor(0, 0, 0, 0));
-        painter.fillRect(gx - cellSize / 2, gy, gw + cellSize, cellSize * 3, aura);
+            QRadialGradient aura(gx + gw / 2, gy, cellSize * 2.8);
+            aura.setColorAt(0.0, QColor(0, 240, 255, 110));
+            aura.setColorAt(0.4, QColor(0, 180, 255, 40));
+            aura.setColorAt(1.0, QColor(0, 0, 0, 0));
+            painter.fillRect(gx - cellSize / 2, gy, gw + cellSize, cellSize * 3, aura);
 
-        painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
-        painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
-        painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
+            painter.setBrush(QColor(0, 140, 255, 50 + int(45 * pulseVal)));
+            painter.setPen(QPen(QColor(0, 255, 240, gateAlpha), std::max(2, cellSize / 9)));
+            painter.drawRoundedRect(gx, gy, gw, gh, 5, 5);
 
-        painter.setPen(QColor(255, 255, 255, gateAlpha));
-        painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
-        painter.drawText(gx + cellSize * 0.35, gy + cellSize * 0.75, "▲");
-        painter.drawText(gx + cellSize * 1.35, gy + cellSize * 0.75, "▲");
+            painter.setPen(QColor(255, 255, 255, gateAlpha));
+            painter.setFont(QFont("Arial", std::max(10, cellSize / 2), QFont::Bold));
+            painter.drawText(gx + cellSize * 0.35, gy + cellSize * 0.75, "▲");
+            painter.drawText(gx + cellSize * 1.35, gy + cellSize * 0.75, "▲");
 
-        painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
-        painter.setPen(QColor(0, 255, 240));
-        bool isNorthDiscovered = (sy - 1 >= 0 && sectorDiscovered[sy - 1][sx]);
-        QString northLabel = isNorthDiscovered ? QString("▲ SECTOR (%1,%2) ▲").arg(sx + 1).arg(sy) : "▲ EXPLORE ▲";
-        painter.drawText(gx - 4, gy + gh + 14, northLabel);
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+            painter.setPen(QColor(0, 255, 240));
+            bool isNorthDiscovered = (sy - 1 >= 0 && sectorDiscovered[sy - 1][sx]);
+            QString northLabel = isNorthDiscovered ? QString("▲ SECTOR (%1,%2) ▲").arg(sx + 1).arg(sy) : "▲ EXPLORE ▲";
+            painter.drawText(gx - 4, gy + gh + 14, northLabel);
+        }
     }
 
-    // 7. Glowing EXIT Portal (Visible beacon shining through fog)
+    // 7. Glowing EXIT Portal (Hidden until Pacman is close or Fog Peek is triggered)
     if (sx == exitSectorX && sy == exitSectorY) {
         bool exitVisible = isCellVisible(sx, sy, exitX, exitY);
-        bool exitExplored = explored[sy][sx][exitY][exitX];
 
-        if (!fogOfWarEnabled || exitVisible || exitExplored) {
+        if (!fogOfWarEnabled || exitVisible) {
             int ex = originX + exitX * cellSize;
             int ey = originY + exitY * cellSize;
 
@@ -1976,8 +1995,8 @@ void MainWindow::paintEvent(QPaintEvent *)
                 painter.setPen(QPen(QColor(50, 130, 220), 1));
                 painter.drawRect(rx, ry, mapBoxSize, mapBoxSize);
 
-                // Mark EXIT only if this discovered sector contains the exit
-                if (sx == exitSectorX && sy == exitSectorY) {
+                // Mark EXIT only if this discovered sector contains the exit AND (peek active or player sees it)
+                if (sx == exitSectorX && sy == exitSectorY && (!fogOfWarEnabled || isCellVisible(exitSectorX, exitSectorY, exitX, exitY))) {
                     painter.setPen(QColor(0, 255, 120));
                     painter.setFont(QFont("Arial", std::max(7, mapBoxSize / 3), QFont::Bold));
                     painter.drawText(rx, ry, mapBoxSize, mapBoxSize, Qt::AlignCenter, "EXIT");
@@ -1997,23 +2016,25 @@ void MainWindow::paintEvent(QPaintEvent *)
                     painter.setPen(Qt::NoPen);
                     painter.drawEllipse(rx + mapBoxSize/2 - 2, ry + mapBoxSize/2 - 2, 4, 4);
 
-                    // Show small pulsing exploration chevrons on edges that lead to UNCHARTED sectors!
-                    float chevPulse = (std::sin(elapsedTimer.elapsed() * 0.008f) + 1.0f) * 0.5f;
-                    int chevAlpha = 140 + int(115 * chevPulse);
-                    painter.setPen(QColor(0, 255, 240, chevAlpha));
-                    painter.setFont(QFont("Arial", std::max(7, mapBoxSize / 3), QFont::Bold));
+                    // Show small exploration chevrons on edges only during Fog Peek!
+                    if (!fogOfWarEnabled) {
+                        float chevPulse = (std::sin(elapsedTimer.elapsed() * 0.008f) + 1.0f) * 0.5f;
+                        int chevAlpha = 140 + int(115 * chevPulse);
+                        painter.setPen(QColor(0, 255, 240, chevAlpha));
+                        painter.setFont(QFont("Arial", std::max(7, mapBoxSize / 3), QFont::Bold));
 
-                    if (sx + 1 < sectorCols && !sectorDiscovered[sy][sx + 1]) {
-                        painter.drawText(rx + mapBoxSize - 1, ry + mapBoxSize * 3 / 4, "▶");
-                    }
-                    if (sx - 1 >= 0 && !sectorDiscovered[sy][sx - 1]) {
-                        painter.drawText(rx - 7, ry + mapBoxSize * 3 / 4, "◀");
-                    }
-                    if (sy + 1 < sectorRows && !sectorDiscovered[sy + 1][sx]) {
-                        painter.drawText(rx + mapBoxSize / 3, ry + mapBoxSize + 7, "▼");
-                    }
-                    if (sy - 1 >= 0 && !sectorDiscovered[sy - 1][sx]) {
-                        painter.drawText(rx + mapBoxSize / 3, ry - 1, "▲");
+                        if (sx + 1 < sectorCols && !sectorDiscovered[sy][sx + 1]) {
+                            painter.drawText(rx + mapBoxSize - 1, ry + mapBoxSize * 3 / 4, "▶");
+                        }
+                        if (sx - 1 >= 0 && !sectorDiscovered[sy][sx - 1]) {
+                            painter.drawText(rx - 7, ry + mapBoxSize * 3 / 4, "◀");
+                        }
+                        if (sy + 1 < sectorRows && !sectorDiscovered[sy + 1][sx]) {
+                            painter.drawText(rx + mapBoxSize / 3, ry + mapBoxSize + 7, "▼");
+                        }
+                        if (sy - 1 >= 0 && !sectorDiscovered[sy - 1][sx]) {
+                            painter.drawText(rx + mapBoxSize / 3, ry - 1, "▲");
+                        }
                     }
                 }
 
@@ -2153,17 +2174,27 @@ void MainWindow::paintEvent(QPaintEvent *)
     int curStage = (currentLevel - 1) % LEVELS_PER_WORLD + 1;
     QString objectiveText;
     if (currentSectorX == exitSectorX && currentSectorY == exitSectorY) {
-        objectiveText = QString("🏁 OBJECTIVE: Find and enter the green [EXIT] portal to clear Stage %1/20 (%2)!").arg(curStage).arg(getWorldName(curWorld));
-        painter.setPen(QColor(60, 255, 140));
+        bool exitNear = isCellVisible(currentSectorX, currentSectorY, exitX, exitY) || (!fogOfWarEnabled);
+        if (exitNear) {
+            objectiveText = QString("🏁 OBJECTIVE: Enter the green [EXIT] portal to clear Stage %1/20 (%2)!").arg(curStage).arg(getWorldName(curWorld));
+            painter.setPen(QColor(60, 255, 140));
+        } else {
+            objectiveText = QString("🧭 OBJECTIVE: Search the dark labyrinth with your lantern to locate the hidden [EXIT] portal! (%1)").arg(getWorldName(curWorld));
+            painter.setPen(QColor(255, 215, 60));
+        }
     } else {
-        QString dirStr;
-        if (currentSectorX < exitSectorX) dirStr = "RIGHT wall [▶ GATEWAY]";
-        else if (currentSectorX > exitSectorX) dirStr = "LEFT wall [◀ GATEWAY]";
-        else if (currentSectorY < exitSectorY) dirStr = "BOTTOM wall [▼ GATEWAY]";
-        else if (currentSectorY > exitSectorY) dirStr = "TOP wall [▲ GATEWAY]";
-
-        objectiveText = QString("🧭 OBJECTIVE: Venture through the glowing %1 into uncharted territory! (%2)").arg(dirStr).arg(getWorldName(curWorld));
-        painter.setPen(QColor(255, 220, 80));
+        if (!fogOfWarEnabled) {
+            QString dirStr;
+            if (currentSectorX < exitSectorX) dirStr = "RIGHT wall [▶ GATEWAY]";
+            else if (currentSectorX > exitSectorX) dirStr = "LEFT wall [◀ GATEWAY]";
+            else if (currentSectorY < exitSectorY) dirStr = "BOTTOM wall [▼ GATEWAY]";
+            else if (currentSectorY > exitSectorY) dirStr = "TOP wall [▲ GATEWAY]";
+            objectiveText = QString("💡 PEEK REVEAL: Head toward the %1 to reach the exit sector! (%2)").arg(dirStr).arg(getWorldName(curWorld));
+            painter.setPen(QColor(0, 255, 240));
+        } else {
+            objectiveText = QString("🧭 OBJECTIVE: Explore the dark corridors with your lantern to discover gateways! (%1)").arg(getWorldName(curWorld));
+            painter.setPen(QColor(255, 220, 80));
+        }
     }
     painter.setFont(QFont("Arial", baseFont1, QFont::Bold));
     painter.drawText(20, hudY + 42, objectiveText);
