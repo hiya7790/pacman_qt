@@ -82,7 +82,7 @@ private slots:
     void onPlayerJoined(int clientId, const QString &role, const QString &name);
     void onPlayerLeft(int clientId, const QString &role, const QString &name);
     void onPlayerMoved(int clientId, const QString &role, int dir);
-    void onPlayerPeek(int clientId);
+    void onPlayerPeek(int clientId, const QString &role);
 
 private:
     void initGame();
@@ -244,6 +244,10 @@ private:
     bool fogPeekActive;
     QElapsedTimer fogPeekTimer;
     int fogPeeksRemaining;
+    int p1FogPeeks;
+    int p2FogPeeks;
+    int hero3FogPeeks;
+    int hero4FogPeeks;
     QString peekToastMessage;
     QElapsedTimer peekToastTimer;
 

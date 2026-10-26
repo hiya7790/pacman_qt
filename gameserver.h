@@ -47,7 +47,7 @@ signals:
     void playerJoined(int clientId, const QString &role, const QString &name);
     void playerLeft(int clientId, const QString &role, const QString &name);
     void playerMoved(int clientId, const QString &role, int dir);
-    void playerTriggeredPeek(int clientId);
+    void playerTriggeredPeek(int clientId, const QString &role);
     void serverStatusChanged(bool running, const QString &url);
 
 private slots:

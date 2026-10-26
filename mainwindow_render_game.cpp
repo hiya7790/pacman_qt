@@ -167,7 +167,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         int px = originX + pacmanX * cellSize;
         int py = originY + pacmanY * cellSize;
 
-        bool isPinkSolo = (!isMultiplayer && singlePlayerHero == 2);
+        bool isPinkSolo = (!isMultiplayer && p2ClientId < 0 && singlePlayerHero == 2);
 
         if (isPinkSolo) {
             // Drawn as Pink Ms. Pacman in solo mode
@@ -215,7 +215,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
     }
 
     // Draw Player 2 (Ms. Pacman - Pink with bow) (if multiplayer and in this sector)
-    if (isMultiplayer && isCurrent && (p2Alive || (p2RespawnTicks > 0 && p2RespawnTicks % 4 < 2))) {
+    if ((isMultiplayer || p2ClientId >= 0) && isCurrent && (p2Alive || (p2RespawnTicks > 0 && p2RespawnTicks % 4 < 2))) {
         int px = originX + p2X * cellSize;
         int py = originY + p2Y * cellSize;
 
@@ -246,13 +246,9 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
         // Active control indicator badge
         painter.setFont(QFont("Arial", std::max(6, cellSize / 4), QFont::Bold));
-        if (arrowPlayer == 2) {
-            painter.setPen(QColor(255, 130, 200));
-            painter.drawText(px - 10, py - 4, cellSize + 20, cellSize / 2, Qt::AlignCenter, "P2 [ARROWS]");
-        } else {
-            painter.setPen(QColor(220, 160, 200));
-            painter.drawText(px - 10, py - 4, cellSize + 20, cellSize / 2, Qt::AlignCenter, "P2 [WASD]");
-        }
+        painter.setPen(QColor(255, 130, 200));
+        QString p2Tag = p2PlayerName.isEmpty() ? (arrowPlayer == 2 ? "P2 [ARROWS]" : "P2 [WASD]") : p2PlayerName;
+        painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, p2Tag);
     }
 
     // Draw Hero 3 (Jr. Pac-Man - Cyan with cap) (if connected and in this sector)
@@ -398,7 +394,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
 
             painter.fillRect(originX, originY, COLS * cellSize, ROWS * cellSize, lantern);
         }
-        if (isMultiplayer && p2Alive) {
+        if ((isMultiplayer || p2ClientId >= 0) && p2Alive) {
             int p2xCenter = originX + p2X * cellSize + cellSize / 2;
             int p2yCenter = originY + p2Y * cellSize + cellSize / 2;
 
@@ -891,13 +887,13 @@ void MainWindow::drawGameScreen(QPainter &painter)
         int msLeft = std::max(0, FOG_PEEK_DURATION_MS - (int)fogPeekTimer.elapsed());
         double secLeft = msLeft / 1000.0;
         painter.setPen(QColor(255, 225, 50));
-        painter.drawText(width() * 0.74, hudY + 20, QString("[PEEKING: %1s 💡 (%2 left)]").arg(secLeft, 0, 'f', 1).arg(fogPeeksRemaining));
-    } else if (fogPeeksRemaining > 0) {
+        painter.drawText(width() * 0.74, hudY + 20, QString("[PEEKING: %1s 💡 (Host: %2)]").arg(secLeft, 0, 'f', 1).arg(p1FogPeeks));
+    } else if (p1FogPeeks > 0) {
         painter.setPen(QColor(100, 230, 255));
-        painter.drawText(width() * 0.74, hudY + 20, QString("[PEEK (F): %1 left 👁️]").arg(fogPeeksRemaining));
+        painter.drawText(width() * 0.74, hudY + 20, QString("[HOST PEEK (F): %1 left 👁️]").arg(p1FogPeeks));
     } else {
         painter.setPen(QColor(255, 110, 110));
-        painter.drawText(width() * 0.74, hudY + 20, "[PEEK: 0 left 🍒 (Eat Fruit!)]");
+        painter.drawText(width() * 0.74, hudY + 20, "[HOST PEEK: 0 left 🍒 (Eat Fruit!)]");
     }
 
     if (ghostsFrightened) {

@@ -183,15 +183,17 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             // Already peeking
             return;
         }
-        if (fogPeeksRemaining > 0) {
-            fogPeeksRemaining--;
+        if (p1FogPeeks > 0) {
+            p1FogPeeks--;
+            fogPeeksRemaining = p1FogPeeks;
             fogOfWarEnabled = false;
             fogPeekActive = true;
             fogPeekTimer.start();
-            peekToastMessage = QString("💡 FOG PEEK ACTIVE! (1.0s) • %1 Left").arg(fogPeeksRemaining);
+            peekToastMessage = QString("💡 HOST FOG PEEK ACTIVE! (1.0s) • %1 Left for Host").arg(p1FogPeeks);
             peekToastTimer.start();
+            broadcastCurrentGameState();
         } else {
-            peekToastMessage = "⚠️ NO FOG PEEKS LEFT! Eat bonus fruits 🍒 to earn more!";
+            peekToastMessage = "⚠️ HOST HAS NO FOG PEEKS LEFT! Eat bonus fruits 🍒 to earn more!";
             peekToastTimer.start();
         }
         update();

@@ -11,7 +11,7 @@ void MainWindow::updateFogOfWar()
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
             double dist1 = (p1Alive ? std::hypot(c - pacmanX, r - pacmanY) : 999.0);
-            double dist2 = (isMultiplayer && p2Alive ? std::hypot(c - p2X, r - p2Y) : 999.0);
+            double dist2 = ((isMultiplayer || p2ClientId >= 0) && p2Alive ? std::hypot(c - p2X, r - p2Y) : 999.0);
             double dist3 = (hero3.clientId != -1 && hero3.alive ? std::hypot(c - hero3.x, r - hero3.y) : 999.0);
             double dist4 = (hero4.clientId != -1 && hero4.alive ? std::hypot(c - hero4.x, r - hero4.y) : 999.0);
             if (dist1 <= currentVisionRadius || dist2 <= currentVisionRadius ||
@@ -27,7 +27,7 @@ bool MainWindow::isCellVisible(int sx, int sy, int x, int y) const
     if (!fogOfWarEnabled) return true;
     if (sx != currentSectorX || sy != currentSectorY) return false;
     double dist1 = (p1Alive ? std::hypot(x - pacmanX, y - pacmanY) : 999.0);
-    double dist2 = (isMultiplayer && p2Alive ? std::hypot(x - p2X, y - p2Y) : 999.0);
+    double dist2 = ((isMultiplayer || p2ClientId >= 0) && p2Alive ? std::hypot(x - p2X, y - p2Y) : 999.0);
     double dist3 = (hero3.clientId != -1 && hero3.alive ? std::hypot(x - hero3.x, y - hero3.y) : 999.0);
     double dist4 = (hero4.clientId != -1 && hero4.alive ? std::hypot(x - hero4.x, y - hero4.y) : 999.0);
     return (dist1 <= currentVisionRadius || dist2 <= currentVisionRadius ||
@@ -56,7 +56,7 @@ void MainWindow::movePacman()
             transitionDirX = 1; transitionDirY = 0;
             currentSectorX = toSectorX;
             pacmanX = 0;
-            if (isMultiplayer) {
+            if (isMultiplayer || p2ClientId >= 0) {
                 p2X = 0; p2Y = (pacmanY == 9 ? 10 : 9);
             }
             if (hero3.clientId != -1) { hero3.x = 0; hero3.y = 8; }
@@ -74,7 +74,7 @@ void MainWindow::movePacman()
             transitionDirX = -1; transitionDirY = 0;
             currentSectorX = toSectorX;
             pacmanX = COLS - 1;
-            if (isMultiplayer) {
+            if (isMultiplayer || p2ClientId >= 0) {
                 p2X = COLS - 1; p2Y = (pacmanY == 9 ? 10 : 9);
             }
             if (hero3.clientId != -1) { hero3.x = COLS - 1; hero3.y = 8; }
@@ -92,7 +92,7 @@ void MainWindow::movePacman()
             transitionDirX = 0; transitionDirY = 1;
             currentSectorY = toSectorY;
             pacmanY = 0;
-            if (isMultiplayer) {
+            if (isMultiplayer || p2ClientId >= 0) {
                 p2Y = 0; p2X = (pacmanX == 9 ? 10 : 9);
             }
             if (hero3.clientId != -1) { hero3.y = 0; hero3.x = 8; }
@@ -110,7 +110,7 @@ void MainWindow::movePacman()
             transitionDirX = 0; transitionDirY = -1;
             currentSectorY = toSectorY;
             pacmanY = ROWS - 1;
-            if (isMultiplayer) {
+            if (isMultiplayer || p2ClientId >= 0) {
                 p2Y = ROWS - 1; p2X = (pacmanX == 9 ? 10 : 9);
             }
             if (hero3.clientId != -1) { hero3.y = ROWS - 1; hero3.x = 8; }
@@ -408,7 +408,7 @@ void MainWindow::moveGhosts()
             };
 
             checkHeroDist(p1Alive, pacmanX, pacmanY);
-            checkHeroDist(isMultiplayer && p2Alive, p2X, p2Y);
+            checkHeroDist((isMultiplayer || p2ClientId >= 0) && p2Alive, p2X, p2Y);
             checkHeroDist(hero3.clientId != -1 && hero3.alive, hero3.x, hero3.y);
             checkHeroDist(hero4.clientId != -1 && hero4.alive, hero4.x, hero4.y);
 
@@ -480,7 +480,7 @@ void MainWindow::checkGhostCollisions()
         }
 
         // Player 2 (Ms. Pac-Man)
-        if (isMultiplayer && p2Alive && g.x == p2X && g.y == p2Y) {
+        if ((isMultiplayer || p2ClientId >= 0) && p2Alive && g.x == p2X && g.y == p2Y) {
             if (ghostsFrightened) {
                 scoreP2 += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
@@ -517,11 +517,11 @@ void MainWindow::checkGhostCollisions()
     }
 
     // Check if entire team has been defeated
-    bool anyHeroAlive = p1Alive || (isMultiplayer && p2Alive) ||
+    bool anyHeroAlive = p1Alive || ((isMultiplayer || p2ClientId >= 0) && p2Alive) ||
                         (hero3.clientId != -1 && hero3.alive) ||
                         (hero4.clientId != -1 && hero4.alive);
 
-    bool anyHeroSpawning = (p1RespawnTicks > 0) || (isMultiplayer && p2RespawnTicks > 0) ||
+    bool anyHeroSpawning = (p1RespawnTicks > 0) || ((isMultiplayer || p2ClientId >= 0) && p2RespawnTicks > 0) ||
                            (hero3.clientId != -1 && hero3.respawnTicks > 0) ||
                            (hero4.clientId != -1 && hero4.respawnTicks > 0);
 
@@ -598,15 +598,33 @@ void MainWindow::checkFruitPickup()
     for (int i = activeFruits.size() - 1; i >= 0; --i) {
         if (activeFruits[i].sectorX == currentSectorX && activeFruits[i].sectorY == currentSectorY) {
             bool p1Picked = p1Alive && (activeFruits[i].x == pacmanX && activeFruits[i].y == pacmanY);
-            bool p2Picked = isMultiplayer && p2Alive && (activeFruits[i].x == p2X && activeFruits[i].y == p2Y);
+            bool p2Picked = (isMultiplayer || p2ClientId >= 0) && p2Alive && (activeFruits[i].x == p2X && activeFruits[i].y == p2Y);
             bool p3Picked = (hero3.clientId != -1 && hero3.alive && activeFruits[i].x == hero3.x && activeFruits[i].y == hero3.y);
             bool p4Picked = (hero4.clientId != -1 && hero4.alive && activeFruits[i].x == hero4.x && activeFruits[i].y == hero4.y);
 
             if (p1Picked || p2Picked || p3Picked || p4Picked) {
-                if (p1Picked) scoreP1 += 100;
-                if (p2Picked) scoreP2 += 100;
-                if (p3Picked) hero3.score += 100;
-                if (p4Picked) hero4.score += 100;
+                QString eaterName = "Hero";
+                if (p1Picked) {
+                    scoreP1 += 100;
+                    p1FogPeeks++;
+                    fogPeeksRemaining = p1FogPeeks;
+                    eaterName = "Pac-Man (Host)";
+                }
+                if (p2Picked) {
+                    scoreP2 += 100;
+                    p2FogPeeks++;
+                    eaterName = p2PlayerName.isEmpty() ? "Ms. Pac-Man" : p2PlayerName;
+                }
+                if (p3Picked) {
+                    hero3.score += 100;
+                    hero3FogPeeks++;
+                    eaterName = hero3.playerName.isEmpty() ? "Jr. Pac-Man" : hero3.playerName;
+                }
+                if (p4Picked) {
+                    hero4.score += 100;
+                    hero4FogPeeks++;
+                    eaterName = hero4.playerName.isEmpty() ? "Miracle Pac-Man" : hero4.playerName;
+                }
 
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 activeFruits.removeAt(i);
@@ -614,9 +632,9 @@ void MainWindow::checkFruitPickup()
                 ghostsFrightened = true;
                 frightenedTicksLeft = currentFrightenDuration;
 
-                fogPeeksRemaining++;
-                peekToastMessage = QString("🍒 FRUIT EATEN! +1 FOG PEEK EARNED! (Charges: %1 👁️)").arg(fogPeeksRemaining);
+                peekToastMessage = QString("🍒 %1 ATE FRUIT! +1 FOG PEEK EARNED!").arg(eaterName);
                 peekToastTimer.start();
+                broadcastCurrentGameState();
             }
         }
     }

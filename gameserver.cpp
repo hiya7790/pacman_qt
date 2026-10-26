@@ -361,7 +361,7 @@ void GameServer::handleWebSocketMessage(ConnectedClient *client, const QString &
         }
     } else if (type == "peek") {
         if (!client->role.isEmpty() && client->role.startsWith("p")) {
-            emit playerTriggeredPeek(client->id);
+            emit playerTriggeredPeek(client->id, client->role);
         }
     } else if (type == "leave") {
         if (!client->role.isEmpty()) {
@@ -1008,13 +1008,18 @@ QByteArray GameServer::getControllerHtml() const
 
     const meta = roleMeta[currentRole];
     if (meta && meta.isHero) {
-      const peeks = (state.fogPeeks !== undefined) ? state.fogPeeks : 3;
+      let peeks = 3;
+      if (state.peeks && state.peeks[currentRole] !== undefined) {
+        peeks = state.peeks[currentRole];
+      } else if (state.fogPeeks !== undefined) {
+        peeks = state.fogPeeks;
+      }
       if (peeks > 0) {
         actionBtn.innerText = "👁️ FOG PEEK (" + peeks + " left)";
         actionBtn.disabled = false;
         actionBtn.style.opacity = "1";
       } else {
-        actionBtn.innerText = "🔒 PEEK (Eat fruit for +1)";
+        actionBtn.innerText = "🔒 0 PEEKS (Eat fruit for +1)";
         actionBtn.disabled = true;
         actionBtn.style.opacity = "0.6";
       }

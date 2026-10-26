@@ -48,6 +48,10 @@ MainWindow::MainWindow(QWidget *parent)
     fogOfWarEnabled = true;
     fogPeekActive = false;
     fogPeeksRemaining = INITIAL_FOG_PEEKS;
+    p1FogPeeks = INITIAL_FOG_PEEKS;
+    p2FogPeeks = INITIAL_FOG_PEEKS;
+    hero3FogPeeks = INITIAL_FOG_PEEKS;
+    hero4FogPeeks = INITIAL_FOG_PEEKS;
     peekToastMessage.clear();
     isTransitioning = false;
     newSectorJustDiscovered = false;
@@ -240,13 +244,16 @@ void MainWindow::initLevel()
     p1RespawnTicks = 0;
 
     // Player 2 (Ms. Pac-Man)
+    if (p2ClientId >= 0 || hero3.clientId != -1 || hero4.clientId != -1) {
+        isMultiplayer = true;
+    }
     p2X = 9;
     p2Y = ROWS - 2;
     p2Dir = RIGHT;
     p2NextDir = RIGHT;
     p2MouthAngle = 45;
     p2MouthOpening = false;
-    p2Alive = true;
+    p2Alive = (isMultiplayer || p2ClientId >= 0);
     p2RespawnTicks = 0;
 
     // Extra Heroes (Jr. Pac-Man & Miracle Pac-Man)
@@ -332,6 +339,10 @@ void MainWindow::initLevel()
     fogOfWarEnabled = true;
     fogPeekActive = false;
     fogPeeksRemaining = INITIAL_FOG_PEEKS;
+    p1FogPeeks = INITIAL_FOG_PEEKS;
+    p2FogPeeks = INITIAL_FOG_PEEKS;
+    hero3FogPeeks = INITIAL_FOG_PEEKS;
+    hero4FogPeeks = INITIAL_FOG_PEEKS;
     peekToastMessage.clear();
 
     updateFogOfWar();
@@ -421,12 +432,26 @@ void MainWindow::gameLoop()
         }
     }
 
+    // Move Player 2 (Ms. Pac-Man) if active
+    if ((isMultiplayer || p2ClientId >= 0) && p2Alive) {
+        movePlayer2();
+        checkFruitPickup();
+        checkGhostCollisions();
+        checkLevelExit();
+    }
+
     // Move extra heroes if active
     if (hero3.clientId != -1 && hero3.alive) {
         moveHero(hero3, 3);
+        checkFruitPickup();
+        checkGhostCollisions();
+        checkLevelExit();
     }
     if (hero4.clientId != -1 && hero4.alive) {
         moveHero(hero4, 4);
+        checkFruitPickup();
+        checkGhostCollisions();
+        checkLevelExit();
     }
 
     ghostTickCounter++;
@@ -469,7 +494,13 @@ void MainWindow::broadcastCurrentGameState()
     state["score"] = score;
     state["frightened"] = ghostsFrightened;
     state["frightenedTicks"] = frightenedTicksLeft;
-    state["fogPeeks"] = fogPeeksRemaining;
+    state["fogPeeks"] = p1FogPeeks;
+    QJsonObject peeks;
+    peeks["p1"] = p1FogPeeks;
+    peeks["p2"] = p2FogPeeks;
+    peeks["p3"] = hero3FogPeeks;
+    peeks["p4"] = hero4FogPeeks;
+    state["peeks"] = peeks;
     state["fog"] = fogOfWarEnabled;
     state["peek"] = fogPeekActive;
     state["radius"] = currentVisionRadius;
@@ -501,7 +532,7 @@ void MainWindow::broadcastCurrentGameState()
         QJsonObject h2;
         h2["x"] = p2X; h2["y"] = p2Y; h2["dir"] = (int)p2Dir;
         h2["mouth"] = p2MouthAngle; h2["alive"] = p2Alive; h2["score"] = scoreP2;
-        h2["name"] = p2PlayerName; h2["active"] = isMultiplayer;
+        h2["name"] = p2PlayerName; h2["active"] = (isMultiplayer || p2ClientId >= 0);
         state["p2"] = h2;
 
         QJsonObject h3;
@@ -659,32 +690,133 @@ void MainWindow::onPlayerMoved(int clientId, const QString &role, int dirInt)
 
     if (role == "p2" && p2ClientId == clientId) {
         p2NextDir = d;
+        if (p2Alive) {
+            if (canMove(p2X, p2Y, d)) {
+                p2Dir = d;
+            }
+            movePlayer2();
+            checkFruitPickup();
+            checkGhostCollisions();
+            checkLevelExit();
+            updateFogOfWar();
+            broadcastCurrentGameState();
+            update();
+        }
     } else if (role == "p3" && hero3.clientId == clientId) {
         hero3.nextDir = d;
+        if (hero3.alive) {
+            if (canMove(hero3.x, hero3.y, d)) {
+                hero3.dir = d;
+            }
+            moveHero(hero3, 3);
+            checkFruitPickup();
+            checkGhostCollisions();
+            checkLevelExit();
+            updateFogOfWar();
+            broadcastCurrentGameState();
+            update();
+        }
     } else if (role == "p4" && hero4.clientId == clientId) {
         hero4.nextDir = d;
+        if (hero4.alive) {
+            if (canMove(hero4.x, hero4.y, d)) {
+                hero4.dir = d;
+            }
+            moveHero(hero4, 4);
+            checkFruitPickup();
+            checkGhostCollisions();
+            checkLevelExit();
+            updateFogOfWar();
+            broadcastCurrentGameState();
+            update();
+        }
     } else if (role == "blinky" && !ghosts.isEmpty() && ghosts[0].clientId == clientId) {
         ghosts[0].dir = d;
+        int nx = ghosts[0].x, ny = ghosts[0].y;
+        if (d == UP) ny--; else if (d == DOWN) ny++; else if (d == LEFT) nx--; else if (d == RIGHT) nx++;
+        if (nx >= 1 && nx < COLS - 1 && ny >= 1 && ny < ROWS - 1 && board[ghosts[0].sectorY][ghosts[0].sectorX][ny][nx] != 1) {
+            ghosts[0].x = nx; ghosts[0].y = ny;
+            checkGhostCollisions();
+            broadcastCurrentGameState();
+            update();
+        }
     } else if (role == "pinky" && ghosts.size() > 1 && ghosts[1].clientId == clientId) {
         ghosts[1].dir = d;
+        int nx = ghosts[1].x, ny = ghosts[1].y;
+        if (d == UP) ny--; else if (d == DOWN) ny++; else if (d == LEFT) nx--; else if (d == RIGHT) nx++;
+        if (nx >= 1 && nx < COLS - 1 && ny >= 1 && ny < ROWS - 1 && board[ghosts[1].sectorY][ghosts[1].sectorX][ny][nx] != 1) {
+            ghosts[1].x = nx; ghosts[1].y = ny;
+            checkGhostCollisions();
+            broadcastCurrentGameState();
+            update();
+        }
     } else if (role == "inky" && ghosts.size() > 2 && ghosts[2].clientId == clientId) {
         ghosts[2].dir = d;
+        int nx = ghosts[2].x, ny = ghosts[2].y;
+        if (d == UP) ny--; else if (d == DOWN) ny++; else if (d == LEFT) nx--; else if (d == RIGHT) nx++;
+        if (nx >= 1 && nx < COLS - 1 && ny >= 1 && ny < ROWS - 1 && board[ghosts[2].sectorY][ghosts[2].sectorX][ny][nx] != 1) {
+            ghosts[2].x = nx; ghosts[2].y = ny;
+            checkGhostCollisions();
+            broadcastCurrentGameState();
+            update();
+        }
     } else if (role == "clyde" && ghosts.size() > 3 && ghosts[3].clientId == clientId) {
         ghosts[3].dir = d;
+        int nx = ghosts[3].x, ny = ghosts[3].y;
+        if (d == UP) ny--; else if (d == DOWN) ny++; else if (d == LEFT) nx--; else if (d == RIGHT) nx++;
+        if (nx >= 1 && nx < COLS - 1 && ny >= 1 && ny < ROWS - 1 && board[ghosts[3].sectorY][ghosts[3].sectorX][ny][nx] != 1) {
+            ghosts[3].x = nx; ghosts[3].y = ny;
+            checkGhostCollisions();
+            broadcastCurrentGameState();
+            update();
+        }
     }
 }
 
-void MainWindow::onPlayerPeek(int clientId)
+void MainWindow::onPlayerPeek(int clientId, const QString &role)
 {
-    Q_UNUSED(clientId);
-    if (fogPeeksRemaining > 0 && !fogPeekActive) {
-        fogPeeksRemaining--;
-        fogOfWarEnabled = false;
-        fogPeekActive = true;
-        fogPeekTimer.start();
-        peekToastMessage = QString("👁️ FOG PEEK TRIGGERED BY TEAM! (Charges: %1 left)").arg(fogPeeksRemaining);
-        peekToastTimer.start();
-        update();
+    if (fogPeekActive) return;
+
+    if (role == "p2" && p2ClientId == clientId) {
+        if (p2FogPeeks > 0) {
+            p2FogPeeks--;
+            fogOfWarEnabled = false;
+            fogPeekActive = true;
+            fogPeekTimer.start();
+            QString name = p2PlayerName.isEmpty() ? "Ms. Pac-Man" : p2PlayerName;
+            peekToastMessage = QString("👁️ %1 ACTIVATED FOG PEEK! (%2 left for them)").arg(name).arg(p2FogPeeks);
+            peekToastTimer.start();
+            broadcastCurrentGameState();
+            update();
+        } else {
+            peekToastMessage = QString("⚠️ %1 HAS NO FOG PEEKS LEFT! Eat fruit 🍒 to earn more!").arg(p2PlayerName.isEmpty() ? "Ms. Pac-Man" : p2PlayerName);
+            peekToastTimer.start();
+            update();
+        }
+    } else if (role == "p3" && hero3.clientId == clientId) {
+        if (hero3FogPeeks > 0) {
+            hero3FogPeeks--;
+            fogOfWarEnabled = false;
+            fogPeekActive = true;
+            fogPeekTimer.start();
+            QString name = hero3.playerName.isEmpty() ? "Jr. Pac-Man" : hero3.playerName;
+            peekToastMessage = QString("👁️ %1 ACTIVATED FOG PEEK! (%2 left for them)").arg(name).arg(hero3FogPeeks);
+            peekToastTimer.start();
+            broadcastCurrentGameState();
+            update();
+        }
+    } else if (role == "p4" && hero4.clientId == clientId) {
+        if (hero4FogPeeks > 0) {
+            hero4FogPeeks--;
+            fogOfWarEnabled = false;
+            fogPeekActive = true;
+            fogPeekTimer.start();
+            QString name = hero4.playerName.isEmpty() ? "Miracle Pac-Man" : hero4.playerName;
+            peekToastMessage = QString("👁️ %1 ACTIVATED FOG PEEK! (%2 left for them)").arg(name).arg(hero4FogPeeks);
+            peekToastTimer.start();
+            broadcastCurrentGameState();
+            update();
+        }
     }
 }
 
