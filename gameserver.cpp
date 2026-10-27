@@ -210,8 +210,23 @@ void GameServer::onClientDisconnected()
 
 void GameServer::handleHttpRequest(ConnectedClient *client, const QByteArray &data)
 {
-    Q_UNUSED(data);
-    QByteArray html = getControllerHtml();
+    // Inspect User-Agent header to detect mobile vs laptop/desktop devices
+    bool isMobile = false;
+    QString req = QString::fromUtf8(data);
+    const QStringList lines = req.split("\r\n");
+    for (const QString &line : lines) {
+        if (line.startsWith("User-Agent:", Qt::CaseInsensitive)) {
+            QString ua = line.mid(11).toLower();
+            if (ua.contains("mobile") || ua.contains("iphone") || ua.contains("android") ||
+                ua.contains("ipad") || ua.contains("ipod") || ua.contains("webos") ||
+                ua.contains("blackberry") || ua.contains("iemobile") || ua.contains("opera mini")) {
+                isMobile = true;
+            }
+            break;
+        }
+    }
+
+    QByteArray html = getControllerHtml(isMobile);
     QByteArray resp;
     resp.append("HTTP/1.1 200 OK\r\n");
     resp.append("Content-Type: text/html; charset=utf-8\r\n");
@@ -453,13 +468,13 @@ QJsonObject GameServer::getRolesStatusJson() const
     return roles;
 }
 
-QByteArray GameServer::getControllerHtml() const
+QByteArray GameServer::getControllerHtml(bool isMobile) const
 {
-    return R"rawhtml(<!DOCTYPE html>
-<html lang="en">
+    QByteArray html = R"rawhtml(<!DOCTYPE html>
+<html lang="en" class="{{DEVICE_CLASS}}" data-device="{{DEVICE_TYPE}}">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <title>Pac-Man: Classroom Multiplayer</title>
 <style>
   * { box-sizing: border-box; margin: 0; padding: 0; user-select: none; -webkit-user-select: none; }
@@ -483,8 +498,15 @@ QByteArray GameServer::getControllerHtml() const
     transition: max-width 0.2s ease;
   }
   header {
-    text-align: center;
+    width: 100%;
     margin-bottom: 10px;
+  }
+  .header-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    width: 100%;
+    gap: 10px;
   }
   h1 {
     font-size: 20px;
@@ -496,9 +518,33 @@ QByteArray GameServer::getControllerHtml() const
   }
   .subtitle {
     font-size: 10px;
-    letter-spacing: 2px;
+    letter-spacing: 1.5px;
     color: #8b9bb4;
     text-transform: uppercase;
+  }
+  .view-mode-pill {
+    background: #141933;
+    border: 1px solid #283769;
+    color: #00e5ff;
+    border-radius: 20px;
+    padding: 4px 10px;
+    font-size: 11px;
+    font-weight: 700;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    white-space: nowrap;
+    transition: all 0.2s ease;
+  }
+  .view-mode-pill:hover, .view-mode-pill:active {
+    border-color: #00e5ff;
+    background: #1d2652;
+    box-shadow: 0 0 12px rgba(0, 229, 255, 0.3);
+  }
+  .mode-switch-arrow {
+    opacity: 0.6;
+    font-size: 10px;
   }
 
   /* Lobby Card */
@@ -817,82 +863,142 @@ QByteArray GameServer::getControllerHtml() const
   }
 
   /* ======================================================== */
-  /* LAPTOP / DESKTOP PC MODE (Screen width >= 768px)         */
-  /* Expands to match host desktop view and fill screen!      */
+  /* MOBILE & LAPTOP DEDICATED VIEW MODES                     */
   /* ======================================================== */
-  @media (min-width: 768px) {
-    .app-container {
-      max-width: 1100px;
-      padding: 14px 20px 24px;
-    }
-    header h1 {
-      font-size: 24px;
-    }
-    header .subtitle {
-      font-size: 11px;
-    }
-    .hud-bar {
-      padding: 10px 18px;
-      margin-bottom: 14px;
-    }
-    .hero-chip-icon { font-size: 26px; }
-    .hero-chip-title { font-size: 15px; }
-    .hero-chip-sub { font-size: 11px; }
-    .hud-lbl { font-size: 9px; }
-    .hud-val { font-size: 16px; }
-    .status-pill { font-size: 11px; padding: 4px 10px; }
+  .mobile-gesture-hint {
+    display: none;
+    font-size: 11px;
+    color: #00e5ff;
+    text-align: center;
+    margin-top: 6px;
+    font-weight: 600;
+  }
 
-    .stage-layout {
+  /* MOBILE VIEW SPECIFIC OVERRIDES (.view-mobile) */
+  .view-mobile .app-container {
+    max-width: 440px !important;
+    padding: 8px 10px 18px !important;
+  }
+  .view-mobile .stage-layout {
+    flex-direction: column !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+  .view-mobile .canvas-box {
+    margin-bottom: 4px !important;
+    width: 100% !important;
+    max-width: min(88vw, 380px) !important;
+  }
+  .view-mobile #gameCanvas {
+    width: 100% !important;
+    height: auto !important;
+    aspect-ratio: 1 / 1 !important;
+    touch-action: none !important;
+  }
+  .view-mobile .side-panel {
+    width: 100% !important;
+    max-width: min(88vw, 380px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+  }
+  .view-mobile .dpad-container {
+    display: grid !important;
+    margin: 4px auto 6px !important;
+    touch-action: manipulation !important;
+  }
+  .view-mobile .desktop-guide {
+    display: none !important;
+  }
+  .view-mobile .mobile-gesture-hint {
+    display: block !important;
+  }
+
+  /* LAPTOP / DESKTOP VIEW SPECIFIC OVERRIDES (.view-desktop) */
+  .view-desktop .app-container {
+    max-width: 1160px !important;
+    padding: 14px 24px 28px !important;
+  }
+  .view-desktop header h1 {
+    font-size: 24px !important;
+  }
+  .view-desktop .stage-layout {
+    flex-direction: row !important;
+    align-items: flex-start !important;
+    justify-content: center !important;
+    gap: 24px !important;
+    width: 100% !important;
+  }
+  .view-desktop .canvas-box {
+    margin-bottom: 0 !important;
+  }
+  .view-desktop #gameCanvas {
+    width: min(72vh, 620px) !important;
+    height: min(72vh, 620px) !important;
+    border-radius: 16px !important;
+    border: 3px solid #2b3972 !important;
+    box-shadow: 0 10px 35px rgba(0,0,0,0.8), 0 0 25px rgba(0,229,255,0.22) !important;
+  }
+  .view-desktop .side-panel {
+    width: 320px !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 12px !important;
+  }
+  .view-desktop .dpad-container {
+    display: none !important; /* Hide touch buttons on laptop to highlight keyboard dashboard */
+  }
+  .view-desktop .desktop-guide {
+    display: flex !important;
+    flex-direction: column;
+    gap: 8px;
+    background: #111429;
+    border: 1px solid #232b54;
+    border-radius: 12px;
+    padding: 14px 16px;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+  }
+  .view-desktop .mobile-gesture-hint {
+    display: none !important;
+  }
+  .view-desktop .key-badge.active-key {
+    background: #00e5ff !important;
+    color: #060814 !important;
+    box-shadow: 0 0 14px #00e5ff !important;
+    transform: scale(1.1);
+  }
+
+  /* Default Responsive Breakpoint when class not explicitly applied */
+  @media (min-width: 768px) {
+    body:not(.view-mobile) .app-container {
+      max-width: 1160px;
+      padding: 14px 24px 28px;
+    }
+    body:not(.view-mobile) .stage-layout {
       flex-direction: row;
       align-items: flex-start;
       justify-content: center;
       gap: 24px;
       width: 100%;
     }
-    .canvas-box {
-      margin-bottom: 0;
-    }
-    #gameCanvas {
-      width: min(74vh, 640px);
-      height: min(74vh, 640px);
+    body:not(.view-mobile) #gameCanvas {
+      width: min(72vh, 620px);
+      height: min(72vh, 620px);
       border-radius: 16px;
       border: 3px solid #2b3972;
       box-shadow: 0 10px 35px rgba(0,0,0,0.8), 0 0 25px rgba(0,229,255,0.22);
     }
-    .side-panel {
-      width: 270px;
+    body:not(.view-mobile) .side-panel {
+      width: 320px;
       align-items: stretch;
-      gap: 10px;
+      gap: 12px;
     }
-    .action-row {
-      flex-direction: column;
-      gap: 6px;
+    body:not(.view-mobile) .dpad-container {
+      display: none;
     }
-    .action-btn {
-      padding: 14px;
-      font-size: 14px;
-      border-radius: 12px;
-    }
-    .btn-subhint {
-      display: block;
-      font-size: 10px;
-      opacity: 0.85;
-      font-weight: 600;
-      margin-top: 2px;
-    }
-    .dpad-container {
-      margin: 2px auto;
-      transform: scale(0.9);
-    }
-    .desktop-guide {
+    body:not(.view-mobile) .desktop-guide {
       display: flex;
-      flex-direction: column;
-      gap: 6px;
-      background: #111429;
-      border: 1px solid #232b54;
-      border-radius: 12px;
-      padding: 12px 14px;
-      box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     }
     .guide-title {
       font-size: 11px;
@@ -917,6 +1023,7 @@ QByteArray GameServer::getControllerHtml() const
       padding: 2px 7px;
       border-radius: 5px;
       font-size: 11px;
+      transition: all 0.1s ease;
     }
     .guide-note {
       font-size: 10px;
@@ -931,12 +1038,21 @@ QByteArray GameServer::getControllerHtml() const
   }
 </style>
 </head>
-<body>
+<body class="{{DEVICE_CLASS}}">
 
 <div class="app-container">
   <header>
-    <h1>PAC-MAN MULTIPLAYER</h1>
-    <div class="subtitle">Classroom Graphics Lab</div>
+    <div class="header-bar">
+      <div>
+        <h1>PAC-MAN MULTIPLAYER</h1>
+        <div class="subtitle">Classroom Graphics Lab • <span id="deviceDetectionNote">Auto-detected</span></div>
+      </div>
+      <button class="view-mode-pill" id="viewModeToggle" onclick="toggleViewMode()" title="Switch Mobile / Laptop Layout">
+        <span id="viewModeIcon">{{DEVICE_ICON}}</span>
+        <span id="viewModeLabel">{{DEVICE_LABEL}}</span>
+        <span class="mode-switch-arrow">⇄</span>
+      </button>
+    </div>
   </header>
 
   <!-- LOBBY SCREEN -->
@@ -1022,6 +1138,7 @@ QByteArray GameServer::getControllerHtml() const
       <!-- LIVE INTERACTIVE HIGH-RES GAME CANVAS -->
       <div class="canvas-box">
         <canvas id="gameCanvas" width="630" height="630"></canvas>
+        <div class="mobile-gesture-hint">👆 Swipe anywhere on maze or use D-Pad below</div>
       </div>
 
       <!-- SIDE DASHBOARD / CONTROLS -->
@@ -1042,15 +1159,15 @@ QByteArray GameServer::getControllerHtml() const
           <button class="d-btn btn-down" ontouchstart="sendDir(1, event)" onclick="sendDir(1, event)">▼</button>
         </div>
 
-        <!-- LAPTOP KEYBOARD GUIDE -->
+        <!-- LAPTOP KEYBOARD GUIDE WITH REAL-TIME ILLUMINATION -->
         <div class="desktop-guide">
-          <div class="guide-title">💻 LAPTOP KEYBOARD</div>
-          <div class="guide-row"><span class="key-badge">W / ↑</span><span class="key-desc">Step Up</span></div>
-          <div class="guide-row"><span class="key-badge">A / ←</span><span class="key-desc">Step Left</span></div>
-          <div class="guide-row"><span class="key-badge">S / ↓</span><span class="key-desc">Step Down</span></div>
-          <div class="guide-row"><span class="key-badge">D / →</span><span class="key-desc">Step Right</span></div>
-          <div class="guide-row"><span class="key-badge">Space / F</span><span class="key-desc">Fog Peek</span></div>
-          <div class="guide-note">⚡ 1 Press = 1 Step (Same as host)</div>
+          <div class="guide-title">💻 LAPTOP KEYBOARD (LIVE)</div>
+          <div class="guide-row"><span class="key-badge" id="key-up">W / ↑</span><span class="key-desc">Step Up</span></div>
+          <div class="guide-row"><span class="key-badge" id="key-left">A / ←</span><span class="key-desc">Step Left</span></div>
+          <div class="guide-row"><span class="key-badge" id="key-down">S / ↓</span><span class="key-desc">Step Down</span></div>
+          <div class="guide-row"><span class="key-badge" id="key-right">D / →</span><span class="key-desc">Step Right</span></div>
+          <div class="guide-row"><span class="key-badge" id="key-peek">Space / F</span><span class="key-desc">Fog Peek</span></div>
+          <div class="guide-note">⚡ Real-time keyboard illumination</div>
         </div>
 
         <button class="leave-btn" onclick="leaveRole()">⇄ Switch Role / Leave</button>
@@ -1067,6 +1184,109 @@ QByteArray GameServer::getControllerHtml() const
   let lastTouchTime = 0;
   let myName = localStorage.getItem('pacman_pname') || '';
   if (myName) document.getElementById('nameInput').value = myName;
+
+  // =============================================================
+  // Comprehensive Browser-Side Device Detection & View Management
+  // =============================================================
+  function detectDeviceType() {
+    // 1. User manual override preference saved in localStorage
+    const saved = localStorage.getItem('pacman_view_mode');
+    if (saved === 'mobile' || saved === 'desktop') {
+      return saved;
+    }
+    // 2. Client Hints API (Modern standard)
+    if (navigator.userAgentData && typeof navigator.userAgentData.mobile === 'boolean') {
+      return navigator.userAgentData.mobile ? 'mobile' : 'desktop';
+    }
+    // 3. User-Agent regex check
+    const ua = navigator.userAgent || '';
+    const isMobileUA = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i.test(ua);
+    // 4. Touch capabilities & pointer type
+    const hasTouch = ('ontouchstart' in window) || (navigator.maxTouchPoints > 0);
+    const isSmallScreen = window.innerWidth <= 768;
+    const isCoarsePointer = window.matchMedia && window.matchMedia('(pointer: coarse)').matches;
+
+    if (isMobileUA || (hasTouch && (isSmallScreen || isCoarsePointer))) {
+      return 'mobile';
+    }
+    return 'desktop';
+  }
+
+  let currentViewMode = detectDeviceType();
+
+  // Screen Wake Lock API for mobile devices
+  let wakeLock = null;
+  async function requestWakeLock() {
+    try {
+      if ('wakeLock' in navigator && !wakeLock && currentRole) {
+        wakeLock = await navigator.wakeLock.request('screen');
+        wakeLock.addEventListener('release', () => { wakeLock = null; });
+      }
+    } catch (err) {}
+  }
+  function releaseWakeLock() {
+    if (wakeLock) {
+      wakeLock.release().catch(() => {});
+      wakeLock = null;
+    }
+  }
+
+  function applyViewMode(mode, savePref = false) {
+    currentViewMode = mode;
+    if (savePref) {
+      localStorage.setItem('pacman_view_mode', mode);
+    }
+    const htmlEl = document.documentElement;
+    const bodyEl = document.body;
+    const toggleIcon = document.getElementById('viewModeIcon');
+    const toggleLabel = document.getElementById('viewModeLabel');
+    const noteEl = document.getElementById('deviceDetectionNote');
+
+    if (mode === 'mobile') {
+      htmlEl.classList.remove('device-desktop', 'view-desktop');
+      htmlEl.classList.add('device-mobile', 'view-mobile');
+      bodyEl.classList.remove('view-desktop');
+      bodyEl.classList.add('view-mobile');
+      if (toggleIcon) toggleIcon.textContent = '📱';
+      if (toggleLabel) toggleLabel.textContent = 'Mobile View';
+      if (noteEl) noteEl.textContent = savePref ? 'Manual Mobile' : 'Auto Mobile';
+      requestWakeLock();
+    } else {
+      htmlEl.classList.remove('device-mobile', 'view-mobile');
+      htmlEl.classList.add('device-desktop', 'view-desktop');
+      bodyEl.classList.remove('view-mobile');
+      bodyEl.classList.add('view-desktop');
+      if (toggleIcon) toggleIcon.textContent = '💻';
+      if (toggleLabel) toggleLabel.textContent = 'Laptop View';
+      if (noteEl) noteEl.textContent = savePref ? 'Manual Laptop' : 'Auto Laptop';
+      releaseWakeLock();
+    }
+  }
+
+  function toggleViewMode() {
+    const nextMode = (currentViewMode === 'mobile') ? 'desktop' : 'mobile';
+    playWebSound('click');
+    applyViewMode(nextMode, true);
+  }
+
+  // Real-time window resize check (if not manually pinned by user)
+  window.addEventListener('resize', () => {
+    if (!localStorage.getItem('pacman_view_mode')) {
+      const auto = detectDeviceType();
+      if (auto !== currentViewMode) {
+        applyViewMode(auto, false);
+      }
+    }
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && currentRole && currentViewMode === 'mobile') {
+      requestWakeLock();
+    }
+  });
+
+  // Apply on initial load
+  applyViewMode(currentViewMode, false);
 
   // Web Audio Retro Sound Synthesizer
   let audioCtx = null;
@@ -1371,8 +1591,27 @@ QByteArray GameServer::getControllerHtml() const
     }
   }
 
+  // Real-time keyboard illumination for laptop users
+  function updateKeyIndicator(code, isPressed) {
+    let keyId = null;
+    if (code === 'KeyW' || code === 'ArrowUp') keyId = 'key-up';
+    else if (code === 'KeyA' || code === 'ArrowLeft') keyId = 'key-left';
+    else if (code === 'KeyS' || code === 'ArrowDown') keyId = 'key-down';
+    else if (code === 'KeyD' || code === 'ArrowRight') keyId = 'key-right';
+    else if (code === 'Space' || code === 'KeyF') keyId = 'key-peek';
+
+    if (keyId) {
+      const el = document.getElementById(keyId);
+      if (el) {
+        if (isPressed) el.classList.add('active-key');
+        else el.classList.remove('active-key');
+      }
+    }
+  }
+
   // Keyboard navigation for laptop users: 1 keypress = 1 step
   window.addEventListener('keydown', (e) => {
+    updateKeyIndicator(e.code, true);
     if (!currentRole) return;
     if (e.repeat) return; // Prevent continuous fast repeating
     if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') { sendDir(0, e); }
@@ -1381,6 +1620,45 @@ QByteArray GameServer::getControllerHtml() const
     else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') { sendDir(3, e); }
     else if (e.key === ' ' || e.key === 'f' || e.key === 'F') { sendAction(); e.preventDefault(); }
   });
+
+  window.addEventListener('keyup', (e) => {
+    updateKeyIndicator(e.code, false);
+  });
+
+  // Touch Swipe Gesture recognition on the maze canvas for mobile
+  let touchStartX = 0;
+  let touchStartY = 0;
+  let touchStartTime = 0;
+
+  canvas.addEventListener('touchstart', (e) => {
+    if (e.touches.length === 1) {
+      touchStartX = e.touches[0].clientX;
+      touchStartY = e.touches[0].clientY;
+      touchStartTime = Date.now();
+    }
+  }, { passive: true });
+
+  canvas.addEventListener('touchmove', (e) => {
+    if (e.cancelable) e.preventDefault(); // Prevent page pull-down/refresh while swiping
+  }, { passive: false });
+
+  canvas.addEventListener('touchend', (e) => {
+    if (e.changedTouches.length === 1) {
+      const dx = e.changedTouches[0].clientX - touchStartX;
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      const dt = Date.now() - touchStartTime;
+      const absX = Math.abs(dx);
+      const absY = Math.abs(dy);
+
+      if (Math.max(absX, absY) > 22 && dt < 600) {
+        if (absX > absY) {
+          sendDir(dx > 0 ? 3 : 2, e); // 3=Right, 2=Left
+        } else {
+          sendDir(dy > 0 ? 1 : 0, e); // 1=Down, 0=Up
+        }
+      }
+    }
+  }, { passive: true });
 
   // ==========================================
   // HTML5 Canvas 2D Game Renderer (630x630)
@@ -1884,4 +2162,17 @@ QByteArray GameServer::getControllerHtml() const
 </script>
 </body>
 </html>)rawhtml";
+
+    if (isMobile) {
+        html.replace("{{DEVICE_CLASS}}", "device-mobile view-mobile");
+        html.replace("{{DEVICE_TYPE}}", "mobile");
+        html.replace("{{DEVICE_LABEL}}", "Mobile View");
+        html.replace("{{DEVICE_ICON}}", "📱");
+    } else {
+        html.replace("{{DEVICE_CLASS}}", "device-desktop view-desktop");
+        html.replace("{{DEVICE_TYPE}}", "desktop");
+        html.replace("{{DEVICE_LABEL}}", "Laptop View");
+        html.replace("{{DEVICE_ICON}}", "💻");
+    }
+    return html;
 }

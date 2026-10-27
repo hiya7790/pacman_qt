@@ -63,7 +63,7 @@ private:
     void processWebSocketFrame(ConnectedClient *client);
     void handleWebSocketMessage(ConnectedClient *client, const QString &message);
     void sendWebSocketFrame(QTcpSocket *socket, const QString &text);
-    QByteArray getControllerHtml() const;
+    QByteArray getControllerHtml(bool isMobile = false) const;
     QJsonObject getRolesStatusJson() const;
 
     QTcpServer *tcpServer;
