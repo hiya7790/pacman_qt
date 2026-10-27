@@ -894,7 +894,8 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
     painter.setPen(QColor(230, 215, 245));
     painter.drawText(0, btnRect.bottom() + 3, w, 16, Qt::AlignCenter, subText);
 
-    // Top-Right Multiplayer Badge
+    // Top-Right Badges
+    drawSoundBadge(painter);
     drawMultiplayerBadge(painter);
 
     // Classroom Multiplayer Lobby Overlay

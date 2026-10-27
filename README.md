@@ -79,6 +79,21 @@ An innovative, feature-packed C++ game built with **Qt 6**, blending classic **P
 
 ---
 
+### 🔊 7. Authentic Retro 8-Bit Sound Effects & Audio Manager
+- **Zero-Dependency Algorithmic Synthesis:** Automatically generates studio-quality 16-bit 22.05kHz PCM audio waveforms on startup with mathematical phase accumulation and resonant filtering. No external audio downloads or assets required!
+- **Classic Arcade Soundboard:**
+  - 🟡 **Waka-Waka Dot Eating:** Dynamic two-stroke alternating pitch sweep (`240Hz ➔ 490Hz` & `490Hz ➔ 240Hz`) throttled for authentic rhythmic chomping.
+  - 🍒 **Fruit Power-Up Chime:** Joyous 4-step ascending arpeggio chord (`C5 ➔ E5 ➔ G5 ➔ C6`).
+  - 👻 **Ghost Eaten Chomp:** High-impact crunchy arcade sweep with dual harmonic rumble.
+  - 💀 **Pac-Man Death Sequence:** Descending 10-step frequency wobble ending in a low cartoon bloop.
+  - 🏆 **Stargate Victory Fanfare:** Triumphant multi-voice celebration fanfare on clearing a level.
+  - 💡 **Fog Lantern Peek:** Mystical high-register crystal chime (`E6 & A6` harmonic shimmer).
+  - 🖱️ **UI Feedback Micro-Clicks:** Crisp 40ms acoustic click on all button presses and Saga node navigation.
+- **Instant Mute / Unmute:** Press **`[S]`** or click the top-right **`[ 🔊 [S] ]`** badge anytime to toggle audio. Mute preferences persist across sessions in `QSettings`.
+- **Mobile Controller Web Audio:** Connected mobile browser controllers automatically synthesize tactical haptic audio via the HTML5 Web Audio API.
+
+---
+
 ## 🎮 Controls
 
 ### Home Map Controls
@@ -90,6 +105,7 @@ An innovative, feature-packed C++ game built with **Qt 6**, blending classic **P
 | **Jump to Level 1 / Base** | `Home` |
 | **Jump to Current Hero / Summit** | `End` or click **`[ 📍 MY HERO ]`** |
 | **Toggle Game Mode (Yellow / Pink / Co-op)** | `Tab`, `1`, `2`, `3`, or click the Mode buttons |
+| **Toggle Audio Mute / Unmute** | `S` or click top-right **`[ 🔊 [S] ]`** |
 | **Classroom Multiplayer Lobby / Link** | `H` or click top-right **`[ 🌐 HOST ROOM ]`** |
 
 ### In-Game Playing Controls
@@ -99,6 +115,7 @@ An innovative, feature-packed C++ game built with **Qt 6**, blending classic **P
 | **Player 2 Movement (Co-op)** | `WASD` (or `Arrow Keys` when swapped) |
 | **Swap Arrow Control (Co-op)** | `Tab` or click directly on Pac-Man / Ms. Pac-Man |
 | **Fog Peek (1.0s glimpse)** | `F` (3 charges per level; eat fruits for +1) |
+| **Toggle Audio Mute / Unmute** | `S` or click top-right **`[ 🔊 [S] ]`** |
 | **Classroom Multiplayer Lobby / Link** | `H` or click top-right **`[ 🌐 HOST ROOM ]`** |
 | **Return to Saga Map** | `M` key or click the top-left **[ 🗺️ SAGA MAP ]** button |
 | **Retry Current Stage (on Game Over)** | `R` or `Space` |
@@ -153,6 +170,8 @@ pacman_qt/
 ├── mainwindow_input.cpp       # Keyboard controls, mouse dragging, scrolling & click events
 ├── gameserver.h               # Embedded HTTP & RFC 6455 WebSocket multiplayer server header
 ├── gameserver.cpp             # Zero-dependency web server & mobile controller HTML5 generator
+├── soundmanager.h             # High-performance retro sound effects manager header
+├── soundmanager.cpp           # Programmatic 16-bit PCM audio synthesizer & QSoundEffect player
 ├── mazesolver.h               # Maze pathfinding & BFS exploration utilities
 └── README.md                  # Project documentation & gameplay guide
 ```

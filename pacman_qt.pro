@@ -1,4 +1,4 @@
-QT       += core gui widgets network
+QT       += core gui widgets network multimedia
 
 TARGET = pacman_qt
 TEMPLATE = app
@@ -10,9 +10,11 @@ SOURCES += main.cpp \
            mainwindow_render_game.cpp \
            mainwindow_map.cpp \
            mainwindow_input.cpp \
-           gameserver.cpp
+           gameserver.cpp \
+           soundmanager.cpp
 
 HEADERS += mainwindow.h \
-           gameserver.h
+           gameserver.h \
+           soundmanager.h
 
 CONFIG += c++17

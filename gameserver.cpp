@@ -1068,6 +1068,51 @@ QByteArray GameServer::getControllerHtml() const
   let myName = localStorage.getItem('pacman_pname') || '';
   if (myName) document.getElementById('nameInput').value = myName;
 
+  // Web Audio Retro Sound Synthesizer
+  let audioCtx = null;
+  function getAudioContext() {
+    if (!audioCtx) {
+      const AudioCtx = window.AudioContext || window.webkitAudioContext;
+      if (AudioCtx) audioCtx = new AudioCtx();
+    }
+    if (audioCtx && audioCtx.state === 'suspended') {
+      audioCtx.resume().catch(() => {});
+    }
+    return audioCtx;
+  }
+  function playWebSound(type) {
+    try {
+      const actx = getAudioContext();
+      if (!actx) return;
+      const now = actx.currentTime;
+      if (type === 'click') {
+        const osc = actx.createOscillator();
+        const gain = actx.createGain();
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(600, now);
+        osc.frequency.exponentialRampToValueAtTime(250, now + 0.04);
+        gain.gain.setValueAtTime(0.2, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
+        osc.connect(gain);
+        gain.connect(actx.destination);
+        osc.start(now);
+        osc.stop(now + 0.04);
+      } else if (type === 'peek') {
+        const osc = actx.createOscillator();
+        const gain = actx.createGain();
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(1320, now);
+        osc.frequency.exponentialRampToValueAtTime(1760, now + 0.18);
+        gain.gain.setValueAtTime(0.25, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.25);
+        osc.connect(gain);
+        gain.connect(actx.destination);
+        osc.start(now);
+        osc.stop(now + 0.25);
+      }
+    } catch (e) {}
+  }
+
   // High-Resolution 630x630 Coordinate System (30px per cell)
   const canvas = document.getElementById('gameCanvas');
   const ctx = canvas.getContext('2d');
@@ -1194,6 +1239,7 @@ QByteArray GameServer::getControllerHtml() const
       return; // Eliminated players cannot move
     }
     if (navigator.vibrate) navigator.vibrate(20);
+    playWebSound('click');
     if (ws && ws.readyState === WebSocket.OPEN && currentRole) {
       ws.send(JSON.stringify({ type: 'move', dir: dir }));
     }
@@ -1205,6 +1251,7 @@ QByteArray GameServer::getControllerHtml() const
       return; // Eliminated players cannot peek
     }
     if (navigator.vibrate) navigator.vibrate(35);
+    playWebSound('peek');
     if (meta && meta.isHero) {
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'peek' }));

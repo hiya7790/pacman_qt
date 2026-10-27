@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "soundmanager.h"
 #include <QKeyEvent>
 #include <QMouseEvent>
 #include <QWheelEvent>
@@ -27,7 +28,18 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
 
     // Toggle Multiplayer Classroom Lobby with [H]
     if (event->key() == Qt::Key_H) {
+        SoundManager::instance().playClick();
         showMultiplayerLobby = !showMultiplayerLobby;
+        update();
+        return;
+    }
+
+    // Toggle Audio Mute / Unmute with [S]
+    if (event->key() == Qt::Key_S) {
+        bool muted = SoundManager::instance().toggleMute();
+        if (!muted) SoundManager::instance().playClick();
+        peekToastMessage = muted ? "🔇 AUDIO MUTED (Press [S] to Unmute)" : "🔊 RETRO AUDIO ON";
+        peekToastTimer.start();
         update();
         return;
     }
@@ -48,10 +60,12 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     // Home Map Key Handling
     if (currentScreen == SCREEN_HOME_MAP) {
         if (event->key() == Qt::Key_Space || event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
+            SoundManager::instance().playClick();
             startLevel(selectedMapLevel);
             return;
         }
         if (event->key() == Qt::Key_Tab || event->key() == Qt::Key_C || event->key() == Qt::Key_P) {
+            SoundManager::instance().playClick();
             if (!isMultiplayer && singlePlayerHero == 1) {
                 singlePlayerHero = 2; // Switch to Pink solo
                 isMultiplayer = false;
@@ -191,6 +205,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             fogOfWarEnabled = false;
             fogPeekActive = true;
             fogPeekTimer.start();
+            SoundManager::instance().playPeek();
             peekToastMessage = "👻 GHOST SONAR ACTIVE! (1.0s) • Entire maze & all Pac-Heroes revealed!";
             peekToastTimer.start();
             broadcastCurrentGameState();
@@ -203,6 +218,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             fogOfWarEnabled = false;
             fogPeekActive = true;
             fogPeekTimer.start();
+            SoundManager::instance().playPeek();
             peekToastMessage = QString("💡 HOST FOG PEEK ACTIVE! (1.0s) • %1 Left for Host").arg(p1FogPeeks);
             peekToastTimer.start();
             broadcastCurrentGameState();
@@ -412,7 +428,17 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         return;
     }
 
+    if (getSoundButtonRect().contains(event->pos())) {
+        bool muted = SoundManager::instance().toggleMute();
+        if (!muted) SoundManager::instance().playClick();
+        peekToastMessage = muted ? "🔇 AUDIO MUTED (Press [S] to Unmute)" : "🔊 RETRO AUDIO ON";
+        peekToastTimer.start();
+        update();
+        return;
+    }
+
     if (getMultiplayerButtonRect().contains(event->pos())) {
+        SoundManager::instance().playClick();
         showMultiplayerLobby = !showMultiplayerLobby;
         update();
         return;
@@ -423,6 +449,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
 
         // 1. Clicked My Hero or Record badges (Quick spring camera jump!)
         if (getMyLevelButtonRect().contains(pos) || getRecordBadgeRect().contains(pos)) {
+            SoundManager::instance().playClick();
             selectedMapLevel = highestUnlockedLevel;
             scrollToLevel(highestUnlockedLevel, false);
             update();
@@ -431,6 +458,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
 
         // 2. Clicked Mode Selector buttons
         if (getModeYellowRect().contains(pos)) {
+            SoundManager::instance().playClick();
             isMultiplayer = false;
             singlePlayerHero = 1;
             arrowPlayer = 1;
@@ -439,6 +467,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
             return;
         }
         if (getModePinkRect().contains(pos)) {
+            SoundManager::instance().playClick();
             isMultiplayer = false;
             singlePlayerHero = 2;
             arrowPlayer = 2;
@@ -447,6 +476,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
             return;
         }
         if (getModeCoopRect().contains(pos)) {
+            SoundManager::instance().playClick();
             isMultiplayer = true;
             update();
             return;
@@ -454,6 +484,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
 
         // 3. Clicked Play button
         if (getPlayButtonRect().contains(pos)) {
+            SoundManager::instance().playClick();
             if (selectedMapLevel <= highestUnlockedLevel) {
                 startLevel(selectedMapLevel);
             } else {

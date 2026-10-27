@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "soundmanager.h"
 #include <QRandomGenerator>
 #include <QPoint>
 #include <QVector>
@@ -198,6 +199,7 @@ void MainWindow::checkLevelExit()
     // In multiplayer: ALL alive (eligible) players must reach the exit portal!
     if (eligibleCount > 0 && reachedCount >= eligibleCount) {
         levelComplete = true;
+        SoundManager::instance().playVictory();
         int clearBonus = (300 + currentLevel * 100) * (sectorCols * sectorRows);
         int perHeroBonus = clearBonus / eligibleCount;
 

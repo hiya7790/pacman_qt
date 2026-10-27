@@ -131,6 +131,8 @@ private:
     void broadcastCurrentGameState();
     void drawMultiplayerBadge(QPainter &painter);
     void drawMultiplayerLobby(QPainter &painter);
+    void drawSoundBadge(QPainter &painter);
+    QRect getSoundButtonRect() const;
     QRect getMultiplayerButtonRect() const;
     QRect getCopyLinkButtonRect() const;
     QRect getLobbyCloseButtonRect() const;

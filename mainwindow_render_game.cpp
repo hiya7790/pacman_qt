@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "gameserver.h"
+#include "soundmanager.h"
 #include <QPainter>
 #include <QPainterPath>
 #include <QRadialGradient>
@@ -1542,13 +1543,67 @@ void MainWindow::drawGameScreen(QPainter &painter)
                          "Press [Space] for Next Stage   •   Press [M] for Saga Map");
     }
 
-    // Top-Right Multiplayer Badge
+    // Top-Right Badges
+    drawSoundBadge(painter);
     drawMultiplayerBadge(painter);
 
     // Classroom Multiplayer Lobby Overlay
     if (showMultiplayerLobby) {
         drawMultiplayerLobby(painter);
     }
+}
+
+QRect MainWindow::getSoundButtonRect() const
+{
+    return QRect(width() - 325, 14, 68, 36);
+}
+
+void MainWindow::drawSoundBadge(QPainter &painter)
+{
+    QRect btn = getSoundButtonRect();
+    bool hovered = btn.contains(mapFromGlobal(QCursor::pos()));
+    bool muted = SoundManager::instance().isMuted();
+
+    // Drop shadow
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(QColor(0, 0, 0, 110));
+    painter.drawRoundedRect(btn.adjusted(1, 2, 1, 2), btn.height() / 2, btn.height() / 2);
+
+    QLinearGradient bgGrad(btn.left(), btn.top(), btn.left(), btn.bottom());
+    if (muted) {
+        if (hovered) {
+            bgGrad.setColorAt(0.0, QColor(70, 30, 30, 240));
+            bgGrad.setColorAt(1.0, QColor(40, 15, 15, 240));
+        } else {
+            bgGrad.setColorAt(0.0, QColor(50, 20, 20, 215));
+            bgGrad.setColorAt(1.0, QColor(28, 10, 10, 215));
+        }
+    } else {
+        if (hovered) {
+            bgGrad.setColorAt(0.0, QColor(35, 75, 155, 240));
+            bgGrad.setColorAt(1.0, QColor(15, 35, 80, 240));
+        } else {
+            bgGrad.setColorAt(0.0, QColor(20, 45, 95, 215));
+            bgGrad.setColorAt(1.0, QColor(10, 20, 50, 215));
+        }
+    }
+    painter.setBrush(bgGrad);
+    painter.setPen(QPen(muted ? (hovered ? QColor(255, 100, 100) : QColor(220, 70, 70, 180))
+                              : (hovered ? QColor(0, 255, 240) : QColor(0, 180, 255, 180)),
+                        hovered ? 2.0 : 1.3));
+    painter.drawRoundedRect(btn, btn.height() / 2, btn.height() / 2);
+
+    // Specular highlight
+    QPainterPath glint;
+    glint.addRoundedRect(QRectF(btn.left() + 3, btn.top() + 1, btn.width() - 6, btn.height() * 0.45),
+                         (btn.height() * 0.45) / 2, (btn.height() * 0.45) / 2);
+    painter.fillPath(glint, QColor(255, 255, 255, 30));
+
+    painter.setFont(QFont("Arial", 10, QFont::Bold));
+    painter.setPen(muted ? (hovered ? Qt::white : QColor(255, 140, 140))
+                         : (hovered ? Qt::white : QColor(210, 240, 255)));
+    QString text = muted ? "🔇 [S]" : "🔊 [S]";
+    painter.drawText(btn, Qt::AlignCenter, text);
 }
 
 QRect MainWindow::getMultiplayerButtonRect() const

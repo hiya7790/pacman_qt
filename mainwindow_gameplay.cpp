@@ -1,4 +1,5 @@
 #include "mainwindow.h"
+#include "soundmanager.h"
 #include <QRandomGenerator>
 #include <QVector>
 #include <QPair>
@@ -138,6 +139,7 @@ void MainWindow::movePacman()
             board[currentSectorY][currentSectorX][pacmanY][pacmanX] = 0;
             scoreP1 += 10 + (currentLevel - 1) * 2;
             score = scoreP1 + scoreP2 + hero3.score + hero4.score;
+            SoundManager::instance().playWaka();
         }
 
         // Mouth animation
@@ -238,6 +240,7 @@ void MainWindow::movePlayer2()
             board[currentSectorY][currentSectorX][p2Y][p2X] = 0;
             scoreP2 += 10 + (currentLevel - 1) * 2;
             score = scoreP1 + scoreP2 + hero3.score + hero4.score;
+            SoundManager::instance().playWaka();
         }
 
         // Mouth animation
@@ -332,6 +335,7 @@ void MainWindow::moveHero(ExtraHero &hero, int heroId)
             board[currentSectorY][currentSectorX][hero.y][hero.x] = 0;
             hero.score += 10 + (currentLevel - 1) * 2;
             score = scoreP1 + scoreP2 + hero3.score + hero4.score;
+            SoundManager::instance().playWaka();
         }
 
         // Mouth animation
@@ -470,10 +474,12 @@ void MainWindow::checkGhostCollisions()
                 scoreP1 += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 respawnGhostFarAway(g);
+                SoundManager::instance().playEatGhost();
             } else {
                 p1Alive = false;
                 p1ReachedExit = false;
                 p1Lives--;
+                SoundManager::instance().playDeath();
                 if (p1Lives > 0) {
                     p1RespawnTicks = 30; // ~4s respawn
                     peekToastMessage = QString("🟡 Pac-Man was eaten! (%1 %2 left)").arg(p1Lives).arg(p1Lives == 1 ? "life" : "lives");
@@ -494,10 +500,12 @@ void MainWindow::checkGhostCollisions()
                 scoreP2 += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 respawnGhostFarAway(g);
+                SoundManager::instance().playEatGhost();
             } else {
                 p2Alive = false;
                 p2ReachedExit = false;
                 p2Lives--;
+                SoundManager::instance().playDeath();
                 if (p2Lives > 0) {
                     p2RespawnTicks = 30;
                     peekToastMessage = QString("🎀 Ms. Pac-Man was eaten! (%1 %2 left)").arg(p2Lives).arg(p2Lives == 1 ? "life" : "lives");
@@ -518,10 +526,12 @@ void MainWindow::checkGhostCollisions()
                 hero3.score += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 respawnGhostFarAway(g);
+                SoundManager::instance().playEatGhost();
             } else {
                 hero3.alive = false;
                 hero3.reachedExit = false;
                 hero3.lives--;
+                SoundManager::instance().playDeath();
                 if (hero3.lives > 0) {
                     hero3.respawnTicks = 30;
                     peekToastMessage = QString("🧢 Jr. Pac-Man was eaten! (%1 %2 left)").arg(hero3.lives).arg(hero3.lives == 1 ? "life" : "lives");
@@ -542,10 +552,12 @@ void MainWindow::checkGhostCollisions()
                 hero4.score += 200;
                 score = scoreP1 + scoreP2 + hero3.score + hero4.score;
                 respawnGhostFarAway(g);
+                SoundManager::instance().playEatGhost();
             } else {
                 hero4.alive = false;
                 hero4.reachedExit = false;
                 hero4.lives--;
+                SoundManager::instance().playDeath();
                 if (hero4.lives > 0) {
                     hero4.respawnTicks = 30;
                     peekToastMessage = QString("🟢 Miracle Pac-Man was eaten! (%1 %2 left)").arg(hero4.lives).arg(hero4.lives == 1 ? "life" : "lives");
@@ -658,6 +670,7 @@ void MainWindow::checkFruitPickup()
             bool p4Picked = (hero4.clientId != -1 && hero4.alive && activeFruits[i].x == hero4.x && activeFruits[i].y == hero4.y);
 
             if (p1Picked || p2Picked || p3Picked || p4Picked) {
+                SoundManager::instance().playFruit();
                 QString eaterName = "Hero";
                 if (p1Picked) {
                     scoreP1 += 100;
