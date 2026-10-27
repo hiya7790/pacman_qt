@@ -39,6 +39,29 @@ bool MainWindow::isCellVisible(int sx, int sy, int x, int y) const
             dist3 <= currentVisionRadius || dist4 <= currentVisionRadius || distG <= (currentVisionRadius + 0.8));
 }
 
+void MainWindow::syncHumanGhostsToCurrentSector()
+{
+    int hostGIdx = isHostGhost() ? getHostGhostIndex() : -1;
+    for (int gi = 0; gi < ghosts.size(); ++gi) {
+        if (ghosts[gi].clientId >= 0 || (hostGIdx == gi)) {
+            ghosts[gi].sectorX = currentSectorX;
+            ghosts[gi].sectorY = currentSectorY;
+            if (board[currentSectorY][currentSectorX][ghosts[gi].y][ghosts[gi].x] == 1) {
+                for (int r = 1; r < ROWS - 1; ++r) {
+                    for (int c = 1; c < COLS - 1; ++c) {
+                        if (board[currentSectorY][currentSectorX][r][c] == 0) {
+                            ghosts[gi].x = c;
+                            ghosts[gi].y = r;
+                            goto placed;
+                        }
+                    }
+                }
+                placed:;
+            }
+        }
+    }
+}
+
 void MainWindow::movePacman()
 {
     if (!p1Alive) return;
@@ -73,6 +96,7 @@ void MainWindow::movePacman()
                 newSectorTimer.start();
             }
             sectorDiscovered[currentSectorY][currentSectorX] = true;
+            syncHumanGhostsToCurrentSector();
         } else if (nextX < 0) {
             fromSectorX = currentSectorX; fromSectorY = currentSectorY;
             toSectorX = currentSectorX - 1; toSectorY = currentSectorY;
@@ -91,6 +115,7 @@ void MainWindow::movePacman()
                 newSectorTimer.start();
             }
             sectorDiscovered[currentSectorY][currentSectorX] = true;
+            syncHumanGhostsToCurrentSector();
         } else if (nextY >= ROWS) {
             fromSectorX = currentSectorX; fromSectorY = currentSectorY;
             toSectorX = currentSectorX; toSectorY = currentSectorY + 1;
@@ -109,6 +134,7 @@ void MainWindow::movePacman()
                 newSectorTimer.start();
             }
             sectorDiscovered[currentSectorY][currentSectorX] = true;
+            syncHumanGhostsToCurrentSector();
         } else if (nextY < 0) {
             fromSectorX = currentSectorX; fromSectorY = currentSectorY;
             toSectorX = currentSectorX; toSectorY = currentSectorY - 1;
@@ -127,6 +153,7 @@ void MainWindow::movePacman()
                 newSectorTimer.start();
             }
             sectorDiscovered[currentSectorY][currentSectorX] = true;
+            syncHumanGhostsToCurrentSector();
         } else {
             pacmanX = nextX;
             pacmanY = nextY;

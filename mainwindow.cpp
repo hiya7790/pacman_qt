@@ -319,6 +319,17 @@ void MainWindow::initLevel()
     newSectorJustDiscovered = false;
 
     // 5. Spawn Ghosts across sectors dynamically based on level
+    // Preserve any active human multiplayer ghost slots
+    int blinkyClient = -1, pinkyClient = -1, inkyClient = -1, clydeClient = -1;
+    QString blinkyName, pinkyName, inkyName, clydeName;
+    if (gameServer) {
+        for (ConnectedClient *c : gameServer->getActiveClients()) {
+            if (c->role == "blinky") { blinkyClient = c->id; blinkyName = c->playerName; }
+            else if (c->role == "pinky") { pinkyClient = c->id; pinkyName = c->playerName; }
+            else if (c->role == "inky") { inkyClient = c->id; inkyName = c->playerName; }
+            else if (c->role == "clyde") { clydeClient = c->id; clydeName = c->playerName; }
+        }
+    }
     ghosts.clear();
 
     // Helper to find a safe, walkable spawn tile in a given sector
@@ -345,29 +356,27 @@ void MainWindow::initLevel()
         outX = 10; outY = 10;
     };
 
-    // --- The Core 4 Classic Ghosts (Blinky, Pinky, Inky, Clyde) ---
-    // Ghost 0: Blinky (Red) - Direct Hunter in Start Sector
+    // --- The Core 4 Classic Playable Ghosts (Blinky, Pinky, Inky, Clyde) ---
+    // All 4 start directly in the active sector with Pac-Man so ghost players can immediately hunt!
+    // Ghost 0: Blinky (Red) - Direct Hunter
     int bX = 10, bY = 9;
     findValidGhostSpawn(currentSectorX, currentSectorY, bX, bY);
-    ghosts.push_back({currentSectorX, currentSectorY, bX, bY, UP, 0, -1, ""});
+    ghosts.push_back({currentSectorX, currentSectorY, bX, bY, UP, 0, blinkyClient, blinkyName});
 
-    // Ghost 1: Pinky (Pink) - Ambusher in Start Sector
+    // Ghost 1: Pinky (Pink) - Ambusher
     int pX = 9, pY = 10;
     findValidGhostSpawn(currentSectorX, currentSectorY, pX, pY);
-    ghosts.push_back({currentSectorX, currentSectorY, pX, pY, LEFT, 1, -1, ""});
+    ghosts.push_back({currentSectorX, currentSectorY, pX, pY, LEFT, 1, pinkyClient, pinkyName});
 
-    // Ghost 2: Inky (Cyan) - Patrols Exit Sector (or Start if single sector)
-    int inkySx = exitSectorX, inkySy = exitSectorY;
+    // Ghost 2: Inky (Cyan) - Flanker
     int iX = 10, iY = 10;
-    findValidGhostSpawn(inkySx, inkySy, iX, iY);
-    ghosts.push_back({inkySx, inkySy, iX, iY, RIGHT, 2, -1, ""});
+    findValidGhostSpawn(currentSectorX, currentSectorY, iX, iY);
+    ghosts.push_back({currentSectorX, currentSectorY, iX, iY, RIGHT, 2, inkyClient, inkyName});
 
-    // Ghost 3: Clyde (Orange) - Roams Exit Sector or adjacent sector
-    int clydeSx = (exitSectorX != currentSectorX || exitSectorY != currentSectorY) ? exitSectorX : currentSectorX;
-    int clydeSy = (exitSectorX != currentSectorX || exitSectorY != currentSectorY) ? exitSectorY : currentSectorY;
+    // Ghost 3: Clyde (Orange) - Roamer
     int cX = 9, cY = 9;
-    findValidGhostSpawn(clydeSx, clydeSy, cX, cY);
-    ghosts.push_back({clydeSx, clydeSy, cX, cY, DOWN, 3, -1, ""});
+    findValidGhostSpawn(currentSectorX, currentSectorY, cX, cY);
+    ghosts.push_back({currentSectorX, currentSectorY, cX, cY, DOWN, 3, clydeClient, clydeName});
 
     // --- Dynamic Target Ghost Count (Increased for beginner levels & scales with labyrinth size) ---
     // Beginner levels:
@@ -822,33 +831,29 @@ void MainWindow::onPlayerJoined(int clientId, const QString &role, const QString
         hero4.y = ROWS - 3;
         peekToastMessage = QString("🟢 %1 joined as Miracle Pac-Man!").arg(name);
         peekToastTimer.start();
-    } else if (role == "blinky") {
-        if (!ghosts.isEmpty()) {
-            ghosts[0].clientId = clientId;
-            ghosts[0].playerName = name;
+    } else if (role == "blinky" || role == "pinky" || role == "inky" || role == "clyde") {
+        int gIdx = (role == "blinky" ? 0 : (role == "pinky" ? 1 : (role == "inky" ? 2 : 3)));
+        if (gIdx < ghosts.size()) {
+            ghosts[gIdx].clientId = clientId;
+            ghosts[gIdx].playerName = name;
+            // Guarantee ghost is in active sector with heroes and at walkable tile
+            ghosts[gIdx].sectorX = currentSectorX;
+            ghosts[gIdx].sectorY = currentSectorY;
+            if (board[currentSectorY][currentSectorX][ghosts[gIdx].y][ghosts[gIdx].x] == 1) {
+                for (int r = 1; r < ROWS - 1; ++r) {
+                    for (int c = 1; c < COLS - 1; ++c) {
+                        if (board[currentSectorY][currentSectorX][r][c] == 0) {
+                            ghosts[gIdx].x = c; ghosts[gIdx].y = r;
+                            goto ghostPlaced;
+                        }
+                    }
+                }
+            }
+            ghostPlaced:;
         }
-        peekToastMessage = QString("🔴 %1 joined as Blinky!").arg(name);
-        peekToastTimer.start();
-    } else if (role == "pinky") {
-        if (ghosts.size() > 1) {
-            ghosts[1].clientId = clientId;
-            ghosts[1].playerName = name;
-        }
-        peekToastMessage = QString("🌸 %1 joined as Pinky!").arg(name);
-        peekToastTimer.start();
-    } else if (role == "inky") {
-        if (ghosts.size() > 2) {
-            ghosts[2].clientId = clientId;
-            ghosts[2].playerName = name;
-        }
-        peekToastMessage = QString("🩵 %1 joined as Inky!").arg(name);
-        peekToastTimer.start();
-    } else if (role == "clyde") {
-        if (ghosts.size() > 3) {
-            ghosts[3].clientId = clientId;
-            ghosts[3].playerName = name;
-        }
-        peekToastMessage = QString("🟠 %1 joined as Clyde!").arg(name);
+        QString icon = (role == "blinky" ? "🔴" : (role == "pinky" ? "🌸" : (role == "inky" ? "🩵" : "🟠")));
+        QString gName = (role == "blinky" ? "Blinky" : (role == "pinky" ? "Pinky" : (role == "inky" ? "Inky" : "Clyde")));
+        peekToastMessage = QString("%1 %2 joined as %3!").arg(icon, name, gName);
         peekToastTimer.start();
     }
     updateFogOfWar();
@@ -973,7 +978,7 @@ void MainWindow::onPlayerMoved(int clientId, const QString &role, int dirInt)
         ghosts[0].dir = d;
         int nx = ghosts[0].x, ny = ghosts[0].y;
         if (d == UP) ny--; else if (d == DOWN) ny++; else if (d == LEFT) nx--; else if (d == RIGHT) nx++;
-        if (nx >= 1 && nx < COLS - 1 && ny >= 1 && ny < ROWS - 1 && board[ghosts[0].sectorY][ghosts[0].sectorX][ny][nx] != 1) {
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && board[ghosts[0].sectorY][ghosts[0].sectorX][ny][nx] != 1) {
             ghosts[0].x = nx; ghosts[0].y = ny;
             checkGhostCollisions();
             broadcastCurrentGameState();
@@ -983,7 +988,7 @@ void MainWindow::onPlayerMoved(int clientId, const QString &role, int dirInt)
         ghosts[1].dir = d;
         int nx = ghosts[1].x, ny = ghosts[1].y;
         if (d == UP) ny--; else if (d == DOWN) ny++; else if (d == LEFT) nx--; else if (d == RIGHT) nx++;
-        if (nx >= 1 && nx < COLS - 1 && ny >= 1 && ny < ROWS - 1 && board[ghosts[1].sectorY][ghosts[1].sectorX][ny][nx] != 1) {
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && board[ghosts[1].sectorY][ghosts[1].sectorX][ny][nx] != 1) {
             ghosts[1].x = nx; ghosts[1].y = ny;
             checkGhostCollisions();
             broadcastCurrentGameState();
@@ -993,7 +998,7 @@ void MainWindow::onPlayerMoved(int clientId, const QString &role, int dirInt)
         ghosts[2].dir = d;
         int nx = ghosts[2].x, ny = ghosts[2].y;
         if (d == UP) ny--; else if (d == DOWN) ny++; else if (d == LEFT) nx--; else if (d == RIGHT) nx++;
-        if (nx >= 1 && nx < COLS - 1 && ny >= 1 && ny < ROWS - 1 && board[ghosts[2].sectorY][ghosts[2].sectorX][ny][nx] != 1) {
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && board[ghosts[2].sectorY][ghosts[2].sectorX][ny][nx] != 1) {
             ghosts[2].x = nx; ghosts[2].y = ny;
             checkGhostCollisions();
             broadcastCurrentGameState();
@@ -1003,7 +1008,7 @@ void MainWindow::onPlayerMoved(int clientId, const QString &role, int dirInt)
         ghosts[3].dir = d;
         int nx = ghosts[3].x, ny = ghosts[3].y;
         if (d == UP) ny--; else if (d == DOWN) ny++; else if (d == LEFT) nx--; else if (d == RIGHT) nx++;
-        if (nx >= 1 && nx < COLS - 1 && ny >= 1 && ny < ROWS - 1 && board[ghosts[3].sectorY][ghosts[3].sectorX][ny][nx] != 1) {
+        if (nx >= 0 && nx < COLS && ny >= 0 && ny < ROWS && board[ghosts[3].sectorY][ghosts[3].sectorX][ny][nx] != 1) {
             ghosts[3].x = nx; ghosts[3].y = ny;
             checkGhostCollisions();
             broadcastCurrentGameState();
@@ -1126,6 +1131,23 @@ void MainWindow::switchHostRole(const QString &newRole)
         hero4.alive = true;
         hero4.respawnTicks = 0;
         if (hero4.lives <= 0) hero4.lives = INITIAL_LIVES;
+    } else if (isHostGhost()) {
+        int hgi = getHostGhostIndex();
+        if (hgi >= 0 && hgi < ghosts.size()) {
+            ghosts[hgi].sectorX = currentSectorX;
+            ghosts[hgi].sectorY = currentSectorY;
+            if (board[currentSectorY][currentSectorX][ghosts[hgi].y][ghosts[hgi].x] == 1) {
+                for (int r = 1; r < ROWS - 1; ++r) {
+                    for (int c = 1; c < COLS - 1; ++c) {
+                        if (board[currentSectorY][currentSectorX][r][c] == 0) {
+                            ghosts[hgi].x = c; ghosts[hgi].y = r;
+                            goto hostPlaced;
+                        }
+                    }
+                }
+            }
+            hostPlaced:;
+        }
     }
 
     if (gameServer) {

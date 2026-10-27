@@ -118,6 +118,7 @@ private:
     void checkFruitPickup();
     void checkGhostCollisions();
     void respawnGhostFarAway(Ghost &g);
+    void syncHumanGhostsToCurrentSector();
     QPoint findSafeHeroSpawnPos(int secX, int secY) const;
     void updateFogOfWar();
     bool isCellVisible(int sx, int sy, int x, int y) const;

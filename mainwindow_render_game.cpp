@@ -599,7 +599,17 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
             painter.drawEllipse(eye2X + (eyeW - pupilSize)/2 + pdx + 1, eyeY + (eyeH - pupilSize)/2 + pdy, std::max(1, pupilSize/3), std::max(1, pupilSize/3));
         }
 
-        // Mode B: Show player name tag if controlled by host or classmate
+        // Mode B: Show player name tag and glowing ring if controlled by host or classmate
+        bool isHumanControlled = (g.clientId >= 0 || (isHostGhost() && getHostGhostIndex() == g.colorIndex));
+        if (isHumanControlled) {
+            painter.save();
+            QColor haloCol = (isHostGhost() && getHostGhostIndex() == g.colorIndex) ? QColor(255, 220, 0, 220) : QColor(255, 60, 100, 220);
+            painter.setPen(QPen(haloCol, 2.0, Qt::DashLine));
+            painter.setBrush(QColor(haloCol.red(), haloCol.green(), haloCol.blue(), 35));
+            painter.drawEllipse(gx - 3, gy - 3, cellSize + 6, cellSize + 6);
+            painter.restore();
+        }
+
         if (isHostGhost() && getHostGhostIndex() == g.colorIndex) {
             painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
             painter.setPen(QColor(255, 220, 0)); // Glowing gold badge for host
@@ -612,7 +622,7 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
     }
 
     // 5. Lantern Light Spotlight (Fused multi-hero & host ghost lighting)
-    if (isCurrent && fogOfWarEnabled && !fogPeekActive) {
+    if (isCurrent && fogOfWarEnabled && !fogPeekActive && !isHostGhost()) {
         int secW = COLS * cellSize;
         int secH = ROWS * cellSize;
         QPixmap fogPix(secW, secH);

@@ -2041,14 +2041,41 @@ QByteArray GameServer::getControllerHtml(bool isMobile) const
       }
       ctx.restore();
 
-      // Ghost Badge
+      // Ghost Badge & Indicator
       const isMe = (currentRole && currentRole.toLowerCase() === ghostRoleNames[g.color]);
       const isHost = (state.hostRole === ghostRoleNames[g.color]);
+
+      if (isMe) {
+        // High-visibility glowing aura & pulsing target ring around ghost
+        ctx.save();
+        const pulse = 1.0 + 0.18 * Math.sin(Date.now() / 130);
+        ctx.strokeStyle = "#ff3366";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([5, 3]);
+        ctx.beginPath();
+        ctx.arc(gx, gy, 18 * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.fillStyle = "rgba(255, 51, 102, 0.22)";
+        ctx.fill();
+
+        // Animated pointer beacon arrow above ghost
+        const bounce = Math.sin(Date.now() / 150) * 3.5;
+        ctx.fillStyle = "#ff3366";
+        ctx.beginPath();
+        ctx.moveTo(gx, gy - 26 + bounce);
+        ctx.lineTo(gx - 6, gy - 36 + bounce);
+        ctx.lineTo(gx + 6, gy - 36 + bounce);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
       ctx.font = "bold 11px sans-serif";
       ctx.textAlign = "center";
       if (isMe) {
-        ctx.fillStyle = "#ff5577";
-        ctx.fillText("▼ YOU (Ghost)", gx, gy - 16);
+        ctx.fillStyle = "#ff3366";
+        ctx.fillText("⭐ YOU (Ghost)", gx, gy - 16);
       } else if (isHost) {
         ctx.fillStyle = "#ffe600";
         ctx.fillText("👑 HOST (Ghost)", gx, gy - 16);
@@ -2064,6 +2091,10 @@ QByteArray GameServer::getControllerHtml(bool isMobile) const
 
   function applyFogOfWar(state) {
     if (!state.fog || state.peek) return;
+
+    // Ghost players have supernatural hunter vision: the entire map is revealed to chase Pac-Man!
+    const isGhostHunter = (currentRole === 'blinky' || currentRole === 'pinky' || currentRole === 'inky' || currentRole === 'clyde');
+    if (isGhostHunter) return;
 
     fogCtx.clearRect(0, 0, 630, 630);
     fogCtx.fillStyle = "rgba(4, 6, 15, 0.95)";
@@ -2100,8 +2131,21 @@ QByteArray GameServer::getControllerHtml(bool isMobile) const
 
   function drawOverlays(state) {
     const meta = roleMeta[currentRole];
+    const isGhostHunter = (currentRole === 'blinky' || currentRole === 'pinky' || currentRole === 'inky' || currentRole === 'clyde');
     const myHeroState = (meta && meta.isHero && state[currentRole]) ? state[currentRole] : null;
     const isEliminated = (myHeroState && myHeroState.lives <= 0);
+
+    if (isGhostHunter && !state.gameOver && !state.levelComplete) {
+      ctx.fillStyle = "rgba(40, 8, 20, 0.92)";
+      ctx.fillRect(0, 0, 630, 32);
+      ctx.strokeStyle = "#ff3366";
+      ctx.lineWidth = 1.5;
+      ctx.strokeRect(0, 0, 630, 32);
+      ctx.fillStyle = "#ff5588";
+      ctx.font = "bold 13px sans-serif";
+      ctx.textAlign = "center";
+      ctx.fillText("👻 GHOST HUNTER RADAR: Full Map Unlocked • Chase & catch Pac-Man!", 315, 21);
+    }
 
     if (isEliminated && !state.gameOver) {
       ctx.fillStyle = "rgba(18, 5, 12, 0.85)";
