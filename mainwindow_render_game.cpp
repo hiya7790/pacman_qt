@@ -284,6 +284,23 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
                 painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, QString("%1%2").arg(p1Tag, stat));
             }
         }
+
+        // Glowing protective spawn shield aura
+        if (p1InvincibleTicks > 0) {
+            float pulse = 0.5f + 0.5f * std::sin(p1InvincibleTicks * 0.7f);
+            int shieldRadius = cellSize * 0.65 + pulse * 4.0f;
+            QRadialGradient shieldGrad(px + cellSize / 2, py + cellSize / 2, shieldRadius);
+            shieldGrad.setColorAt(0.0, QColor(0, 229, 255, 35));
+            shieldGrad.setColorAt(0.65, QColor(0, 255, 230, 110));
+            shieldGrad.setColorAt(1.0, QColor(0, 255, 180, 230));
+            painter.setBrush(shieldGrad);
+            painter.setPen(QPen(QColor(0, 255, 240, 220), 2.2, Qt::DashLine));
+            painter.drawEllipse(QPoint(px + cellSize / 2, py + cellSize / 2), shieldRadius, shieldRadius);
+
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+            painter.setPen(QColor(0, 255, 240));
+            painter.drawText(px - 20, py - 18, cellSize + 40, 14, Qt::AlignCenter, "🛡️ SHIELD");
+        }
     }
 
     // Draw Player 2 (Ms. Pacman - Pink with bow) (if active and in this sector)
@@ -340,6 +357,23 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         QString p2Stat = p2ReachedExit ? " 🏁" : "";
         QString p2Tag = (hostRole == "p2") ? QString("★ HOST%1").arg(p2Stat) : QString("%1%2").arg(p2PlayerName.isEmpty() ? "P2 (Ms. Pac)" : p2PlayerName, p2Stat);
         painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, p2Tag);
+
+        // Glowing protective spawn shield aura
+        if (p2InvincibleTicks > 0) {
+            float pulse = 0.5f + 0.5f * std::sin(p2InvincibleTicks * 0.7f);
+            int shieldRadius = cellSize * 0.65 + pulse * 4.0f;
+            QRadialGradient shieldGrad(px + cellSize / 2, py + cellSize / 2, shieldRadius);
+            shieldGrad.setColorAt(0.0, QColor(0, 229, 255, 35));
+            shieldGrad.setColorAt(0.65, QColor(0, 255, 230, 110));
+            shieldGrad.setColorAt(1.0, QColor(0, 255, 180, 230));
+            painter.setBrush(shieldGrad);
+            painter.setPen(QPen(QColor(0, 255, 240, 220), 2.2, Qt::DashLine));
+            painter.drawEllipse(QPoint(px + cellSize / 2, py + cellSize / 2), shieldRadius, shieldRadius);
+
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+            painter.setPen(QColor(0, 255, 240));
+            painter.drawText(px - 20, py - 18, cellSize + 40, 14, Qt::AlignCenter, "🛡️ SHIELD");
+        }
     }
 
     // Draw Hero 3 (Jr. Pac-Man - Cyan with cap) (if connected or host and in this sector)
@@ -388,6 +422,23 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         QString p3Stat = hero3.reachedExit ? " 🏁" : "";
         QString tag = (hostRole == "p3") ? QString("★ HOST%1").arg(p3Stat) : QString("%1%2").arg(hero3.playerName.isEmpty() ? "P3 (Jr. Pac)" : hero3.playerName, p3Stat);
         painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, tag);
+
+        // Glowing protective spawn shield aura
+        if (hero3.invincibleTicks > 0) {
+            float pulse = 0.5f + 0.5f * std::sin(hero3.invincibleTicks * 0.7f);
+            int shieldRadius = cellSize * 0.65 + pulse * 4.0f;
+            QRadialGradient shieldGrad(px + cellSize / 2, py + cellSize / 2, shieldRadius);
+            shieldGrad.setColorAt(0.0, QColor(0, 229, 255, 35));
+            shieldGrad.setColorAt(0.65, QColor(0, 255, 230, 110));
+            shieldGrad.setColorAt(1.0, QColor(0, 255, 180, 230));
+            painter.setBrush(shieldGrad);
+            painter.setPen(QPen(QColor(0, 255, 240, 220), 2.2, Qt::DashLine));
+            painter.drawEllipse(QPoint(px + cellSize / 2, py + cellSize / 2), shieldRadius, shieldRadius);
+
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+            painter.setPen(QColor(0, 255, 240));
+            painter.drawText(px - 20, py - 18, cellSize + 40, 14, Qt::AlignCenter, "🛡️ SHIELD");
+        }
     }
 
     // Draw Hero 4 (Miracle Pac-Man - Emerald Green) (if connected or host and in this sector)
@@ -434,6 +485,23 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         QString p4Stat = hero4.reachedExit ? " 🏁" : "";
         QString tag = (hostRole == "p4") ? QString("★ HOST%1").arg(p4Stat) : QString("%1%2").arg(hero4.playerName.isEmpty() ? "P4 (Miracle)" : hero4.playerName, p4Stat);
         painter.drawText(px - 15, py - 5, cellSize + 30, cellSize / 2, Qt::AlignCenter, tag);
+
+        // Glowing protective spawn shield aura
+        if (hero4.invincibleTicks > 0) {
+            float pulse = 0.5f + 0.5f * std::sin(hero4.invincibleTicks * 0.7f);
+            int shieldRadius = cellSize * 0.65 + pulse * 4.0f;
+            QRadialGradient shieldGrad(px + cellSize / 2, py + cellSize / 2, shieldRadius);
+            shieldGrad.setColorAt(0.0, QColor(0, 229, 255, 35));
+            shieldGrad.setColorAt(0.65, QColor(0, 255, 230, 110));
+            shieldGrad.setColorAt(1.0, QColor(0, 255, 180, 230));
+            painter.setBrush(shieldGrad);
+            painter.setPen(QPen(QColor(0, 255, 240, 220), 2.2, Qt::DashLine));
+            painter.drawEllipse(QPoint(px + cellSize / 2, py + cellSize / 2), shieldRadius, shieldRadius);
+
+            painter.setFont(QFont("Arial", std::max(7, cellSize / 4), QFont::Bold));
+            painter.setPen(QColor(0, 255, 240));
+            painter.drawText(px - 20, py - 18, cellSize + 40, 14, Qt::AlignCenter, "🛡️ SHIELD");
+        }
     }
 
     // 6. Draw Ghosts in this sector (with floating hover bobbing & pupil tracking!)
@@ -568,16 +636,20 @@ void MainWindow::drawSector(QPainter &painter, int sx, int sy, int originX, int 
         };
 
         if (isP1Active() && p1Alive) {
-            carveLight(pacmanX, pacmanY, currentVisionRadius);
+            double r = (p1InvincibleTicks > 0) ? (currentVisionRadius + 1.4) : currentVisionRadius;
+            carveLight(pacmanX, pacmanY, r);
         }
         if (isP2Active() && p2Alive) {
-            carveLight(p2X, p2Y, currentVisionRadius);
+            double r = (p2InvincibleTicks > 0) ? (currentVisionRadius + 1.4) : currentVisionRadius;
+            carveLight(p2X, p2Y, r);
         }
         if ((hero3.clientId != -1 || hostRole == "p3") && hero3.alive) {
-            carveLight(hero3.x, hero3.y, currentVisionRadius);
+            double r = (hero3.invincibleTicks > 0) ? (currentVisionRadius + 1.4) : currentVisionRadius;
+            carveLight(hero3.x, hero3.y, r);
         }
         if ((hero4.clientId != -1 || hostRole == "p4") && hero4.alive) {
-            carveLight(hero4.x, hero4.y, currentVisionRadius);
+            double r = (hero4.invincibleTicks > 0) ? (currentVisionRadius + 1.4) : currentVisionRadius;
+            carveLight(hero4.x, hero4.y, r);
         }
         if (isHostGhost()) {
             int hgi = getHostGhostIndex();
@@ -1141,6 +1213,11 @@ void MainWindow::drawGameScreen(QPainter &painter)
             int livW = std::max(115, int(width() * 0.12));
             drawHudPill(curX, pillY, livW, pillH, livesStr, QColor(52, 32, 12), QColor(255, 160, 40), QColor(255, 220, 140), true);
             curX += livW + gap;
+        } else if (p1InvincibleTicks > 0) {
+            livesStr = QString("🛡️ SHIELD %1s").arg((p1InvincibleTicks * 130 + 999) / 1000);
+            int livW = std::max(115, int(width() * 0.12));
+            drawHudPill(curX, pillY, livW, pillH, livesStr, QColor(10, 42, 52), QColor(0, 229, 255), QColor(160, 255, 240), true);
+            curX += livW + gap;
         } else {
             QString hearts;
             for (int i = 0; i < p1Lives; ++i) hearts += "❤️";
@@ -1173,6 +1250,9 @@ void MainWindow::drawGameScreen(QPainter &painter)
             } else if (!p1Alive && p1RespawnTicks > 0) {
                 p1Str = QString("🟡 P1: ⏳%1s").arg((p1RespawnTicks * 130 + 999) / 1000);
                 p1Bg = QColor(50, 32, 10); p1Border = QColor(255, 160, 40);
+            } else if (p1InvincibleTicks > 0) {
+                p1Str = QString("🟡 P1: 🛡️%1s").arg((p1InvincibleTicks * 130 + 999) / 1000);
+                p1Bg = QColor(10, 42, 52); p1Border = QColor(0, 229, 255);
             } else {
                 p1Str = QString("🟡 P1: %1 %2").arg(scoreP1).arg(formatHearts(p1Lives));
                 p1Bg = QColor(42, 36, 12); p1Border = QColor(255, 220, 40);
@@ -1195,6 +1275,9 @@ void MainWindow::drawGameScreen(QPainter &painter)
             } else if (!p2Alive && p2RespawnTicks > 0) {
                 p2Str = QString("🎀 P2: ⏳%1s").arg((p2RespawnTicks * 130 + 999) / 1000);
                 p2Bg = QColor(50, 32, 10); p2Border = QColor(255, 160, 40);
+            } else if (p2InvincibleTicks > 0) {
+                p2Str = QString("🎀 P2: 🛡️%1s").arg((p2InvincibleTicks * 130 + 999) / 1000);
+                p2Bg = QColor(10, 42, 52); p2Border = QColor(0, 229, 255);
             } else {
                 p2Str = QString("🎀 P2: %1 %2").arg(scoreP2).arg(formatHearts(p2Lives));
                 p2Bg = QColor(48, 16, 38); p2Border = QColor(255, 105, 180);
@@ -1217,6 +1300,9 @@ void MainWindow::drawGameScreen(QPainter &painter)
             } else if (!hero3.alive && hero3.respawnTicks > 0) {
                 p3Str = QString("🧢 P3: ⏳%1s").arg((hero3.respawnTicks * 130 + 999) / 1000);
                 p3Bg = QColor(50, 32, 10); p3Border = QColor(255, 160, 40);
+            } else if (hero3.invincibleTicks > 0) {
+                p3Str = QString("🧢 P3: 🛡️%1s").arg((hero3.invincibleTicks * 130 + 999) / 1000);
+                p3Bg = QColor(10, 42, 52); p3Border = QColor(0, 229, 255);
             } else {
                 p3Str = QString("🧢 P3: %1 %2").arg(hero3.score).arg(formatHearts(hero3.lives));
                 p3Bg = QColor(10, 36, 52); p3Border = QColor(0, 229, 255);
@@ -1239,6 +1325,9 @@ void MainWindow::drawGameScreen(QPainter &painter)
             } else if (!hero4.alive && hero4.respawnTicks > 0) {
                 p4Str = QString("🟢 P4: ⏳%1s").arg((hero4.respawnTicks * 130 + 999) / 1000);
                 p4Bg = QColor(50, 32, 10); p4Border = QColor(255, 160, 40);
+            } else if (hero4.invincibleTicks > 0) {
+                p4Str = QString("🟢 P4: 🛡️%1s").arg((hero4.invincibleTicks * 130 + 999) / 1000);
+                p4Bg = QColor(10, 42, 52); p4Border = QColor(0, 229, 255);
             } else {
                 p4Str = QString("🟢 P4: %1 %2").arg(hero4.score).arg(formatHearts(hero4.lives));
                 p4Bg = QColor(10, 44, 25); p4Border = QColor(0, 255, 120);

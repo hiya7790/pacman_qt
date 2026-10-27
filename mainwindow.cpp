@@ -1,5 +1,6 @@
 #include "mainwindow.h"
 #include "gameserver.h"
+#include "soundmanager.h"
 #include <QPainter>
 #include <QRandomGenerator>
 #include <QJsonObject>
@@ -67,6 +68,8 @@ MainWindow::MainWindow(QWidget *parent)
     p2Alive = true;
     p1RespawnTicks = 0;
     p2RespawnTicks = 0;
+    p1InvincibleTicks = 0;
+    p2InvincibleTicks = 0;
     p1Lives = INITIAL_LIVES;
     p2Lives = INITIAL_LIVES;
     p1ReachedExit = false;
@@ -265,6 +268,7 @@ void MainWindow::initLevel()
     pacmanMouthOpening = false;
     p1Alive = isP1Active();
     p1RespawnTicks = 0;
+    p1InvincibleTicks = 16; // 2s spawn grace shield on stage start
     p1Lives = INITIAL_LIVES;
     p1ReachedExit = false;
 
@@ -277,6 +281,7 @@ void MainWindow::initLevel()
     p2MouthOpening = false;
     p2Alive = isP2Active();
     p2RespawnTicks = 0;
+    p2InvincibleTicks = 16;
     p2Lives = INITIAL_LIVES;
     p2ReachedExit = false;
 
@@ -289,6 +294,7 @@ void MainWindow::initLevel()
     hero3.mouthOpening = false;
     hero3.alive = isP3Active();
     hero3.respawnTicks = 0;
+    hero3.invincibleTicks = 16;
     hero3.lives = INITIAL_LIVES;
     hero3.reachedExit = false;
 
@@ -300,6 +306,7 @@ void MainWindow::initLevel()
     hero4.mouthOpening = false;
     hero4.alive = isP4Active();
     hero4.respawnTicks = 0;
+    hero4.invincibleTicks = 16;
     hero4.lives = INITIAL_LIVES;
     hero4.reachedExit = false;
 
@@ -496,8 +503,27 @@ void MainWindow::gameLoop()
         if (p1RespawnTicks == 0) {
             if (p1Lives > 0) {
                 p1Alive = true;
-                pacmanX = 10; pacmanY = ROWS - 2;
+                p1InvincibleTicks = 25; // ~3.3s spawn protection shield
+                QPoint safePos = findSafeHeroSpawnPos(currentSectorX, currentSectorY);
+                pacmanX = safePos.x();
+                pacmanY = safePos.y();
+                pacmanDir = STOP;
+                pacmanNextDir = STOP;
+
+                // Push away any ghosts in this sector within 5.0 tiles of spawn point
+                for (Ghost &g : ghosts) {
+                    if (g.sectorX == currentSectorX && g.sectorY == currentSectorY) {
+                        if (std::hypot(g.x - pacmanX, g.y - pacmanY) < 5.0) {
+                            respawnGhostFarAway(g);
+                        }
+                    }
+                }
+
                 updateFogOfWar();
+                QString heroName = (!isAnyMultiplayer() && singlePlayerHero == 2) ? "Ms. Pac-Man" : "Pac-Man";
+                peekToastMessage = QString("🛡️ %1 RESPAWNED! (Spawn Shield Active)").arg(heroName);
+                peekToastTimer.start();
+                SoundManager::instance().playFruit();
             }
         }
     }
@@ -506,8 +532,25 @@ void MainWindow::gameLoop()
         if (p2RespawnTicks == 0) {
             if (p2Lives > 0) {
                 p2Alive = true;
-                p2X = 9; p2Y = ROWS - 2;
+                p2InvincibleTicks = 25;
+                QPoint safePos = findSafeHeroSpawnPos(currentSectorX, currentSectorY);
+                p2X = safePos.x();
+                p2Y = safePos.y();
+                p2Dir = STOP;
+                p2NextDir = STOP;
+
+                for (Ghost &g : ghosts) {
+                    if (g.sectorX == currentSectorX && g.sectorY == currentSectorY) {
+                        if (std::hypot(g.x - p2X, g.y - p2Y) < 5.0) {
+                            respawnGhostFarAway(g);
+                        }
+                    }
+                }
+
                 updateFogOfWar();
+                peekToastMessage = "🛡️ Ms. Pac-Man RESPAWNED! (Spawn Shield Active)";
+                peekToastTimer.start();
+                SoundManager::instance().playFruit();
             }
         }
     }
@@ -516,8 +559,25 @@ void MainWindow::gameLoop()
         if (hero3.respawnTicks == 0) {
             if (hero3.lives > 0) {
                 hero3.alive = true;
-                hero3.x = 9; hero3.y = ROWS - 3;
+                hero3.invincibleTicks = 25;
+                QPoint safePos = findSafeHeroSpawnPos(currentSectorX, currentSectorY);
+                hero3.x = safePos.x();
+                hero3.y = safePos.y();
+                hero3.dir = STOP;
+                hero3.nextDir = STOP;
+
+                for (Ghost &g : ghosts) {
+                    if (g.sectorX == currentSectorX && g.sectorY == currentSectorY) {
+                        if (std::hypot(g.x - hero3.x, g.y - hero3.y) < 5.0) {
+                            respawnGhostFarAway(g);
+                        }
+                    }
+                }
+
                 updateFogOfWar();
+                peekToastMessage = "🛡️ Jr. Pac-Man RESPAWNED! (Spawn Shield Active)";
+                peekToastTimer.start();
+                SoundManager::instance().playFruit();
             }
         }
     }
@@ -526,11 +586,34 @@ void MainWindow::gameLoop()
         if (hero4.respawnTicks == 0) {
             if (hero4.lives > 0) {
                 hero4.alive = true;
-                hero4.x = 10; hero4.y = ROWS - 3;
+                hero4.invincibleTicks = 25;
+                QPoint safePos = findSafeHeroSpawnPos(currentSectorX, currentSectorY);
+                hero4.x = safePos.x();
+                hero4.y = safePos.y();
+                hero4.dir = STOP;
+                hero4.nextDir = STOP;
+
+                for (Ghost &g : ghosts) {
+                    if (g.sectorX == currentSectorX && g.sectorY == currentSectorY) {
+                        if (std::hypot(g.x - hero4.x, g.y - hero4.y) < 5.0) {
+                            respawnGhostFarAway(g);
+                        }
+                    }
+                }
+
                 updateFogOfWar();
+                peekToastMessage = "🛡️ Miracle Pac-Man RESPAWNED! (Spawn Shield Active)";
+                peekToastTimer.start();
+                SoundManager::instance().playFruit();
             }
         }
     }
+
+    // Decrement spawn protection shield ticks
+    if (p1InvincibleTicks > 0) p1InvincibleTicks--;
+    if (p2InvincibleTicks > 0) p2InvincibleTicks--;
+    if (hero3.invincibleTicks > 0) hero3.invincibleTicks--;
+    if (hero4.invincibleTicks > 0) hero4.invincibleTicks--;
 
     ghostTickCounter++;
     if (ghostTickCounter >= ghostMoveEveryN) {
@@ -608,6 +691,7 @@ void MainWindow::broadcastCurrentGameState()
         h1["mouth"] = pacmanMouthAngle; h1["alive"] = (isP1Active() && p1Alive); h1["score"] = scoreP1; h1["active"] = isP1Active();
         h1["name"] = (hostRole == "p1" ? "Host" : p1PlayerName);
         h1["respawnTicks"] = p1RespawnTicks;
+        h1["invincible"] = (p1InvincibleTicks > 0);
         h1["lives"] = p1Lives;
         h1["reachedExit"] = p1ReachedExit;
         state["p1"] = h1;
@@ -617,6 +701,7 @@ void MainWindow::broadcastCurrentGameState()
         h2["mouth"] = p2MouthAngle; h2["alive"] = (isP2Active() && p2Alive); h2["score"] = scoreP2;
         h2["name"] = (hostRole == "p2" ? "Host" : p2PlayerName); h2["active"] = isP2Active();
         h2["respawnTicks"] = p2RespawnTicks;
+        h2["invincible"] = (p2InvincibleTicks > 0);
         h2["lives"] = p2Lives;
         h2["reachedExit"] = p2ReachedExit;
         state["p2"] = h2;
@@ -626,6 +711,7 @@ void MainWindow::broadcastCurrentGameState()
         h3["mouth"] = hero3.mouthAngle; h3["alive"] = (isP3Active() && hero3.alive); h3["score"] = hero3.score;
         h3["name"] = (hostRole == "p3" ? "Host" : hero3.playerName); h3["active"] = isP3Active();
         h3["respawnTicks"] = hero3.respawnTicks;
+        h3["invincible"] = (hero3.invincibleTicks > 0);
         h3["lives"] = hero3.lives;
         h3["reachedExit"] = hero3.reachedExit;
         state["p3"] = h3;
@@ -635,6 +721,7 @@ void MainWindow::broadcastCurrentGameState()
         h4["mouth"] = hero4.mouthAngle; h4["alive"] = (isP4Active() && hero4.alive); h4["score"] = hero4.score;
         h4["name"] = (hostRole == "p4" ? "Host" : hero4.playerName); h4["active"] = isP4Active();
         h4["respawnTicks"] = hero4.respawnTicks;
+        h4["invincible"] = (hero4.invincibleTicks > 0);
         h4["lives"] = hero4.lives;
         h4["reachedExit"] = hero4.reachedExit;
         state["p4"] = h4;

@@ -468,7 +468,9 @@ void MainWindow::checkGhostCollisions()
 
         // Player 1 (Yellow Pac-Man)
         if (isP1Active() && p1Alive && g.x == pacmanX && g.y == pacmanY) {
-            if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && pacmanX == exitX && pacmanY == exitY && p1ReachedExit) {
+            if (p1InvincibleTicks > 0) {
+                // SPAWN SHIELD ACTIVE! Hero is immune to ghosts!
+            } else if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && pacmanX == exitX && pacmanY == exitY && p1ReachedExit) {
                 // Safe at exit portal sanctuary waiting for team!
             } else if (ghostsFrightened) {
                 scoreP1 += 200;
@@ -494,7 +496,9 @@ void MainWindow::checkGhostCollisions()
 
         // Player 2 (Ms. Pac-Man)
         if (isP2Active() && p2Alive && g.x == p2X && g.y == p2Y) {
-            if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && p2X == exitX && p2Y == exitY && p2ReachedExit) {
+            if (p2InvincibleTicks > 0) {
+                // SPAWN SHIELD ACTIVE! Hero is immune to ghosts!
+            } else if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && p2X == exitX && p2Y == exitY && p2ReachedExit) {
                 // Safe at exit portal sanctuary waiting for team!
             } else if (ghostsFrightened) {
                 scoreP2 += 200;
@@ -520,7 +524,9 @@ void MainWindow::checkGhostCollisions()
 
         // Hero 3 (Jr. Pac-Man)
         if (isP3Active() && hero3.alive && g.x == hero3.x && g.y == hero3.y) {
-            if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && hero3.x == exitX && hero3.y == exitY && hero3.reachedExit) {
+            if (hero3.invincibleTicks > 0) {
+                // SPAWN SHIELD ACTIVE! Hero is immune to ghosts!
+            } else if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && hero3.x == exitX && hero3.y == exitY && hero3.reachedExit) {
                 // Safe at exit portal sanctuary waiting for team!
             } else if (ghostsFrightened) {
                 hero3.score += 200;
@@ -546,7 +552,9 @@ void MainWindow::checkGhostCollisions()
 
         // Hero 4 (Miracle Pac-Man)
         if (isP4Active() && hero4.alive && g.x == hero4.x && g.y == hero4.y) {
-            if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && hero4.x == exitX && hero4.y == exitY && hero4.reachedExit) {
+            if (hero4.invincibleTicks > 0) {
+                // SPAWN SHIELD ACTIVE! Hero is immune to ghosts!
+            } else if (currentSectorX == exitSectorX && currentSectorY == exitSectorY && hero4.x == exitX && hero4.y == exitY && hero4.reachedExit) {
                 // Safe at exit portal sanctuary waiting for team!
             } else if (ghostsFrightened) {
                 hero4.score += 200;
@@ -618,6 +626,51 @@ void MainWindow::respawnGhostFarAway(Ghost &g)
     g.x = 10;
     g.y = 10;
     g.dir = UP;
+}
+
+QPoint MainWindow::findSafeHeroSpawnPos(int secX, int secY) const
+{
+    struct Candidate {
+        int x;
+        int y;
+        double minGhostDist;
+    };
+    QVector<Candidate> candidates;
+
+    for (int r = 1; r < ROWS - 1; ++r) {
+        for (int c = 1; c < COLS - 1; ++c) {
+            // Must be open walkable corridor (0 or 2), not a wall (1)
+            if (board[secY][secX][r][c] != 1) {
+                double minGDist = 999.0;
+                for (const Ghost &g : ghosts) {
+                    if (g.sectorX == secX && g.sectorY == secY) {
+                        double d = std::hypot(c - g.x, r - g.y);
+                        if (d < minGDist) minGDist = d;
+                    }
+                }
+                candidates.push_back({c, r, minGDist});
+            }
+        }
+    }
+
+    if (candidates.isEmpty()) {
+        return QPoint(10, ROWS - 2);
+    }
+
+    // Sort descending by distance from nearest ghost
+    std::sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) {
+        return a.minGhostDist > b.minGhostDist;
+    });
+
+    // If default starting area (10, ROWS - 2) is at least 4.5 tiles from all ghosts, prefer it
+    for (const Candidate &cand : candidates) {
+        if (cand.x == 10 && cand.y == ROWS - 2 && cand.minGhostDist >= 4.5) {
+            return QPoint(cand.x, cand.y);
+        }
+    }
+
+    // Otherwise pick the safest tile furthest from all ghosts
+    return QPoint(candidates.first().x, candidates.first().y);
 }
 
 void MainWindow::trySpawnFruit()

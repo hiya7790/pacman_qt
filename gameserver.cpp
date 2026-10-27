@@ -1935,6 +1935,21 @@ QByteArray GameServer::getControllerHtml(bool isMobile) const
     }
     ctx.restore();
 
+    // Invulnerability / Grace Shield Ring
+    if (h.invincible) {
+      ctx.save();
+      const pulse = 1.0 + 0.15 * Math.sin(Date.now() / 150);
+      ctx.strokeStyle = "#00ffff";
+      ctx.lineWidth = 2.5;
+      ctx.setLineDash([4, 3]);
+      ctx.beginPath();
+      ctx.arc(hx, hy, 16 * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.fillStyle = "rgba(0, 255, 255, 0.18)";
+      ctx.fill();
+      ctx.restore();
+    }
+
     // Role Indicator Tag
     const isMe = (currentRole === roleKey);
     const isHost = (latestState && (latestState.hostRole === roleKey || (!latestState.hostRole && roleKey === 'p1')));
@@ -1944,6 +1959,9 @@ QByteArray GameServer::getControllerHtml(bool isMobile) const
       ctx.fillStyle = "#ffb300";
       const sLeft = Math.ceil((h.respawnTicks || 30) * 0.13);
       ctx.fillText("⏳ RESPAWN (" + sLeft + "s)", hx, hy - 15);
+    } else if (h.invincible) {
+      ctx.fillStyle = "#00ffff";
+      ctx.fillText("🛡️ SHIELD", hx, hy - 15);
     } else if (h.reachedExit) {
       ctx.fillStyle = "#00ff88";
       ctx.fillText("🏁 AT EXIT", hx, hy - 15);

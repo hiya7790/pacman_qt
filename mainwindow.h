@@ -46,6 +46,7 @@ struct ExtraHero {
     bool mouthOpening = false;
     bool alive = false;
     int respawnTicks = 0;
+    int invincibleTicks = 0; // Spawn protection grace period
     int score = 0;
     int lives = 3;           // 3 lives per stage
     bool reachedExit = false;
@@ -117,6 +118,7 @@ private:
     void checkFruitPickup();
     void checkGhostCollisions();
     void respawnGhostFarAway(Ghost &g);
+    QPoint findSafeHeroSpawnPos(int secX, int secY) const;
     void updateFogOfWar();
     bool isCellVisible(int sx, int sy, int x, int y) const;
     void drawSector(QPainter &painter, int sx, int sy, int originX, int originY, int cellSize);
@@ -209,6 +211,8 @@ private:
     bool p2Alive;
     int p1RespawnTicks;
     int p2RespawnTicks;
+    int p1InvincibleTicks;
+    int p2InvincibleTicks;
     int p1Lives;
     int p2Lives;
     bool p1ReachedExit;
