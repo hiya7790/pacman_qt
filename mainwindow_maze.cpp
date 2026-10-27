@@ -59,6 +59,13 @@ QString MainWindow::getWorldName(int world) const
 
 void MainWindow::generateSectorMaze(int sx, int sy)
 {
+    // Deterministic Seed derived uniquely from level number and sector coordinates:
+    // This guarantees that Level 1 always generates the exact same iconic layout every time!
+    quint32 seed = static_cast<quint32>(currentLevel) * 73856093u ^
+                   static_cast<quint32>(sx + 1) * 19349663u ^
+                   static_cast<quint32>(sy + 1) * 83492791u;
+    QRandomGenerator rng(seed);
+
     // 1. Fill sector with walls
     for (int r = 0; r < ROWS; ++r) {
         for (int c = 0; c < COLS; ++c) {
@@ -67,7 +74,7 @@ void MainWindow::generateSectorMaze(int sx, int sy)
         }
     }
 
-    // 2. Randomized DFS carving on odd coordinates
+    // 2. Deterministic DFS carving on odd coordinates
     bool visited[ROWS][COLS] = {};
     QVector<QPoint> stack;
 
@@ -94,7 +101,7 @@ void MainWindow::generateSectorMaze(int sx, int sy)
         }
 
         if (!neighbors.isEmpty()) {
-            int pick = neighbors[QRandomGenerator::global()->bounded(neighbors.size())];
+            int pick = neighbors[rng.bounded(neighbors.size())];
             int nr = curr.y() + dr[pick];
             int nc = curr.x() + dc[pick];
 
@@ -119,19 +126,19 @@ void MainWindow::generateSectorMaze(int sx, int sy)
     board[sy][sx][8][10] = 0;
     board[sy][sx][12][10] = 0;
 
-    // 4. Loop braiding: Dynamic wall removal (reduces at higher levels for tricky labyrinth turns!)
+    // 4. Loop braiding: Deterministic wall removal based on level difficulty
     int braidChance = std::clamp(32 - currentLevel, 14, 32);
     for (int r = 2; r < ROWS - 2; ++r) {
         for (int c = 2; c < COLS - 2; ++c) {
             if (board[sy][sx][r][c] == 1) {
                 if (board[sy][sx][r-1][c] == 0 && board[sy][sx][r+1][c] == 0 &&
                     board[sy][sx][r][c-1] == 1 && board[sy][sx][r][c+1] == 1) {
-                    if (QRandomGenerator::global()->bounded(100) < braidChance) {
+                    if (int(rng.bounded(100)) < braidChance) {
                         board[sy][sx][r][c] = 0;
                     }
                 } else if (board[sy][sx][r][c-1] == 0 && board[sy][sx][r][c+1] == 0 &&
                            board[sy][sx][r-1][c] == 1 && board[sy][sx][r+1][c] == 1) {
-                    if (QRandomGenerator::global()->bounded(100) < braidChance) {
+                    if (int(rng.bounded(100)) < braidChance) {
                         board[sy][sx][r][c] = 0;
                     }
                 }
@@ -200,12 +207,40 @@ void MainWindow::checkLevelExit()
         if (isP4Active() && hero4.lives > 0 && hero4.reachedExit) hero4.score += perHeroBonus;
 
         score = scoreP1 + scoreP2 + hero3.score + hero4.score;
+
+        // Calculate stars earned based on preserved lives:
+        // 3 stars = all 3 lives preserved (flawless run)
+        // 2 stars = 2 lives preserved
+        // 1 star  = 1 life preserved
+        int earnedStars = 1;
+        if (!isAnyMultiplayer()) {
+            earnedStars = std::clamp(p1Lives, 1, 3);
+        } else {
+            int totalLivesLeft = (isP1Active() ? p1Lives : 0) +
+                                 (isP2Active() ? p2Lives : 0) +
+                                 (hero3.clientId != -1 ? hero3.lives : 0) +
+                                 (hero4.clientId != -1 ? hero4.lives : 0);
+            int maxPossible = eligibleCount * 3;
+            if (totalLivesLeft >= maxPossible) earnedStars = 3;
+            else if (totalLivesLeft >= maxPossible * 2 / 3) earnedStars = 2;
+            else earnedStars = 1;
+        }
+
+        levelStars[currentLevel] = std::max(levelStars.value(currentLevel, 0), earnedStars);
+        if (score > levelHighScores.value(currentLevel, 0)) {
+            levelHighScores[currentLevel] = score;
+        }
+        totalCareerScore += score;
+
         if (currentLevel >= highestUnlockedLevel) {
             highestUnlockedLevel = currentLevel + 1;
         }
         selectedMapLevel = currentLevel + 1;
         viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
         scrollToLevel(selectedMapLevel, false);
+
+        // Immediately persist all progress to disk
+        saveGameProgress();
     }
 }
 

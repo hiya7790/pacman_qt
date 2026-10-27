@@ -7,7 +7,14 @@
 #include <QWheelEvent>
 #include <QTimer>
 #include <QVector>
+#include <QMap>
 #include <QElapsedTimer>
+#include <QSettings>
+#include <QStandardPaths>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QFile>
+#include <QDir>
 
 enum GameScreen {
     SCREEN_HOME_MAP,
@@ -165,6 +172,7 @@ private:
     // Movement & Level Exit Helpers
     void movePlayer2();
     void checkLevelExit();
+    void closeEvent(QCloseEvent *event) override;
 
     static constexpr int LEVELS_PER_WORLD = 20;
     int viewedMapWorld;
@@ -178,6 +186,16 @@ private:
     int highestUnlockedLevel;
     int selectedMapLevel;
     int hoveredMapLevel;
+    int totalCareerScore;
+    QMap<int, int> levelHighScores;
+    QMap<int, int> levelStars;
+
+    // Persistent Progress System
+    void loadGameProgress();
+    void saveGameProgress();
+    void resetGameProgress();
+    int getLevelStars(int lvl) const;
+    int getLevelHighScore(int lvl) const;
 
     // Multiplayer & Character Selection
     bool isMultiplayer;

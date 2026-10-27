@@ -121,6 +121,10 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             update();
             return;
         }
+        if ((event->modifiers() & Qt::ShiftModifier) && event->key() == Qt::Key_R) {
+            resetGameProgress();
+            return;
+        }
         return;
     }
 
@@ -147,6 +151,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             if (currentLevel > highestUnlockedLevel) highestUnlockedLevel = currentLevel;
             selectedMapLevel = currentLevel;
             viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
+            saveGameProgress();
             initLevel();
             levelComplete = false;
             update();
@@ -429,6 +434,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
             isMultiplayer = false;
             singlePlayerHero = 1;
             arrowPlayer = 1;
+            saveGameProgress();
             update();
             return;
         }
@@ -436,6 +442,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
             isMultiplayer = false;
             singlePlayerHero = 2;
             arrowPlayer = 2;
+            saveGameProgress();
             update();
             return;
         }
@@ -539,6 +546,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
             if (currentLevel > highestUnlockedLevel) highestUnlockedLevel = currentLevel;
             selectedMapLevel = currentLevel;
             viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
+            saveGameProgress();
             initLevel();
             levelComplete = false;
             update();

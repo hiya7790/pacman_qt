@@ -335,10 +335,31 @@ void MainWindow::drawLevelNode(QPainter &painter, int lvl, int cx, int cy, int r
 
         // Golden Stars for completed levels
         if (isCompleted) {
-            painter.setFont(QFont("Arial", std::max(8, r / 3)));
+            int stars = getLevelStars(lvl);
+            QString starStr;
+            for (int s = 0; s < stars; ++s) starStr += "⭐";
+            painter.setFont(QFont("Arial", std::max(7, r / 3)));
             painter.setPen(QColor(255, 215, 0));
-            painter.drawText(cx - r, cy + r - 3, r * 2, 16, Qt::AlignCenter, "⭐⭐⭐");
+            painter.drawText(cx - r, cy + r - 3, r * 2, 16, Qt::AlignCenter, starStr);
         }
+    }
+
+    // Best Score Hover Badge for completed nodes
+    if (isHovered && isCompleted && getLevelHighScore(lvl) > 0) {
+        int bestScore = getLevelHighScore(lvl);
+        QString scoreText = QString("BEST: %1").arg(bestScore);
+        int tagW = std::max(76, r * 2 + 16);
+        int tagH = 18;
+        int tagX = cx - tagW / 2;
+        int tagY = cy - r - tagH - 6;
+
+        painter.setBrush(QColor(10, 16, 36, 235));
+        painter.setPen(QPen(QColor(0, 240, 255), 1.2));
+        painter.drawRoundedRect(tagX, tagY, tagW, tagH, tagH / 2, tagH / 2);
+
+        painter.setFont(QFont("Arial", 8, QFont::Bold));
+        painter.setPen(QColor(255, 220, 100));
+        painter.drawText(QRect(tagX, tagY, tagW, tagH), Qt::AlignCenter, scoreText);
     }
 
     // 6. Milestone Jewel Rings on Stages 5, 10, 15

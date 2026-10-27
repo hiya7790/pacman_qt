@@ -33,11 +33,11 @@ MainWindow::MainWindow(QWidget *parent)
     setFocus();
 
     currentScreen = SCREEN_HOME_MAP;
-    highestUnlockedLevel = 1;
-    selectedMapLevel = 1;
-    viewedMapWorld = 1;
+    loadGameProgress();
+    selectedMapLevel = highestUnlockedLevel;
+    viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
     hoveredMapLevel = 0;
-    currentLevel = 1;
+    currentLevel = highestUnlockedLevel;
 
     mapScrollY = 0.0f;
     targetMapScrollY = 0.0f;
@@ -103,7 +103,7 @@ MainWindow::MainWindow(QWidget *parent)
     gameServer->startServer(8080);
 
     initGame();
-    scrollToLevel(1, true);
+    scrollToLevel(highestUnlockedLevel, true);
 
     timer = new QTimer(this);
     connect(timer, &QTimer::timeout, this, &MainWindow::gameLoop);
@@ -114,6 +114,7 @@ MainWindow::MainWindow(QWidget *parent)
 
 MainWindow::~MainWindow()
 {
+    saveGameProgress();
     if (gameServer) {
         gameServer->stopServer();
     }
@@ -392,10 +393,13 @@ void MainWindow::initLevel()
         }
     }
 
-    // Pass 2: Distribute remaining ghosts across sectors (giving extra danger to exit & middle sectors)
+    // Pass 2: Deterministically distribute remaining ghosts across sectors
+    quint32 ghostSeed = static_cast<quint32>(currentLevel) * 9184711u + 54321u;
+    QRandomGenerator ghostRng(ghostSeed);
+
     while ((int)ghosts.size() < targetGhostCount) {
-        int randSx = QRandomGenerator::global()->bounded(sectorCols);
-        int randSy = QRandomGenerator::global()->bounded(sectorRows);
+        int randSx = ghostRng.bounded(sectorCols);
+        int randSy = ghostRng.bounded(sectorRows);
         int gx = 10, gy = 10;
         findValidGhostSpawn(randSx, randSy, gx, gy);
         Direction initDir = static_cast<Direction>((colorCycle) % 4);
@@ -422,7 +426,7 @@ void MainWindow::initLevel()
     frightenedTicksLeft = 0;
 
     activeFruits.clear();
-    fruitSpawnCounter = QRandomGenerator::global()->bounded(15, 35);
+    fruitSpawnCounter = 20 + (currentLevel % 15);
 
     fogOfWarEnabled = true;
     fogPeekActive = false;
@@ -1171,4 +1175,165 @@ void MainWindow::moveHostGhost(int ghostIdx, Direction d)
         broadcastCurrentGameState();
         update();
     }
+}
+
+void MainWindow::saveGameProgress()
+{
+    // 1. Native QSettings storage (macOS plist / Windows registry / Linux conf)
+    QSettings settings("PacmanGame", "LabyrinthSaga");
+    settings.setValue("highestUnlockedLevel", highestUnlockedLevel);
+    settings.setValue("totalCareerScore", totalCareerScore);
+    settings.setValue("singlePlayerHero", singlePlayerHero);
+
+    settings.beginGroup("HighScores");
+    for (auto it = levelHighScores.begin(); it != levelHighScores.end(); ++it) {
+        settings.setValue(QString::number(it.key()), it.value());
+    }
+    settings.endGroup();
+
+    settings.beginGroup("Stars");
+    for (auto it = levelStars.begin(); it != levelStars.end(); ++it) {
+        settings.setValue(QString::number(it.key()), it.value());
+    }
+    settings.endGroup();
+    settings.sync();
+
+    // 2. Portable JSON backup in AppDataLocation
+    QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+    QDir().mkpath(appDataDir);
+    QString saveFilePath = appDataDir + "/savegame.json";
+
+    QJsonObject root;
+    root["highestUnlockedLevel"] = highestUnlockedLevel;
+    root["totalCareerScore"] = totalCareerScore;
+    root["singlePlayerHero"] = singlePlayerHero;
+
+    QJsonObject scoresObj;
+    for (auto it = levelHighScores.begin(); it != levelHighScores.end(); ++it) {
+        scoresObj[QString::number(it.key())] = it.value();
+    }
+    root["highScores"] = scoresObj;
+
+    QJsonObject starsObj;
+    for (auto it = levelStars.begin(); it != levelStars.end(); ++it) {
+        starsObj[QString::number(it.key())] = it.value();
+    }
+    root["stars"] = starsObj;
+
+    QJsonDocument doc(root);
+    QFile file(saveFilePath);
+    if (file.open(QIODevice::WriteOnly)) {
+        file.write(doc.toJson());
+        file.close();
+    }
+}
+
+void MainWindow::loadGameProgress()
+{
+    highestUnlockedLevel = 1;
+    totalCareerScore = 0;
+    singlePlayerHero = 1;
+    levelHighScores.clear();
+    levelStars.clear();
+
+    bool loadedFromSettings = false;
+    QSettings settings("PacmanGame", "LabyrinthSaga");
+    if (settings.contains("highestUnlockedLevel")) {
+        highestUnlockedLevel = settings.value("highestUnlockedLevel", 1).toInt();
+        totalCareerScore = settings.value("totalCareerScore", 0).toInt();
+        singlePlayerHero = settings.value("singlePlayerHero", 1).toInt();
+
+        settings.beginGroup("HighScores");
+        const QStringList scoreKeys = settings.childKeys();
+        for (const QString &k : scoreKeys) {
+            bool ok;
+            int lvl = k.toInt(&ok);
+            if (ok) {
+                levelHighScores[lvl] = settings.value(k).toInt();
+            }
+        }
+        settings.endGroup();
+
+        settings.beginGroup("Stars");
+        const QStringList starKeys = settings.childKeys();
+        for (const QString &k : starKeys) {
+            bool ok;
+            int lvl = k.toInt(&ok);
+            if (ok) {
+                levelStars[lvl] = settings.value(k).toInt();
+            }
+        }
+        settings.endGroup();
+        loadedFromSettings = true;
+    }
+
+    if (!loadedFromSettings) {
+        // Fallback: Read savegame.json
+        QString appDataDir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+        QString saveFilePath = appDataDir + "/savegame.json";
+        QFile file(saveFilePath);
+        if (file.open(QIODevice::ReadOnly)) {
+            QByteArray data = file.readAll();
+            file.close();
+            QJsonDocument doc = QJsonDocument::fromJson(data);
+            if (doc.isObject()) {
+                QJsonObject root = doc.object();
+                highestUnlockedLevel = root.value("highestUnlockedLevel").toInt(1);
+                totalCareerScore = root.value("totalCareerScore").toInt(0);
+                singlePlayerHero = root.value("singlePlayerHero").toInt(1);
+
+                QJsonObject scoresObj = root.value("highScores").toObject();
+                for (auto it = scoresObj.begin(); it != scoresObj.end(); ++it) {
+                    levelHighScores[it.key().toInt()] = it.value().toInt();
+                }
+
+                QJsonObject starsObj = root.value("stars").toObject();
+                for (auto it = starsObj.begin(); it != starsObj.end(); ++it) {
+                    levelStars[it.key().toInt()] = it.value().toInt();
+                }
+            }
+        }
+    }
+
+    if (highestUnlockedLevel < 1) highestUnlockedLevel = 1;
+    if (singlePlayerHero != 1 && singlePlayerHero != 2) singlePlayerHero = 1;
+    arrowPlayer = singlePlayerHero;
+
+    // Persist defaults on first launch
+    if (!loadedFromSettings) {
+        saveGameProgress();
+    }
+}
+
+void MainWindow::closeEvent(QCloseEvent *event)
+{
+    saveGameProgress();
+    QWidget::closeEvent(event);
+}
+
+void MainWindow::resetGameProgress()
+{
+    highestUnlockedLevel = 1;
+    selectedMapLevel = 1;
+    viewedMapWorld = 1;
+    totalCareerScore = 0;
+    levelHighScores.clear();
+    levelStars.clear();
+
+    saveGameProgress();
+    scrollToLevel(1, true);
+    update();
+}
+
+int MainWindow::getLevelStars(int lvl) const
+{
+    if (lvl < highestUnlockedLevel) {
+        return levelStars.value(lvl, 3); // Default 3 stars if completed
+    }
+    return levelStars.value(lvl, 0);
+}
+
+int MainWindow::getLevelHighScore(int lvl) const
+{
+    return levelHighScores.value(lvl, 0);
 }
