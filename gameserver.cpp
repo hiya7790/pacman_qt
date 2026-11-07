@@ -1751,8 +1751,12 @@ QByteArray GameServer::getControllerHtml(bool isMobile) const
 
         if (cell === '1') {
           if (isFog && !wasExplored) {
-            ctx.fillStyle = "#030408";
-            ctx.fillRect(cx, cy, C_SIZE, C_SIZE);
+            ctx.fillStyle = "#080c1e";
+            ctx.strokeStyle = "#121b44";
+            ctx.lineWidth = 1;
+            roundRect(ctx, cx + 1.5, cy + 1.5, C_SIZE - 3, C_SIZE - 3, 5);
+            ctx.fill();
+            ctx.stroke();
           } else {
             ctx.fillStyle = wasExplored ? "#141c48" : "#0c112e";
             ctx.strokeStyle = wasExplored ? "#2844a8" : "#1a2c6d";
@@ -2097,7 +2101,7 @@ QByteArray GameServer::getControllerHtml(bool isMobile) const
     if (isGhostHunter) return;
 
     fogCtx.clearRect(0, 0, 630, 630);
-    fogCtx.fillStyle = "rgba(4, 6, 15, 0.95)";
+    fogCtx.fillStyle = "rgba(4, 6, 15, 0.65)";
     fogCtx.fillRect(0, 0, 630, 630);
 
     // Carve out illuminated spotlights for alive & active heroes using destination-out
@@ -2108,15 +2112,17 @@ QByteArray GameServer::getControllerHtml(bool isMobile) const
     if (state.p3 && state.p3.active && (state.p3.alive || state.p3.respawnTicks > 0)) heroes.push(state.p3);
     if (state.p4 && state.p4.active && (state.p4.alive || state.p4.respawnTicks > 0)) heroes.push(state.p4);
 
-    const rPx = (state.radius || 3.5) * C_SIZE;
+    const rPx = (state.radius || 7.5) * C_SIZE;
 
     for (const h of heroes) {
       const hx = h.x * C_SIZE + 15;
       const hy = h.y * C_SIZE + 15;
 
-      const grad = fogCtx.createRadialGradient(hx, hy, rPx * 0.25, hx, hy, rPx);
+      const grad = fogCtx.createRadialGradient(hx, hy, 0, hx, hy, rPx);
       grad.addColorStop(0, "rgba(0,0,0,1.0)");
-      grad.addColorStop(0.7, "rgba(0,0,0,0.85)");
+      grad.addColorStop(0.25, "rgba(0,0,0,0.94)");
+      grad.addColorStop(0.5, "rgba(0,0,0,0.72)");
+      grad.addColorStop(0.75, "rgba(0,0,0,0.40)");
       grad.addColorStop(1, "rgba(0,0,0,0.0)");
 
       fogCtx.fillStyle = grad;

@@ -27,6 +27,8 @@
 Makefile
 .qmake.stash
 moc_*.cpp
+moc_predefs.h
+pacman_qt
 ui_*.h
 qrc_*.cpp
 *_plugin_import.cpp
