@@ -39,6 +39,20 @@ bool MainWindow::isCellVisible(int sx, int sy, int x, int y) const
             dist3 <= currentVisionRadius || dist4 <= currentVisionRadius || distG <= (currentVisionRadius + 0.8));
 }
 
+bool MainWindow::isGhostVisible(int sx, int sy, int x, int y) const
+{
+    if (!fogOfWarEnabled || fogPeekActive || isHostGhost()) return true;
+    if (sx != currentSectorX || sy != currentSectorY) return false;
+    int hostGIdx = isHostGhost() ? getHostGhostIndex() : -1;
+    double dist1 = (isP1Active() && p1Alive ? std::hypot(x - pacmanX, y - pacmanY) : 999.0);
+    double dist2 = (isP2Active() && p2Alive ? std::hypot(x - p2X, y - p2Y) : 999.0);
+    double dist3 = (isP3Active() && hero3.alive ? std::hypot(x - hero3.x, y - hero3.y) : 999.0);
+    double dist4 = (isP4Active() && hero4.alive ? std::hypot(x - hero4.x, y - hero4.y) : 999.0);
+    double distG = (hostGIdx >= 0 && hostGIdx < ghosts.size() ? std::hypot(x - ghosts[hostGIdx].x, y - ghosts[hostGIdx].y) : 999.0);
+    double minDist = std::min({dist1, dist2, dist3, dist4, distG});
+    return minDist <= ghostVisionRadius;
+}
+
 void MainWindow::syncHumanGhostsToCurrentSector()
 {
     int hostGIdx = isHostGhost() ? getHostGhostIndex() : -1;

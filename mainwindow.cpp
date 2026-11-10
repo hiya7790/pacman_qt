@@ -47,6 +47,7 @@ MainWindow::MainWindow(QWidget *parent)
     dragStartScrollY = 0.0f;
 
     currentVisionRadius = DEFAULT_VISION_RADIUS;
+    ghostVisionRadius = DEFAULT_GHOST_VISION_RADIUS;
     currentFrightenDuration = FRIGHTEN_DURATION;
     fogOfWarEnabled = true;
     fogPeekActive = false;
@@ -58,6 +59,7 @@ MainWindow::MainWindow(QWidget *parent)
     peekToastMessage.clear();
     isTransitioning = false;
     newSectorJustDiscovered = false;
+    rulesOverlayActive = false;
 
     isMultiplayer = false;
     singlePlayerHero = 1; // 1 = Yellow Pacman, 2 = Pink Ms. Pacman
@@ -150,6 +152,12 @@ void MainWindow::initGame()
     currentScreen = SCREEN_HOME_MAP;
 }
 
+void MainWindow::startRulesOverlay()
+{
+    rulesOverlayActive = true;
+    rulesOverlayTimer.start();
+}
+
 void MainWindow::startLevel(int lvl)
 {
     currentLevel = std::max(1, lvl);
@@ -162,6 +170,7 @@ void MainWindow::startLevel(int lvl)
         hostRole = (singlePlayerHero == 2 ? "p2" : "p1");
     }
     initLevel();
+    startRulesOverlay();
     setFocus();
     activateWindow();
     broadcastCurrentGameState();
@@ -174,7 +183,8 @@ void MainWindow::initLevel()
     getSectorDimsForLevel(currentLevel, sectorCols, sectorRows);
 
     // Dynamic difficulty scaling across 20 stages per world
-    currentVisionRadius = std::max(2.6, 3.8 - (currentLevel - 1) * 0.05);
+    currentVisionRadius = std::max(4.2, DEFAULT_VISION_RADIUS - (currentLevel - 1) * 0.04);
+    ghostVisionRadius = std::max(currentVisionRadius + 1.8, DEFAULT_GHOST_VISION_RADIUS);
     currentFrightenDuration = std::max(12, 28 - (currentLevel / 3) * 2);
     ghostMoveEveryN = (currentLevel >= 7) ? 1 : 2;
     ghostTickCounter = 0;
@@ -317,6 +327,7 @@ void MainWindow::initLevel()
     gameOver = false;
     isTransitioning = false;
     newSectorJustDiscovered = false;
+    rulesOverlayActive = false;
 
     // 5. Spawn Ghosts across sectors dynamically based on level
     // Preserve any active human multiplayer ghost slots
@@ -484,6 +495,15 @@ void MainWindow::gameLoop()
         static int endBrdCount = 0;
         if (++endBrdCount % 10 == 0) {
             broadcastCurrentGameState();
+        }
+        update();
+        return;
+    }
+
+    // Check 2-3s rules & mission briefing overlay timer at game start
+    if (rulesOverlayActive) {
+        if (rulesOverlayTimer.elapsed() >= RULES_OVERLAY_DURATION_MS) {
+            rulesOverlayActive = false;
         }
         update();
         return;
@@ -673,7 +693,9 @@ void MainWindow::broadcastCurrentGameState()
     state["peeks"] = peeks;
     state["fog"] = fogOfWarEnabled;
     state["peek"] = fogPeekActive;
-    state["radius"] = currentVisionRadius;
+    state["radius"] = ghostVisionRadius;
+    state["visionRadius"] = currentVisionRadius;
+    state["ghostRadius"] = ghostVisionRadius;
     state["gameOver"] = gameOver;
     state["levelComplete"] = levelComplete;
     state["secX"] = currentSectorX;

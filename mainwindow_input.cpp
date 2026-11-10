@@ -57,6 +57,15 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
         }
     }
 
+    // Dismiss Rules Overlay on any key press so the player can jump straight into the game
+    if (currentScreen == SCREEN_PLAYING && rulesOverlayActive) {
+        rulesOverlayActive = false;
+        if (event->key() == Qt::Key_Space || event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter || event->key() == Qt::Key_Escape) {
+            update();
+            return;
+        }
+    }
+
     // Home Map Key Handling
     if (currentScreen == SCREEN_HOME_MAP) {
         if (event->key() == Qt::Key_Space || event->key() == Qt::Key_Return || event->key() == Qt::Key_Enter) {
@@ -146,6 +155,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
     if (gameOver) {
         if (event->key() == Qt::Key_Space || event->key() == Qt::Key_R) {
             initLevel();
+            startRulesOverlay();
             gameOver = false;
             update();
         } else if (event->key() == Qt::Key_M) {
@@ -167,6 +177,7 @@ void MainWindow::keyPressEvent(QKeyEvent *event)
             viewedMapWorld = (selectedMapLevel - 1) / LEVELS_PER_WORLD + 1;
             saveGameProgress();
             initLevel();
+            startRulesOverlay();
             levelComplete = false;
             update();
         } else if (event->key() == Qt::Key_M) {
@@ -528,6 +539,12 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
     }
 
     if (currentScreen == SCREEN_PLAYING) {
+        if (rulesOverlayActive) {
+            rulesOverlayActive = false;
+            update();
+            return;
+        }
+
         QPoint pos = event->pos();
 
         // Clicked Saga Map button in HUD
@@ -541,7 +558,7 @@ void MainWindow::mousePressEvent(QMouseEvent *event)
         }
 
         // Click on Pacman to toggle arrow control!
-        int hudHeight = 72;
+        int hudHeight = 84;
         int availW = width();
         int availH = height() - hudHeight;
         int cellSize = std::min(availW / COLS, availH / ROWS);

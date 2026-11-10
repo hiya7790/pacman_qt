@@ -19,9 +19,8 @@ QString MainWindow::getLevelTitle(int lvl) const
 
 QRect MainWindow::getPlayButtonRect() const
 {
-    int btnW = std::min(320, int(width() * 0.45));
-    int btnH = std::max(42, int(height() * 0.054));
-    if (btnH > 52) btnH = 52;
+    int btnW = std::clamp(int(width() * 0.52), 340, 500);
+    int btnH = std::clamp(int(height() * 0.054), 44, 52);
     int btnX = (width() - btnW) / 2;
     int btnY = height() - btnH - 12;
     return QRect(btnX, btnY, btnW, btnH);
@@ -29,13 +28,13 @@ QRect MainWindow::getPlayButtonRect() const
 
 QRect MainWindow::getMyLevelButtonRect() const
 {
-    int btnW = std::clamp(int(width() * 0.16), 125, 160);
+    int btnW = std::clamp(int(width() * 0.18), 135, 175);
     return QRect(18, 22, btnW, 36);
 }
 
 QRect MainWindow::getRecordBadgeRect() const
 {
-    int btnW = std::clamp(int(width() * 0.16), 125, 160);
+    int btnW = std::clamp(int(width() * 0.18), 135, 175);
     return QRect(width() - btnW - 18, 22, btnW, 36);
 }
 
@@ -874,7 +873,14 @@ void MainWindow::drawCandyCrushMap(QPainter &painter)
         playText = QString("▶ PLAY AS YELLOW PACMAN (LVL %1)").arg(selectedMapLevel);
     }
 
-    painter.setFont(QFont("Arial", std::max(12, btnRect.height() * 3 / 8), QFont::Bold));
+    QFont playFont("Arial", std::clamp(int(btnRect.height() * 0.36), 11, 15), QFont::Bold);
+    QFontMetrics pFm(playFont);
+    while (playFont.pointSize() > 9 && pFm.horizontalAdvance(playText) > btnRect.width() - 24) {
+        playFont.setPointSize(playFont.pointSize() - 1);
+        pFm = QFontMetrics(playFont);
+    }
+
+    painter.setFont(playFont);
     painter.setPen(QColor(40, 20, 5));
     painter.drawText(btnRect.adjusted(1, 2, 1, 2), Qt::AlignCenter, playText);
     painter.setPen(Qt::white);

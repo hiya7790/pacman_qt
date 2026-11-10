@@ -122,12 +122,15 @@ private:
     QPoint findSafeHeroSpawnPos(int secX, int secY) const;
     void updateFogOfWar();
     bool isCellVisible(int sx, int sy, int x, int y) const;
+    bool isGhostVisible(int sx, int sy, int x, int y) const;
     void drawSector(QPainter &painter, int sx, int sy, int originX, int originY, int cellSize);
     void drawCherry(QPainter &painter, int cx, int cy, int s);
     void drawApple(QPainter &painter, int cx, int cy, int s);
     void drawStrawberry(QPainter &painter, int cx, int cy, int s);
     void drawOrangeFruit(QPainter &painter, int cx, int cy, int s);
     void drawGameScreen(QPainter &painter);
+    void drawRulesOverlay(QPainter &painter);
+    void startRulesOverlay();
 
     // Connected Multiplayer & Classroom Lobby
     void moveHero(ExtraHero &hero, int heroId);
@@ -282,8 +285,10 @@ private:
     static constexpr int COLS = 21;
     static constexpr int MAX_SECTORS_X = 6;
     static constexpr int MAX_SECTORS_Y = 6;
-    static constexpr double DEFAULT_VISION_RADIUS = 3.8;
+    static constexpr double DEFAULT_VISION_RADIUS = 5.5;
+    static constexpr double DEFAULT_GHOST_VISION_RADIUS = 7.5;
     double currentVisionRadius;
+    double ghostVisionRadius;
     int currentFrightenDuration;
     static constexpr int FOG_PEEK_DURATION_MS = 1000; // 1.0 second temporary peek
     static constexpr int INITIAL_FOG_PEEKS = 3;       // 3 peeks per level by default
@@ -341,6 +346,11 @@ private:
     int hero4FogPeeks;
     QString peekToastMessage;
     QElapsedTimer peekToastTimer;
+
+    // Rules / Mission Briefing popup at game start
+    bool rulesOverlayActive;
+    QElapsedTimer rulesOverlayTimer;
+    static constexpr int RULES_OVERLAY_DURATION_MS = 2800; // 2.8 second preview before game starts
 
     // Level system
     int currentLevel;
